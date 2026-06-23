@@ -218,3 +218,17 @@ The browser editor now rebuilds an offscreen editable map image from the current
 Verification: regenerated `derived/editor/stage11`, loaded `http://127.0.0.1:8787/stage11/editor.html`, performed a real Paint action through the browser UI, and confirmed the clicked region screenshot changed (`byteDiff=901`) while the patch list changed to one dirty edit.
 
 Known limitation: the first live-redraw version rebuilds the whole stage image after each Paint. This is simple and correct for the current `stage11` bundle, but a later pass should redraw only a dirty neighborhood and improve `acwz` footprint/z-order refresh for larger maps.
+
+
+## Undo And Reset Update 2026-06-24
+
+The editor now keeps an immutable copy of the original `.m` records and computes patches against that baseline. This fixes repeated edits to the same cell/layer: the patch `before` value remains the original value, while `after` follows the current edited value.
+
+Edit controls:
+
+- `Ctrl+Z` / `Undo`: undo the most recent edit transaction.
+- `Reset cell`: reset the currently selected cell on the currently selected layer (`acwx`, `acwy`, or `acwz`) back to the original `.m` value.
+- `Reset all`: reset every current patch back to the original `.m` values.
+- Reset operations are also transactions, so `Ctrl+Z` after `Reset all` restores the reset batch.
+
+Verification: in the browser editor, Paint produced one patch, `Ctrl+Z` returned to zero patches, `Reset cell` returned one selected-layer patch to zero, `Reset all` returned two patches to zero, and `Ctrl+Z` after `Reset all` restored those two patches.

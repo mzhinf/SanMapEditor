@@ -214,3 +214,10 @@
 - Updated `tools/editor_app.html` to load draw atlases, rebuild an offscreen editable map image from current records, and immediately show visual edits after Paint.
 - Changed patch/selection markers to outlines so edited tile pixels remain visible.
 - Regenerated `derived/editor/stage11`; browser UI verification passed with one Paint action producing one patch and a local screenshot byte diff of 901.
+
+
+## Update 2026-06-24 Undo And Reset
+- Added immutable original-record snapshots in the browser editor so patch `before` values remain tied to the source `.m` records across repeated edits.
+- Added transaction-based edit history, `Ctrl+Z`/Undo, `Reset cell`, and `Reset all` controls.
+- `Reset cell` reverts the selected cell on the selected layer; `Reset all` reverts all dirty patches. Reset operations are undoable.
+- Regenerated `derived/editor/stage11` and verified in browser UI: Paint -> Ctrl+Z, Paint -> Reset cell, two Paints -> Reset all, and Reset all -> Ctrl+Z all behaved as expected.

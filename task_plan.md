@@ -108,3 +108,8 @@ Phase 5
 ## Update 2026-06-24 Live Redraw Complete
 - Completed the first live redraw slice for Phase 5: editor bundles now include draw-ready CEL atlases and the browser editor rebuilds the visible map from edited records after Paint.
 - Remaining Phase 5 work: optimize redraw to dirty neighborhoods, add `.m` file/stage selection loading, implement safe patch-to-`.m` copy writing, and continue `.s/.x` minimap/cache confirmation in `Emperor.exe`.
+
+
+## Update 2026-06-24 Undo/Reset Complete
+- Completed editor history controls for Phase 5: Ctrl+Z, Reset cell, Reset all, and stable original-record patch baselines.
+- Remaining Phase 5 work: stage/.m selection loading, dirty-neighborhood redraw optimization, safe patch-to-`.m` copy writing, and `.s/.x` minimap/cache confirmation.

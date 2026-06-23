@@ -63,7 +63,10 @@ canvas { width: 100%; height: 100%; display: block; }
     <select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option></select>
     <label>Value</label>
     <input id="brush" type="number" value="0" step="1">
-    <button id="resetView">Reset</button>
+    <button id="resetView">Reset view</button>
+    <button id="undoEdit">Undo</button>
+    <button id="resetCell">Reset cell</button>
+    <button id="resetAll">Reset all</button>
     <button id="exportPatch" class="primary">Export patch</button>
     <span class="status" id="status">Loading</span>
   </div>
@@ -116,17 +119,21 @@ const state = {
   dragging: false,
   dragStart: null,
   patches: new Map(),
+  originalRecords: null,
+  undoStack: [],
 };
 const els = {
   status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
   cellInfo: document.getElementById('cellInfo'), recordGrid: document.getElementById('recordGrid'), tool: document.getElementById('tool'),
   layer: document.getElementById('layer'), brush: document.getElementById('brush'), patchCount: document.getElementById('patchCount'),
   patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceFilter: document.getElementById('resourceFilter'),
-  resourceSort: document.getElementById('resourceSort'),
+  resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
 };
 function fieldIndex(name) { return state.meta.fields.indexOf(name); }
-function recordAt(cell) { return state.meta.records[cell.row * state.meta.width + cell.col]; }
+function recordIndex(cell) { return cell.row * state.meta.width + cell.col; }
+function recordAt(cell) { return state.meta.records[recordIndex(cell)]; }
 function cellKey(cell) { return `${cell.col},${cell.row}`; }
+function patchKey(cell, field) { return `${cellKey(cell)}:${field}`; }
 function cellToWorld(col, row) { const [ox, oy] = state.meta.origin; return { x: ox + col * 40 + (row & 1 ? 20 : 0), y: oy + row * 10 }; }
 function displayImage() { return state.renderCanvas || state.image; }
 function worldToCell(x, y) {
@@ -196,7 +203,18 @@ function refreshSide() {
   els.recordGrid.innerHTML = ''; m.fields.forEach((name, i) => { const k = document.createElement('span'); k.textContent = name; const v = document.createElement('span'); v.textContent = rec[i]; els.recordGrid.append(k, v); });
   els.brush.value = rec[fieldIndex(els.layer.value)] ?? 0;
 }
-function refreshPatches() { els.patchCount.value = state.patches.size; els.patchList.textContent = [...state.patches.values()].slice(-12).map(p => `${p.x},${p.y} ${p.field}: ${p.before} -> ${p.after}`).join('\n'); els.status.textContent = state.patches.size ? 'Dirty' : 'Ready'; }
+function hasSelectedLayerPatch() {
+  return !!state.selected && state.patches.has(patchKey(state.selected, els.layer.value));
+}
+function refreshPatches() {
+  els.patchCount.value = state.patches.size;
+  els.patchList.textContent = [...state.patches.values()].slice(-12).map(p => `${p.x},${p.y} ${p.field}: ${p.before} -> ${p.after}`).join('\n');
+  els.status.textContent = state.patches.size ? `Dirty (${state.patches.size})` : 'Ready';
+  els.undoEdit.disabled = !state.undoStack.length;
+  els.resetCell.disabled = !hasSelectedLayerPatch();
+  els.resetAll.disabled = !state.patches.size;
+}
+
 function renderResourceList() {
   if (!state.resources) return;
   const layer = els.layer.value;
@@ -288,9 +306,69 @@ function rebuildEditedImage() {
     }
   }
 }
+function syncPatchFor(cell, field) {
+  const fi = fieldIndex(field);
+  const idx = recordIndex(cell);
+  const before = state.originalRecords[idx][fi];
+  const after = state.meta.records[idx][fi];
+  const key = patchKey(cell, field);
+  if (before === after) state.patches.delete(key);
+  else state.patches.set(key, { x: cell.col, y: cell.row, field, before, after, minimapDirty: true });
+}
+function refreshAfterRecordEdit(cell = null) {
+  if (cell) state.selected = cell;
+  rebuildEditedImage();
+  refreshSide();
+  refreshPatches();
+  draw();
+}
+function applyChangeSet(changes) {
+  const applied = [];
+  for (const change of changes) {
+    const cell = { col: change.x, row: change.y };
+    const fi = fieldIndex(change.field);
+    if (fi < 0) continue;
+    const rec = recordAt(cell);
+    const before = rec[fi];
+    const after = change.after;
+    if (before === after) continue;
+    rec[fi] = after;
+    syncPatchFor(cell, change.field);
+    applied.push({ x: change.x, y: change.y, field: change.field, before, after });
+  }
+  if (!applied.length) return false;
+  state.undoStack.push(applied);
+  const last = applied[applied.length - 1];
+  refreshAfterRecordEdit({ col: last.x, row: last.y });
+  return true;
+}
+function undoLastEdit() {
+  const changes = state.undoStack.pop();
+  if (!changes) return;
+  for (const change of [...changes].reverse()) {
+    const cell = { col: change.x, row: change.y };
+    const fi = fieldIndex(change.field);
+    recordAt(cell)[fi] = change.before;
+    syncPatchFor(cell, change.field);
+  }
+  const last = changes[changes.length - 1];
+  refreshAfterRecordEdit({ col: last.x, row: last.y });
+}
+function resetSelectedLayerChange() {
+  if (!state.selected) return;
+  const field = els.layer.value;
+  const fi = fieldIndex(field);
+  if (fi < 0) return;
+  const original = state.originalRecords[recordIndex(state.selected)][fi];
+  applyChangeSet([{ x: state.selected.col, y: state.selected.row, field, after: original }]);
+}
+function resetAllChanges() {
+  const changes = [...state.patches.values()].map(p => ({ x: p.x, y: p.y, field: p.field, after: p.before }));
+  applyChangeSet(changes);
+}
 function applyPaint(cell) {
-  const field = els.layer.value; const fi = fieldIndex(field); if (fi < 0) return; const rec = recordAt(cell); const value = Number.parseInt(els.brush.value, 10); if (!Number.isFinite(value)) return; const before = rec[fi]; if (before === value) return;
-  rec[fi] = value; state.patches.set(`${cellKey(cell)}:${field}`, { x: cell.col, y: cell.row, field, before, after: value, minimapDirty: true }); rebuildEditedImage(); refreshSide(); refreshPatches(); draw();
+  const field = els.layer.value; const value = Number.parseInt(els.brush.value, 10); if (!Number.isFinite(value)) return;
+  applyChangeSet([{ x: cell.col, y: cell.row, field, after: value }]);
 }
 function downloadPatch() { const payload = { format: 'san-editor-patch-v1', stage: state.meta.stage, fields: state.meta.fields, minimap: { dirtyCells: [...state.patches.values()].filter(p => p.minimapDirty).map(p => [p.x, p.y]) }, changes: [...state.patches.values()] }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${state.meta.stage}_patch.json`; a.click(); URL.revokeObjectURL(a.href); }
 canvas.addEventListener('pointerdown', ev => { canvas.setPointerCapture(ev.pointerId); const world = clientToWorld(ev); const cell = worldToCell(world.x, world.y); const tool = els.tool.value; if (tool === 'pan') { state.dragging = true; state.dragStart = { x: ev.clientX, y: ev.clientY, tx: state.transform.x, ty: state.transform.y }; return; } if (cell) { state.selected = cell; if (tool === 'paint') applyPaint(cell); refreshSide(); draw(); } });
@@ -299,15 +377,20 @@ canvas.addEventListener('pointerup', () => { state.dragging = false; });
 canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; draw(); }, { passive: false });
 mini.addEventListener('pointerdown', ev => { if (!state.minimap || !state.image) return; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / state.minimap.width, rect.height / state.minimap.height); const w = state.minimap.width * scale; const h = state.minimap.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * state.image.width; const y = (ev.clientY - rect.top - oy) / h * state.image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; draw(); });
 document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; draw(); });
+els.undoEdit.addEventListener('click', undoLastEdit);
+els.resetCell.addEventListener('click', resetSelectedLayerChange);
+els.resetAll.addEventListener('click', resetAllChanges);
 document.getElementById('exportPatch').addEventListener('click', downloadPatch);
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
-els.layer.addEventListener('change', () => { renderResourceList(); refreshSide(); });
+els.layer.addEventListener('change', () => { renderResourceList(); refreshSide(); refreshPatches(); });
 els.resourceFilter.addEventListener('input', renderResourceList);
 els.resourceSort.addEventListener('change', renderResourceList);
+window.addEventListener('keydown', ev => { if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && !ev.shiftKey) { ev.preventDefault(); undoLastEdit(); } });
 window.addEventListener('resize', resizeCanvas);
 async function loadImage(src) { const image = new Image(); image.src = src; await image.decode(); return image; }
 async function boot() {
   state.meta = await fetch('stage.json').then(r => r.json());
+  state.originalRecords = state.meta.records.map(record => record.slice());
   const resourcePromise = fetch(state.meta.resources).then(r => r.json());
   const imagePromise = loadImage(state.meta.image);
   const minimapPromise = loadImage(state.meta.minimap.image);
@@ -325,7 +408,7 @@ async function boot() {
   for (const layer of state.meta.editableLayers) { state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null; }
   refreshSide(); refreshPatches(); resizeCanvas(); renderResourceList();
 }
-window.sanEditor = { state, els, applyPaint, rebuildEditedImage, cellToWorld, fieldIndex, recordAt };
+window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, rebuildEditedImage, cellToWorld, fieldIndex, recordAt };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>
