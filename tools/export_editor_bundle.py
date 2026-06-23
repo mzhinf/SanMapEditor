@@ -147,7 +147,7 @@ def export_resource_catalog(blocks: dict, palette: list[int], stage_dir: Path, r
             image, meta = build_resource_image(layer, entry, palette)
             meta["used"] = usage.get(index, 0)
             sprites.append((index, fit_thumbnail(image, box), meta))
-        sprites.sort(key=lambda item: (-int(item[2].get("used", 0)), item[0]))
+        sprites.sort(key=lambda item: item[0])
         rows = max(1, (len(sprites) + cols - 1) // cols)
         atlas = Image.new("RGBA", (cols * box, rows * box), (0, 0, 0, 0))
         draw = ImageDraw.Draw(atlas)

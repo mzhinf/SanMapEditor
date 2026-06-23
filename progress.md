@@ -198,3 +198,11 @@
 - Added `resources.json` with resource indices, atlas coordinates, image dimensions, anchors, and current-stage usage counts.
 - Updated the editor to show resource palettes, select a drawable resource as the brush value, display a minimap, and include minimap dirty cells in exported patches.
 - Verified `stage11` bundle regeneration and resource counts: `acwx` 1,944, `acwy` 2,162, `acwz` 4,209 drawable entries.
+
+
+## Update 2026-06-24 Editor Inspection Fixes
+- Verified `derived/editor/stage11/stage.json`: `acwy` has 1702 non-empty cells / 391 non-empty ids, and `acwz` has 744 non-empty cells / 133 non-empty ids. The data is not all `-1`; the layers are sparse and tall `acwz` sprites can visually cover cells that are not the owning anchor record.
+- Updated `tools/editor_app.html` so tool names are visible as Inspect/Paint/Pan equivalents in Chinese, resources can be sorted by index or usage, resource labels use `xN` for current-stage usage count, and the Cell panel shows nearby non-empty `acwy/acwz` anchors.
+- Updated `tools/export_editor_bundle.py` so generated resource catalogs are sorted by numeric index by default.
+- Regenerated `derived/editor/stage11` and verified the page in the in-app browser: resource labels start with indices 0..7, sort defaults to index, and stage stats show the expected non-empty `acwy/acwz` counts.
+- Syntax check passed using compile() without writing `__pycache__`; direct `py_compile` was blocked by an existing `tools/__pycache__` permission issue.

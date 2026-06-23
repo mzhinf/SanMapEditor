@@ -97,3 +97,9 @@ Phase 5
 ## Update 2026-06-23 Editor Resource Palette Phase
 - Completed the first resource selection step: editor bundles now include visible `acwx/acwy/acwz` resource atlases and usage-sorted resource metadata.
 - Added minimap as a derived editor view with dirty-cell patch metadata. Next work is live tile redraw and safe patch-to-`.m` copy writing.
+
+
+## Update 2026-06-24 Editor UX Clarification
+- Phase 5 remains in progress.
+- Completed this slice: verified editor layer data, clarified sparse `acwy/acwz` behavior, changed resource catalog ordering to numeric index by default, added usage sorting, improved inspect context, and documented next steps for live redraw, `.m` loading, and `.s/.x` minimap/cache confirmation.
+- Next phase focus: implement draw-ready resource atlases and dirty-cell live redraw before safe `.m` copy writing.

@@ -38,7 +38,7 @@ canvas { width: 100%; height: 100%; display: block; }
 .record-grid span:nth-child(odd) { color: var(--muted); }
 .field { display: grid; grid-template-columns: 82px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
 .patch-list { font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; color: #343434; }
-.resource-controls { display: grid; grid-template-columns: 1fr 92px; gap: 8px; margin-bottom: 8px; }
+.resource-controls { display: grid; grid-template-columns: 1fr 116px 76px; gap: 8px; margin-bottom: 8px; }
 .resource-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; max-height: 260px; overflow: auto; padding-right: 2px; }
 .resource-item { height: 76px; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: 1fr 16px; align-items: center; justify-items: center; }
 .resource-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15,118,110,.18); }
@@ -58,7 +58,7 @@ canvas { width: 100%; height: 100%; display: block; }
   <div class="toolbar">
     <div class="title" id="stageTitle">stage</div>
     <label>Tool</label>
-    <select id="tool"><option value="inspect">Inspect</option><option value="paint">Paint</option><option value="pan">Pan</option></select>
+    <select id="tool" title="查看=只选中格子；绘制=把当前资源写到当前层；平移=拖动地图"><option value="inspect">查看</option><option value="paint">绘制</option><option value="pan">平移</option></select>
     <label>Layer</label>
     <select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option></select>
     <label>Value</label>
@@ -79,7 +79,7 @@ canvas { width: 100%; height: 100%; display: block; }
     </div>
     <div class="section">
       <div class="section-title">Resources</div>
-      <div class="resource-controls"><input id="resourceFilter" placeholder="index"><button id="clearFilter">Clear</button></div>
+      <div class="resource-controls"><input id="resourceFilter" placeholder="index"><select id="resourceSort"><option value="index">按编号</option><option value="used">按使用</option></select><button id="clearFilter">清除</button></div>
       <div class="resource-list" id="resourceList"></div>
     </div>
     <div class="section">
@@ -118,6 +118,7 @@ const els = {
   cellInfo: document.getElementById('cellInfo'), recordGrid: document.getElementById('recordGrid'), tool: document.getElementById('tool'),
   layer: document.getElementById('layer'), brush: document.getElementById('brush'), patchCount: document.getElementById('patchCount'),
   patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceFilter: document.getElementById('resourceFilter'),
+  resourceSort: document.getElementById('resourceSort'),
 };
 function fieldIndex(name) { return state.meta.fields.indexOf(name); }
 function recordAt(cell) { return state.meta.records[cell.row * state.meta.width + cell.col]; }
@@ -156,10 +157,35 @@ function drawMinimap() {
   miniCtx.strokeStyle = '#f59e0b'; miniCtx.lineWidth = 2; miniCtx.strokeRect(ox + view.x / state.image.width * w, oy + view.y / state.image.height * h, view.w / state.image.width * w, view.h / state.image.height * h);
 }
 function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = v; node.append(a, b); } }
+function layerStats(layer) {
+  const fi = fieldIndex(layer);
+  let nonEmpty = 0;
+  const unique = new Set();
+  for (const rec of state.meta.records) {
+    const value = rec[fi];
+    if (value !== -1) { nonEmpty++; unique.add(value); }
+  }
+  return `${nonEmpty} cells / ${unique.size} ids`;
+}
+function nearbyValues(cell, layer, radius = 3, limit = 5) {
+  const fi = fieldIndex(layer);
+  const hits = [];
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const col = cell.col + dx;
+      const row = cell.row + dy;
+      if (col < 0 || row < 0 || col >= state.meta.width || row >= state.meta.height) continue;
+      const value = state.meta.records[row * state.meta.width + col][fi];
+      if (value !== -1) hits.push({ value, col, row, dist: Math.abs(dx) + Math.abs(dy) });
+    }
+  }
+  hits.sort((a, b) => a.dist - b.dist || a.row - b.row || a.col - b.col);
+  return hits.slice(0, limit).map(h => `${h.value} @ ${h.col},${h.row}`).join(' | ') || '-';
+}
 function refreshSide() {
-  const m = state.meta; setPairs(els.stageInfo, [['Stage', m.stage], ['Cells', `${m.width} x ${m.height}`], ['Layout', m.layout], ['Palette', m.palette]]);
+  const m = state.meta; setPairs(els.stageInfo, [['Stage', m.stage], ['Cells', `${m.width} x ${m.height}`], ['Layout', m.layout], ['Palette', m.palette], ['acwy', layerStats('acwy')], ['acwz', layerStats('acwz')]]);
   if (!state.selected) { setPairs(els.cellInfo, [['Cell', '-'], ['Index', '-']]); els.recordGrid.innerHTML = ''; return; }
-  const cell = state.selected; const idx = cell.row * m.width + cell.col; const rec = recordAt(cell); setPairs(els.cellInfo, [['Cell', `${cell.col}, ${cell.row}`], ['Index', idx]]);
+  const cell = state.selected; const idx = cell.row * m.width + cell.col; const rec = recordAt(cell); setPairs(els.cellInfo, [['Cell', `${cell.col}, ${cell.row}`], ['Index', idx], ['Near acwy', nearbyValues(cell, 'acwy')], ['Near acwz', nearbyValues(cell, 'acwz')]]);
   els.recordGrid.innerHTML = ''; m.fields.forEach((name, i) => { const k = document.createElement('span'); k.textContent = name; const v = document.createElement('span'); v.textContent = rec[i]; els.recordGrid.append(k, v); });
   els.brush.value = rec[fieldIndex(els.layer.value)] ?? 0;
 }
@@ -170,7 +196,10 @@ function renderResourceList() {
   const info = state.resources.layers[layer];
   const filter = els.resourceFilter.value.trim();
   const selected = state.selectedResource[layer];
-  const entries = info.entries.filter(e => !filter || String(e.index).includes(filter)).slice(0, 240);
+  const entries = info.entries
+    .filter(e => !filter || String(e.index).includes(filter))
+    .sort((a, b) => els.resourceSort.value === 'used' ? ((b.used || 0) - (a.used || 0) || a.index - b.index) : (a.index - b.index))
+    .slice(0, 240);
   els.resourceList.textContent = '';
   let cursor = 0;
   function addChunk() {
@@ -180,7 +209,7 @@ function renderResourceList() {
       const entry = entries[cursor];
       const button = document.createElement('button');
       button.className = 'resource-item' + (selected === entry.index ? ' selected' : '');
-      button.title = `${layer} ${entry.index}`;
+      button.title = `${layer} ${entry.index}${entry.used ? `, used ${entry.used}` : ''}`;
       const thumb = document.createElement('div');
       thumb.className = 'resource-thumb';
       thumb.style.width = `${info.tileSize}px`;
@@ -189,7 +218,7 @@ function renderResourceList() {
       thumb.style.backgroundPosition = `-${entry.atlas[0]}px -${entry.atlas[1]}px`;
       const label = document.createElement('div');
       label.className = 'resource-label';
-      label.textContent = entry.used ? `${entry.index} (${entry.used})` : entry.index;
+      label.textContent = entry.used ? `${entry.index} x${entry.used}` : entry.index;
       button.append(thumb, label);
       button.addEventListener('click', () => {
         state.selectedResource[layer] = entry.index;
@@ -219,6 +248,7 @@ document.getElementById('exportPatch').addEventListener('click', downloadPatch);
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
 els.layer.addEventListener('change', () => { renderResourceList(); refreshSide(); });
 els.resourceFilter.addEventListener('input', renderResourceList);
+els.resourceSort.addEventListener('change', renderResourceList);
 window.addEventListener('resize', resizeCanvas);
 async function loadImage(src) { const image = new Image(); image.src = src; await image.decode(); return image; }
 async function boot() {

@@ -162,3 +162,31 @@ derived/cel_maps/stage11_stagger_xyz_viewport93_57_1642_1684_scale2.png
 6. 验证闭环：每次编辑后生成 CEL 渲染预览，与原图或游戏截图对比；对关键 stage 保留小型自动回归测试。
 
 优先级最高的未解问题：`acwz` 的完整 z-order/footprint、`byte08/09/10/11` 的语义、`.spr/.dor/.evt/.stg` 与地图对象之间的引用关系。
+
+
+## Editor Notes 2026-06-24
+
+`stage11.m` is not all `-1` on the overlay/object layers. The current export contains:
+
+- `acwy`: 1702 non-empty cells, 391 distinct non-empty ids.
+- `acwz`: 744 non-empty cells, 133 distinct non-empty ids.
+
+These layers are sparse by design. `acwx` is the base terrain and is present on every cell; `acwy` is an optional transparent overlay/transition layer; `acwz` is an optional object/building/footprint reference. A tall `acwz` sprite can cover neighboring cells, so clicking a visible building pixel may inspect a neighboring ground cell whose own `acwz` value is still `-1`. The editor now shows nearby non-empty `acwy/acwz` anchors in the Cell panel to make this clearer.
+
+Resource list behavior:
+
+- The generated resource catalog is sorted by numeric index by default.
+- The editor can switch between numeric order and current-stage usage order.
+- A label like `123 x7` means resource index `123` appears 7 times in the current `.m` file.
+
+Tool modes:
+
+- Inspect: select a cell and show its decoded `.m` record without changing data.
+- Paint: write the current resource index into the active layer for the selected cell.
+- Pan: drag the map view.
+
+Next implementation plan for lower-priority items:
+
+1. Live redraw edits: export draw-ready CEL tile/object atlases, add an overlay canvas, and repaint dirty cells immediately using the same stagger transform as `render_m_cel_map.py`. `acwx` redraw replaces the base diamond, `acwy` draws transparent overlay pixels, and `acwz` uses the recovered anchor rule plus local z-order refresh.
+2. Select/load `.m` files: add an editor index page for exported stages first, then add a browser File API path that parses `Hello1.0` `.m` files locally and pairs them with the already exported `kingdom.cel` resource catalog.
+3. Minimap/cache write-back: treat minimap as derived from edited `.m` records first. Continue `Emperor.exe` xref research before writing `.s/.x`; current evidence says they are minimap/cache-like, but the exact write-back mapping is not confirmed yet.

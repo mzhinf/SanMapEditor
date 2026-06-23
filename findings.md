@@ -173,3 +173,31 @@ Editor implications:
 - Replacement cannot be numeric-only; the editor must expose resource palettes for `acwx`, `acwy`, and `acwz` so the user sees the actual drawable graphic before painting.
 - `tools/export_editor_bundle.py` now exports `resources.json` and atlas PNGs for all drawable entries in those three layers. Current-stage used resources are sorted first and include a `used` count.
 - The minimap should be treated as a derived view, not an unrelated bitmap. A terrain/object edit marks the affected cells as minimap-dirty; later write-back should regenerate the minimap/cache representation from the same `.m` record table, and only then update `.s/.x` if those files are confirmed as game minimap/cache outputs.
+
+
+## Editor Notes 2026-06-24
+
+`stage11.m` is not all `-1` on the overlay/object layers. The current export contains:
+
+- `acwy`: 1702 non-empty cells, 391 distinct non-empty ids.
+- `acwz`: 744 non-empty cells, 133 distinct non-empty ids.
+
+These layers are sparse by design. `acwx` is the base terrain and is present on every cell; `acwy` is an optional transparent overlay/transition layer; `acwz` is an optional object/building/footprint reference. A tall `acwz` sprite can cover neighboring cells, so clicking a visible building pixel may inspect a neighboring ground cell whose own `acwz` value is still `-1`. The editor now shows nearby non-empty `acwy/acwz` anchors in the Cell panel to make this clearer.
+
+Resource list behavior:
+
+- The generated resource catalog is sorted by numeric index by default.
+- The editor can switch between numeric order and current-stage usage order.
+- A label like `123 x7` means resource index `123` appears 7 times in the current `.m` file.
+
+Tool modes:
+
+- Inspect: select a cell and show its decoded `.m` record without changing data.
+- Paint: write the current resource index into the active layer for the selected cell.
+- Pan: drag the map view.
+
+Next implementation plan for lower-priority items:
+
+1. Live redraw edits: export draw-ready CEL tile/object atlases, add an overlay canvas, and repaint dirty cells immediately using the same stagger transform as `render_m_cel_map.py`. `acwx` redraw replaces the base diamond, `acwy` draws transparent overlay pixels, and `acwz` uses the recovered anchor rule plus local z-order refresh.
+2. Select/load `.m` files: add an editor index page for exported stages first, then add a browser File API path that parses `Hello1.0` `.m` files locally and pairs them with the already exported `kingdom.cel` resource catalog.
+3. Minimap/cache write-back: treat minimap as derived from edited `.m` records first. Continue `Emperor.exe` xref research before writing `.s/.x`; current evidence says they are minimap/cache-like, but the exact write-back mapping is not confirmed yet.
