@@ -88,3 +88,8 @@ Phase 5
 - Palette calibration phase completed: no embedded EXE palette found; default map palette changed to `BIGMAP01.bmp` because it matches screenshot water colors.
 - Added `README.md` as the main operating guide for all scripts and outputs.
 - Next editor plan is now explicit: preserve raw `.m` records for round-trip, modularize stagger rendering and picking, build resource palettes, implement terrain/overlay/object editing, then decode scenario/unit/event side files.
+
+## Update 2026-06-23 Editor Prototype Start
+- Started the map editor phase with a protected data-model workflow: export stage records and rendered CEL map into `derived/editor/<stage>/`.
+- First editor prototype supports map browsing, stagger cell picking, record inspection, local `acwx/acwy/acwz` edits, and JSON patch export.
+- Next editor work: render changed tiles live from CEL cache, add tile/object palette panels, then implement patch-to-`.m` writing for copied stages.

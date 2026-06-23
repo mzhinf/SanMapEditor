@@ -186,3 +186,9 @@
 - Confirmed the river color issue is caused by using `stage.bmp` as the default palette; switched script defaults to `BIGMAP01.bmp`.
 - Created `README.md` with script usage, outputs, palette notes, and the next-stage map editor plan.
 - Updated `tools/render_m_cel_map.py` so non-default `--palette` renders include `_pal<name>` in the output filename, preventing palette comparison outputs from overwriting each other.
+
+## Update 2026-06-23 Editor Prototype Start
+- Switched tool defaults to `SAN_RGB_PALETTE` from `tools/palette.py`; BMP palettes are now opt-in through `--palette`.
+- Added `tools/export_editor_bundle.py` and `tools/editor_app.html`.
+- Exported `derived/editor/stage11/` with `map.png`, `stage.json`, and `editor.html`.
+- Verified the generated editor page through a local Chrome headless screenshot at `http://127.0.0.1:8787/stage11/editor.html`.

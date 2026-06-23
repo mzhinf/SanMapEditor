@@ -154,3 +154,8 @@
 - `Emperor.exe` has no embedded bitmap resource palette; palette-related imports are GDI/DirectDraw system palette functions, and the executable references external BMP files.
 - The current map CEL pixels use water-related indices `11/12/13`; `stage.bmp` maps those indices to bright green, while `BIGMAP01.bmp`/`mainmenu.bmp` map them to blue and match `derived/stage11.png`.
 - Changed script defaults to `BIGMAP01.bmp` for map/resource preview generation. `stage.bmp` is still available via `--palette stage.bmp` for comparison.
+
+## Update 2026-06-23 Editor Data Model
+- The first editor bundle uses `.m` records as the authoritative editable table and preserves all 12 decoded fields per cell: `acwx`, `acwy`, `acwz`, `word06`, `byte08..byte12`, `final_palette`, `byte14`, `byte15`.
+- The editor prototype writes JSON patch data rather than modifying original `.m` files. This keeps the round-trip path reversible while field semantics are still being decoded.
+- Runtime palette selection now defaults to `tools/palette.py::SAN_RGB_PALETTE`, with BMP palette names remaining available for comparison.

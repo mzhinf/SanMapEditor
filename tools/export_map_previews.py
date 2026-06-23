@@ -119,7 +119,7 @@ def export_dat_sheet(path: Path, palette: list[int], out_dir: Path, limit: int =
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", nargs="?", default=".", type=Path)
-    parser.add_argument("--palette", default="BIGMAP01.bmp")
+    parser.add_argument("--palette", default="SAN_RGB_PALETTE")
     parser.add_argument("--out", default="derived", type=Path)
     parser.add_argument("--stage", action="append", help="stage stem such as stage20; can be repeated")
     args = parser.parse_args()

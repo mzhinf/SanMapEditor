@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from extract_kingdom import find_game_dir, load_palette
+from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
 
 DIAMOND_ROWS = [
     (19, 0, 2), (17, 2, 6), (15, 8, 10), (13, 18, 14), (11, 32, 18),
@@ -221,7 +221,7 @@ def main() -> int:
     parser.add_argument("--layout", choices=["rect", "iso", "skew", "stagger"], default="stagger")
     parser.add_argument("--layers", default="xyz", help="Include x=acwx, y=acwy, z=acwz")
     parser.add_argument("--out", default="derived/cel_maps", type=Path)
-    parser.add_argument("--palette", default="BIGMAP01.bmp")
+    parser.add_argument("--palette", default="SAN_RGB_PALETTE")
     parser.add_argument("--flip-x", action="store_true", help="Flip rendered world horizontally after drawing")
     parser.add_argument("--crop", nargs=4, type=int, metavar=("X", "Y", "W", "H"), help="Crop a rectangular viewport after optional flip")
     parser.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale after crop")
@@ -235,7 +235,7 @@ def main() -> int:
     stage_path = game_dir / f"{args.stage}.m"
     out_dir = args.out if args.out.is_absolute() else root / args.out
     suffix = f"{args.stage}_{args.layout}_{args.layers}"
-    if args.palette != "BIGMAP01.bmp":
+    if args.palette != DEFAULT_PALETTE_SOURCE:
         suffix += f"_pal{Path(args.palette).stem}"
     if args.flip_x:
         suffix += "_flipx"

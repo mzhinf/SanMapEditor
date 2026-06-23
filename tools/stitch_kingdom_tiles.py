@@ -133,7 +133,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", nargs="?", default=".", type=Path)
     parser.add_argument("--out", default="derived/kingdom", type=Path)
-    parser.add_argument("--palette", default="BIGMAP01.bmp")
+    parser.add_argument("--palette", default="SAN_RGB_PALETTE")
     parser.add_argument("--acwz-align", choices=["center", "bottom", "top"], default="center")
     args = parser.parse_args()
 

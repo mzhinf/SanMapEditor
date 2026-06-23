@@ -8,6 +8,13 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+try:
+    from palette import SAN_RGB_PALETTE
+except ImportError:
+    from tools.palette import SAN_RGB_PALETTE
+
+DEFAULT_PALETTE_SOURCE = "SAN_RGB_PALETTE"
+
 VALID_CODES = {b"acwx", b"acwy", b"acwz"}
 
 
@@ -20,7 +27,9 @@ def find_game_dir(root: Path) -> Path:
     raise FileNotFoundError("Could not find game directory containing Emperor.exe")
 
 
-def load_palette(game_dir: Path, palette_source: str) -> list[int]:
+def load_palette(game_dir: Path, palette_source: str | None = DEFAULT_PALETTE_SOURCE) -> list[int]:
+    if palette_source in (None, "", DEFAULT_PALETTE_SOURCE, "san", "SAN"):
+        return [c for rgb in SAN_RGB_PALETTE for c in rgb]
     palette = Image.open(game_dir / palette_source).getpalette()
     if not palette:
         raise ValueError(f"{palette_source} has no palette")
@@ -167,7 +176,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", nargs="?", default=".", type=Path)
     parser.add_argument("--out", default="derived/kingdom", type=Path)
-    parser.add_argument("--palette", default="BIGMAP01.bmp")
+    parser.add_argument("--palette", default="SAN_RGB_PALETTE")
     parser.add_argument("--sheet-limit", type=int, default=240)
     args = parser.parse_args()
 

@@ -10,7 +10,7 @@
 $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
 ```
 
-脚本会自动在当前目录或子目录里寻找包含 `Emperor.exe` 的游戏目录。默认 palette 是 `BIGMAP01.bmp`，因为当前 `stage11.png` 实机截图中的河流颜色与这组通用 BMP palette 匹配；`stage.bmp` 虽然被 `Emperor.exe` 引用，但它把水相关索引 `1..13` 映成亮绿，不适合 `kingdom.cel` 地图渲染。
+脚本会自动在当前目录或子目录里寻找包含 `Emperor.exe` 的游戏目录。默认 palette 暂时使用 `tools/palette.py` 中的 `SAN_RGB_PALETTE`；如需对比外部 BMP 色盘，可以通过 `--palette BIGMAP01.bmp` 或其他 BMP 文件名显式指定。
 
 ## 常用脚本
 
@@ -97,6 +97,24 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 
 说明：这些是编辑器数据模型的雏形。预览图是属性/索引诊断图，不等同于最终游戏画面。
 
+
+### `tools/export_editor_bundle.py`
+
+Builds the first editor-ready bundle: a rendered CEL map image, editable record JSON, and a static HTML editor.
+
+```powershell
+& $py tools/export_editor_bundle.py . --stage stage11
+```
+
+Outputs:
+
+- `derived/editor/stage11/map.png`
+- `derived/editor/stage11/stage.json`
+- `derived/editor/stage11/editor.html`
+- `derived/editor/index.json`
+
+Current editor scope: map browsing, zoom/pan, stagger cell picking, `.m` record inspection, local `acwx/acwy/acwz` edits, and JSON patch export. It does not overwrite the original `.m` files yet.
+
 ### `tools/render_m_cel_map.py`
 
 使用 `stageNN.m` 的 `acwx/acwy/acwz` 索引和 `kingdom.cel` 真实像素绘制游戏地图。
@@ -112,7 +130,7 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 - `--layers xyz`：`x=acwx` 基础地形，`y=acwy` 叠加/过渡，`z=acwz` 物件/建筑。
 - `--crop X Y W H`：渲染后裁切视口。
 - `--scale 2`：最近邻放大，便于和截图对比。
-- `--palette BIGMAP01.bmp`：默认值；可显式指定其他 BMP palette 做对比，非默认 palette 输出文件名会附加 `_pal<name>`。
+- `--palette SAN_RGB_PALETTE`：默认值，来自 `tools/palette.py`；可显式指定 BMP palette 做对比，非默认 palette 输出文件名会附加 `_pal<name>`。
 
 当前确认的地图坐标变换：
 
@@ -131,7 +149,8 @@ derived/cel_maps/stage11_stagger_xyz_viewport93_57_1642_1684_scale2.png
 
 `Emperor.exe` 的 PE resource 中没有 `RT_BITMAP`，目前没有发现内嵌 DIB palette。EXE 导入了 `SetSystemPaletteUse`、`GetSystemPaletteEntries` 和 `DirectDrawCreate`，并在字符串表中引用外部 BMP 文件，包括 `stage.bmp`。
 
-实机截图校准显示：河流常用索引 `11/12/13` 在 `BIGMAP01.bmp`、`mainmenu.bmp` 等通用 palette 中是蓝色，和 `derived/stage11.png` 一致；`stage.bmp` 将这些索引映成亮绿，因此不再作为地图渲染默认 palette。
+实机截图校准显示：河流常用索引 `11/12/13` 在 `BIGMAP01.bmp`、`mainmenu.bmp` 等通用 palette 中是蓝色，和 `derived/stage11.png` 一致；`stage.bmp` 将这些索引映成亮绿。当前工具默认使用 `tools/palette.py` 的 `SAN_RGB_PALETTE`，便于后续集中调整。
+
 
 ## 下一步地图编辑器方案
 
