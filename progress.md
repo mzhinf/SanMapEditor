@@ -206,3 +206,11 @@
 - Updated `tools/export_editor_bundle.py` so generated resource catalogs are sorted by numeric index by default.
 - Regenerated `derived/editor/stage11` and verified the page in the in-app browser: resource labels start with indices 0..7, sort defaults to index, and stage stats show the expected non-empty `acwy/acwz` counts.
 - Syntax check passed using compile() without writing `__pycache__`; direct `py_compile` was blocked by an existing `tools/__pycache__` permission issue.
+
+
+## Update 2026-06-24 Live Redraw
+- Added draw-ready resource atlas generation to `tools/export_editor_bundle.py`: `draw_acwx.png`, `draw_acwy.png`, and `draw_acwz.png` are exported next to thumbnail resource sheets.
+- Updated `resources.json` to `san-editor-resources-v2`; entries now include both thumbnail `atlas` rectangles and draw-source `draw` rectangles.
+- Updated `tools/editor_app.html` to load draw atlases, rebuild an offscreen editable map image from current records, and immediately show visual edits after Paint.
+- Changed patch/selection markers to outlines so edited tile pixels remain visible.
+- Regenerated `derived/editor/stage11`; browser UI verification passed with one Paint action producing one patch and a local screenshot byte diff of 901.

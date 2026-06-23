@@ -104,7 +104,11 @@ const miniCtx = mini.getContext('2d');
 const state = {
   meta: null,
   resources: null,
+  resourceByIndex: {},
+  drawImages: {},
   image: null,
+  renderCanvas: null,
+  renderCtx: null,
   minimap: null,
   selected: null,
   selectedResource: { acwx: null, acwy: null, acwz: null },
@@ -124,6 +128,7 @@ function fieldIndex(name) { return state.meta.fields.indexOf(name); }
 function recordAt(cell) { return state.meta.records[cell.row * state.meta.width + cell.col]; }
 function cellKey(cell) { return `${cell.col},${cell.row}`; }
 function cellToWorld(col, row) { const [ox, oy] = state.meta.origin; return { x: ox + col * 40 + (row & 1 ? 20 : 0), y: oy + row * 10 }; }
+function displayImage() { return state.renderCanvas || state.image; }
 function worldToCell(x, y) {
   const [ox, oy] = state.meta.origin;
   const row = Math.floor((y - oy) / 10);
@@ -140,21 +145,23 @@ function resizeCanvas() {
 }
 function diamondPath(col, row) { const p = cellToWorld(col, row); ctx.beginPath(); ctx.moveTo(p.x + 20, p.y); ctx.lineTo(p.x + 40, p.y + 10); ctx.lineTo(p.x + 20, p.y + 20); ctx.lineTo(p.x, p.y + 10); ctx.closePath(); }
 function draw() {
-  if (!state.image) return;
-  const rect = canvas.getBoundingClientRect(); ctx.save(); ctx.clearRect(0, 0, rect.width, rect.height); ctx.translate(state.transform.x, state.transform.y); ctx.scale(state.transform.scale, state.transform.scale); ctx.imageSmoothingEnabled = false; ctx.drawImage(state.image, 0, 0); ctx.lineWidth = 1 / state.transform.scale;
-  for (const patch of state.patches.values()) { diamondPath(patch.x, patch.y); ctx.fillStyle = 'rgba(15,118,110,0.22)'; ctx.fill(); ctx.strokeStyle = 'rgba(15,118,110,0.9)'; ctx.stroke(); }
-  if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.fillStyle = 'rgba(245,158,11,0.18)'; ctx.fill(); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / state.transform.scale; ctx.stroke(); }
+  const image = displayImage();
+  if (!image) return;
+  const rect = canvas.getBoundingClientRect(); ctx.save(); ctx.clearRect(0, 0, rect.width, rect.height); ctx.translate(state.transform.x, state.transform.y); ctx.scale(state.transform.scale, state.transform.scale); ctx.imageSmoothingEnabled = false; ctx.drawImage(image, 0, 0); ctx.lineWidth = 1 / state.transform.scale;
+  for (const patch of state.patches.values()) { diamondPath(patch.x, patch.y); ctx.strokeStyle = 'rgba(15,118,110,0.9)'; ctx.stroke(); }
+  if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / state.transform.scale; ctx.stroke(); }
   ctx.restore(); drawMinimap();
 }
 function drawMinimap() {
-  if (!state.minimap) return;
+  const image = displayImage();
+  if (!state.minimap || !image) return;
   const rect = mini.getBoundingClientRect(); miniCtx.clearRect(0, 0, rect.width, rect.height);
   const scale = Math.min(rect.width / state.minimap.width, rect.height / state.minimap.height);
   const w = state.minimap.width * scale; const h = state.minimap.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2;
   miniCtx.imageSmoothingEnabled = true; miniCtx.drawImage(state.minimap, ox, oy, w, h);
   const mainRect = canvas.getBoundingClientRect();
   const view = { x: -state.transform.x / state.transform.scale, y: -state.transform.y / state.transform.scale, w: mainRect.width / state.transform.scale, h: mainRect.height / state.transform.scale };
-  miniCtx.strokeStyle = '#f59e0b'; miniCtx.lineWidth = 2; miniCtx.strokeRect(ox + view.x / state.image.width * w, oy + view.y / state.image.height * h, view.w / state.image.width * w, view.h / state.image.height * h);
+  miniCtx.strokeStyle = '#f59e0b'; miniCtx.lineWidth = 2; miniCtx.strokeRect(ox + view.x / image.width * w, oy + view.y / image.height * h, view.w / image.width * w, view.h / image.height * h);
 }
 function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = v; node.append(a, b); } }
 function layerStats(layer) {
@@ -233,9 +240,57 @@ function renderResourceList() {
   }
   addChunk();
 }
+function buildResourceIndex() {
+  state.resourceByIndex = {};
+  for (const layer of state.meta.editableLayers) {
+    state.resourceByIndex[layer] = new Map((state.resources.layers[layer]?.entries || []).map(entry => [entry.index, entry]));
+  }
+}
+function drawResource(layer, value, col, row, targetCtx) {
+  if (value < 0) return;
+  const entry = state.resourceByIndex[layer]?.get(value);
+  const atlas = state.drawImages[layer];
+  if (!entry || !atlas || !entry.draw) return;
+  const [sx, sy, sw, sh] = entry.draw;
+  const p = cellToWorld(col, row);
+  let dx = p.x;
+  let dy = p.y;
+  if (layer === 'acwz') {
+    dx = p.x + 20 - (entry.xAnchor || 0);
+    dy = p.y + 20 - (entry.yAnchor || 0);
+  }
+  targetCtx.drawImage(atlas, sx, sy, sw, sh, dx, dy, sw, sh);
+}
+function rebuildEditedImage() {
+  if (!state.image || !state.resources) return;
+  if (!state.renderCanvas) {
+    state.renderCanvas = document.createElement('canvas');
+    state.renderCanvas.width = state.image.width;
+    state.renderCanvas.height = state.image.height;
+    state.renderCtx = state.renderCanvas.getContext('2d');
+  }
+  const rctx = state.renderCtx;
+  rctx.clearRect(0, 0, state.renderCanvas.width, state.renderCanvas.height);
+  rctx.imageSmoothingEnabled = false;
+  for (let row = 0; row < state.meta.height; row++) {
+    for (let col = 0; col < state.meta.width; col++) {
+      drawResource('acwx', state.meta.records[row * state.meta.width + col][fieldIndex('acwx')], col, row, rctx);
+    }
+  }
+  for (let row = 0; row < state.meta.height; row++) {
+    for (let col = 0; col < state.meta.width; col++) {
+      drawResource('acwy', state.meta.records[row * state.meta.width + col][fieldIndex('acwy')], col, row, rctx);
+    }
+  }
+  for (let row = 0; row < state.meta.height; row++) {
+    for (let col = 0; col < state.meta.width; col++) {
+      drawResource('acwz', state.meta.records[row * state.meta.width + col][fieldIndex('acwz')], col, row, rctx);
+    }
+  }
+}
 function applyPaint(cell) {
   const field = els.layer.value; const fi = fieldIndex(field); if (fi < 0) return; const rec = recordAt(cell); const value = Number.parseInt(els.brush.value, 10); if (!Number.isFinite(value)) return; const before = rec[fi]; if (before === value) return;
-  rec[fi] = value; state.patches.set(`${cellKey(cell)}:${field}`, { x: cell.col, y: cell.row, field, before, after: value, minimapDirty: true }); refreshSide(); refreshPatches(); draw();
+  rec[fi] = value; state.patches.set(`${cellKey(cell)}:${field}`, { x: cell.col, y: cell.row, field, before, after: value, minimapDirty: true }); rebuildEditedImage(); refreshSide(); refreshPatches(); draw();
 }
 function downloadPatch() { const payload = { format: 'san-editor-patch-v1', stage: state.meta.stage, fields: state.meta.fields, minimap: { dirtyCells: [...state.patches.values()].filter(p => p.minimapDirty).map(p => [p.x, p.y]) }, changes: [...state.patches.values()] }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${state.meta.stage}_patch.json`; a.click(); URL.revokeObjectURL(a.href); }
 canvas.addEventListener('pointerdown', ev => { canvas.setPointerCapture(ev.pointerId); const world = clientToWorld(ev); const cell = worldToCell(world.x, world.y); const tool = els.tool.value; if (tool === 'pan') { state.dragging = true; state.dragStart = { x: ev.clientX, y: ev.clientY, tx: state.transform.x, ty: state.transform.y }; return; } if (cell) { state.selected = cell; if (tool === 'paint') applyPaint(cell); refreshSide(); draw(); } });
@@ -259,10 +314,18 @@ async function boot() {
   state.image = await imagePromise;
   state.minimap = await minimapPromise;
   state.resources = await resourcePromise;
+  const drawPromises = state.meta.editableLayers.map(async layer => {
+    const src = state.resources.layers[layer]?.drawImage;
+    if (src) state.drawImages[layer] = await loadImage(src);
+  });
+  await Promise.all(drawPromises);
+  buildResourceIndex();
+  rebuildEditedImage();
   els.title.textContent = state.meta.stage;
   for (const layer of state.meta.editableLayers) { state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null; }
   refreshSide(); refreshPatches(); resizeCanvas(); renderResourceList();
 }
+window.sanEditor = { state, els, applyPaint, rebuildEditedImage, cellToWorld, fieldIndex, recordAt };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>

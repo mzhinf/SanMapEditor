@@ -103,3 +103,8 @@ Phase 5
 - Phase 5 remains in progress.
 - Completed this slice: verified editor layer data, clarified sparse `acwy/acwz` behavior, changed resource catalog ordering to numeric index by default, added usage sorting, improved inspect context, and documented next steps for live redraw, `.m` loading, and `.s/.x` minimap/cache confirmation.
 - Next phase focus: implement draw-ready resource atlases and dirty-cell live redraw before safe `.m` copy writing.
+
+
+## Update 2026-06-24 Live Redraw Complete
+- Completed the first live redraw slice for Phase 5: editor bundles now include draw-ready CEL atlases and the browser editor rebuilds the visible map from edited records after Paint.
+- Remaining Phase 5 work: optimize redraw to dirty neighborhoods, add `.m` file/stage selection loading, implement safe patch-to-`.m` copy writing, and continue `.s/.x` minimap/cache confirmation in `Emperor.exe`.

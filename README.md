@@ -190,3 +190,20 @@ Next implementation plan for lower-priority items:
 1. Live redraw edits: export draw-ready CEL tile/object atlases, add an overlay canvas, and repaint dirty cells immediately using the same stagger transform as `render_m_cel_map.py`. `acwx` redraw replaces the base diamond, `acwy` draws transparent overlay pixels, and `acwz` uses the recovered anchor rule plus local z-order refresh.
 2. Select/load `.m` files: add an editor index page for exported stages first, then add a browser File API path that parses `Hello1.0` `.m` files locally and pairs them with the already exported `kingdom.cel` resource catalog.
 3. Minimap/cache write-back: treat minimap as derived from edited `.m` records first. Continue `Emperor.exe` xref research before writing `.s/.x`; current evidence says they are minimap/cache-like, but the exact write-back mapping is not confirmed yet.
+
+
+## Live Redraw Update 2026-06-24
+
+The editor now exports draw-ready CEL atlases in addition to thumbnail resource sheets:
+
+- `draw_acwx.png`: original 40x20 base terrain diamonds.
+- `draw_acwy.png`: original 40x20 transparent overlay diamonds, with palette index 0 transparent.
+- `draw_acwz.png`: packed original object/building sprites, preserving `xAnchor/yAnchor` metadata.
+
+`resources.json` is now `san-editor-resources-v2`. Each resource entry keeps the thumbnail `atlas` rectangle for the resource browser and a `draw` rectangle for live map rendering.
+
+The browser editor now rebuilds an offscreen editable map image from the current `.m` records whenever Paint changes a cell. It draws the three layers in the same order as the renderer: all `acwx`, then all `acwy`, then all `acwz`; `acwz` uses `screen_x + 20 - xAnchor` and `screen_y + 20 - yAnchor`. Patch and selection markers are now outlines only, so they do not hide the edited tile pixels.
+
+Verification: regenerated `derived/editor/stage11`, loaded `http://127.0.0.1:8787/stage11/editor.html`, performed a real Paint action through the browser UI, and confirmed the clicked region screenshot changed (`byteDiff=901`) while the patch list changed to one dirty edit.
+
+Known limitation: the first live-redraw version rebuilds the whole stage image after each Paint. This is simple and correct for the current `stage11` bundle, but a later pass should redraw only a dirty neighborhood and improve `acwz` footprint/z-order refresh for larger maps.

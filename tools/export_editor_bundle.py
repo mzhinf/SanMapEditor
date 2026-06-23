@@ -107,8 +107,9 @@ def fit_thumbnail(image: Image.Image, box_size: int) -> Image.Image:
 
 def build_resource_image(layer: str, entry: dict, palette: list[int]) -> tuple[Image.Image, dict]:
     if layer in ("acwx", "acwy"):
-        tile, mask = make_diamond_tile(entry["pixels"], palette)
-        image = indexed_to_rgba(tile, mask)
+        tile, diamond_mask = make_diamond_tile(entry["pixels"], palette)
+        alpha = diamond_mask if layer == "acwx" else None
+        image = indexed_to_rgba(tile, alpha)
         meta = {"width": 40, "height": 20}
         return image, meta
     obj = make_object(entry, palette)
@@ -122,6 +123,50 @@ def build_resource_image(layer: str, entry: dict, palette: list[int]) -> tuple[I
     return image, meta
 
 
+def pack_fixed_atlas(items: list[tuple[int, Image.Image, dict]], cell_size: tuple[int, int]) -> tuple[Image.Image, dict[int, list[int]]]:
+    cell_w, cell_h = cell_size
+    cols = 32
+    rows = max(1, (len(items) + cols - 1) // cols)
+    atlas = Image.new("RGBA", (cols * cell_w, rows * cell_h), (0, 0, 0, 0))
+    rects: dict[int, list[int]] = {}
+    for n, (index, image, _meta) in enumerate(items):
+        x = (n % cols) * cell_w
+        y = (n // cols) * cell_h
+        atlas.alpha_composite(image, (x, y))
+        rects[index] = [x, y, image.width, image.height]
+    return atlas, rects
+
+
+def pack_shelf_atlas(items: list[tuple[int, Image.Image, dict]], max_width: int = 4096, pad: int = 1) -> tuple[Image.Image, dict[int, list[int]]]:
+    shelves: list[tuple[int, int, list[tuple[int, int, Image.Image]]]] = []
+    x = 0
+    y = 0
+    shelf_h = 0
+    current: list[tuple[int, int, Image.Image]] = []
+    rects: dict[int, list[int]] = {}
+    for index, image, _meta in items:
+        w, h = image.size
+        if x and x + w > max_width:
+            shelves.append((y, shelf_h, current))
+            y += shelf_h + pad
+            x = 0
+            shelf_h = 0
+            current = []
+        current.append((x, index, image))
+        rects[index] = [x, y, w, h]
+        x += w + pad
+        shelf_h = max(shelf_h, h)
+    if current:
+        shelves.append((y, shelf_h, current))
+    height = max(1, y + shelf_h)
+    atlas = Image.new("RGBA", (max_width, height), (0, 0, 0, 0))
+    for shelf_y, _shelf_h, shelf_items in shelves:
+        for item_x, _index, image in shelf_items:
+            atlas.alpha_composite(image, (item_x, shelf_y))
+    used_width = max((rect[0] + rect[2] for rect in rects.values()), default=1)
+    return atlas.crop((0, 0, used_width, height)), rects
+
+
 def layer_usage(records: list[list[int]], layer: str) -> dict[int, int]:
     field = FIELD_NAMES.index(layer)
     usage: dict[int, int] = {}
@@ -133,21 +178,30 @@ def layer_usage(records: list[list[int]], layer: str) -> dict[int, int]:
 
 
 def export_resource_catalog(blocks: dict, palette: list[int], stage_dir: Path, records: list[list[int]]) -> dict:
-    catalog = {"format": "san-editor-resources-v1", "layers": {}}
+    catalog = {"format": "san-editor-resources-v2", "layers": {}}
     usage_by_layer = {layer: layer_usage(records, layer) for layer in EDITABLE_LAYERS}
     for layer in EDITABLE_LAYERS:
         box = 56 if layer != "acwz" else 72
         cols = 16 if layer != "acwz" else 12
         entries = []
         sprites: list[tuple[int, Image.Image, dict]] = []
+        draw_items: list[tuple[int, Image.Image, dict]] = []
         usage = usage_by_layer[layer]
         for index, entry in enumerate(blocks[layer]["entries"]):
             if entry is None:
                 continue
             image, meta = build_resource_image(layer, entry, palette)
             meta["used"] = usage.get(index, 0)
-            sprites.append((index, fit_thumbnail(image, box), meta))
+            sprites.append((index, fit_thumbnail(image, box), meta.copy()))
+            draw_items.append((index, image, meta.copy()))
         sprites.sort(key=lambda item: item[0])
+        draw_items.sort(key=lambda item: item[0])
+        if layer in ("acwx", "acwy"):
+            draw_atlas, draw_rects = pack_fixed_atlas(draw_items, (40, 20))
+        else:
+            draw_atlas, draw_rects = pack_shelf_atlas(draw_items)
+        draw_image_name = f"draw_{layer}.png"
+        draw_atlas.save(stage_dir / draw_image_name)
         rows = max(1, (len(sprites) + cols - 1) // cols)
         atlas = Image.new("RGBA", (cols * box, rows * box), (0, 0, 0, 0))
         draw = ImageDraw.Draw(atlas)
@@ -156,10 +210,10 @@ def export_resource_catalog(blocks: dict, palette: list[int], stage_dir: Path, r
             y = (n // cols) * box
             atlas.alpha_composite(thumb, (x, y))
             draw.text((x + 3, y + box - 12), str(index), fill=(255, 255, 255, 230), stroke_width=1, stroke_fill=(0, 0, 0, 220))
-            entries.append({"index": index, "atlas": [x, y, box, box], **meta})
+            entries.append({"index": index, "atlas": [x, y, box, box], "draw": draw_rects[index], **meta})
         image_name = f"resources_{layer}.png"
         atlas.save(stage_dir / image_name)
-        catalog["layers"][layer] = {"image": image_name, "tileSize": box, "columns": cols, "entries": entries}
+        catalog["layers"][layer] = {"image": image_name, "drawImage": draw_image_name, "tileSize": box, "columns": cols, "entries": entries}
     (stage_dir / "resources.json").write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     return catalog
 
