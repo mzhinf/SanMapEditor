@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import math
@@ -119,7 +119,7 @@ def export_dat_sheet(path: Path, palette: list[int], out_dir: Path, limit: int =
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", nargs="?", default=".", type=Path)
-    parser.add_argument("--palette", default="stage.bmp")
+    parser.add_argument("--palette", default="BIGMAP01.bmp")
     parser.add_argument("--out", default="derived", type=Path)
     parser.add_argument("--stage", action="append", help="stage stem such as stage20; can be repeated")
     args = parser.parse_args()
@@ -152,4 +152,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

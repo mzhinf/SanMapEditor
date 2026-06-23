@@ -148,3 +148,9 @@
   - `derived/cel_maps/stage11_stagger_xyz_scale2.png`
   - `derived/cel_maps/stage11_stagger_xyz_viewport93_57_1642_1684_scale2.png` (3284x3368, matching the screenshot dimensions)
 - Remaining differences vs `stage11.png`: UI and soldiers are not part of `.m`/`kingdom.cel` terrain rendering; they must come from UI resources and `.spr`/unit systems. Some acwz z-order/footprint details still need refinement, but the terrain/world transform is now aligned.
+
+## Update 2026-06-23 Palette Calibration
+- Checked all BMP palettes and `Emperor.exe` resources/import strings after the user noticed rivers were not blue.
+- `Emperor.exe` has no embedded bitmap resource palette; palette-related imports are GDI/DirectDraw system palette functions, and the executable references external BMP files.
+- The current map CEL pixels use water-related indices `11/12/13`; `stage.bmp` maps those indices to bright green, while `BIGMAP01.bmp`/`mainmenu.bmp` map them to blue and match `derived/stage11.png`.
+- Changed script defaults to `BIGMAP01.bmp` for map/resource preview generation. `stage.bmp` is still available via `--palette stage.bmp` for comparison.

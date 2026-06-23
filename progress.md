@@ -179,3 +179,10 @@
   - `derived/cel_maps/stage11_stagger_xyz_scale2.png`
   - `derived/cel_maps/stage11_stagger_xyz_viewport93_57_1642_1684_scale2.png` (3284x3368, matching the screenshot dimensions)
 - Remaining differences vs `stage11.png`: UI and soldiers are not part of `.m`/`kingdom.cel` terrain rendering; they must come from UI resources and `.spr`/unit systems. Some acwz z-order/footprint details still need refinement, but the terrain/world transform is now aligned.
+
+## Update 2026-06-23 Palette and README Pass
+- Used Codex bundled Python for session catchup because the default `python` command is unavailable.
+- Audited BMP palettes and `Emperor.exe` PE resources/import strings.
+- Confirmed the river color issue is caused by using `stage.bmp` as the default palette; switched script defaults to `BIGMAP01.bmp`.
+- Created `README.md` with script usage, outputs, palette notes, and the next-stage map editor plan.
+- Updated `tools/render_m_cel_map.py` so non-default `--palette` renders include `_pal<name>` in the output filename, preventing palette comparison outputs from overwriting each other.

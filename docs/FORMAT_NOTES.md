@@ -1,4 +1,4 @@
-﻿# Sangokushi Hegemony / Emperor Map Format Notes
+# Sangokushi Hegemony / Emperor Map Format Notes
 
 This document records the recovered map/resource structure observed from `Emperor.exe` and the game asset directory.
 
@@ -253,3 +253,10 @@ Exported previews: `derived/kingdom/acwz_align_compare.png` and `derived/kingdom
   - `derived/cel_maps/stage11_stagger_xyz_scale2.png`
   - `derived/cel_maps/stage11_stagger_xyz_viewport93_57_1642_1684_scale2.png` (3284x3368, matching the screenshot dimensions)
 - Remaining differences vs `stage11.png`: UI and soldiers are not part of `.m`/`kingdom.cel` terrain rendering; they must come from UI resources and `.spr`/unit systems. Some acwz z-order/footprint details still need refinement, but the terrain/world transform is now aligned.
+
+## Update 2026-06-23 Palette Calibration
+- `Emperor.exe` resource tree has no `RT_BITMAP` entries and no embedded DIB palette was found in `.rsrc`.
+- The executable imports `SetSystemPaletteUse`, `GetSystemPaletteEntries`, and `DirectDrawCreate`, and references external BMP names including `stage.bmp`.
+- `stage.bmp` is not a good default palette for CEL map rendering: indices `1..13`, including common river indices `11/12/13`, are mapped to bright green in that palette.
+- `BIGMAP01.bmp`, `mainmenu.bmp`, and related common BMP palettes map those river indices to blue values matching the user-provided `derived/stage11.png` screenshot.
+- Tool defaults were changed from `stage.bmp` to `BIGMAP01.bmp`; `--palette` can still override this for experiments.

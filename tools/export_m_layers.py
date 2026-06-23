@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import collections
@@ -158,7 +158,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", nargs="?", default=".", type=Path)
     parser.add_argument("--out", default="derived/m_layers", type=Path)
-    parser.add_argument("--palette", default="stage.bmp")
+    parser.add_argument("--palette", default="BIGMAP01.bmp")
     args = parser.parse_args()
 
     root = args.root.resolve()

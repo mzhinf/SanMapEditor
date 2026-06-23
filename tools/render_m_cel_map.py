@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
@@ -221,7 +221,7 @@ def main() -> int:
     parser.add_argument("--layout", choices=["rect", "iso", "skew", "stagger"], default="stagger")
     parser.add_argument("--layers", default="xyz", help="Include x=acwx, y=acwy, z=acwz")
     parser.add_argument("--out", default="derived/cel_maps", type=Path)
-    parser.add_argument("--palette", default="stage.bmp")
+    parser.add_argument("--palette", default="BIGMAP01.bmp")
     parser.add_argument("--flip-x", action="store_true", help="Flip rendered world horizontally after drawing")
     parser.add_argument("--crop", nargs=4, type=int, metavar=("X", "Y", "W", "H"), help="Crop a rectangular viewport after optional flip")
     parser.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale after crop")
@@ -235,6 +235,8 @@ def main() -> int:
     stage_path = game_dir / f"{args.stage}.m"
     out_dir = args.out if args.out.is_absolute() else root / args.out
     suffix = f"{args.stage}_{args.layout}_{args.layers}"
+    if args.palette != "BIGMAP01.bmp":
+        suffix += f"_pal{Path(args.palette).stem}"
     if args.flip_x:
         suffix += "_flipx"
     if args.max_cells:
@@ -250,9 +252,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-
-
-
-

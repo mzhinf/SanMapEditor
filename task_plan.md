@@ -1,4 +1,4 @@
-﻿# Task Plan: 三国霸业地图复原
+# Task Plan: 三国霸业地图复原
 
 ## Goal
 解析 `三国霸业/Emperor.exe` 和游戏资源格式，提取并复原可用于制作地图编辑器的地图数据与可视化结果。
@@ -83,3 +83,8 @@ Phase 5
 - Generated real map previews in derived/cel_maps; iso layout is the current valid renderer direction.
 - Next: refine acwz z-order/footprint and extract exact world-to-screen transform from Emperor.exe.
 
+
+## Update 2026-06-23 Palette and Editor Planning
+- Palette calibration phase completed: no embedded EXE palette found; default map palette changed to `BIGMAP01.bmp` because it matches screenshot water colors.
+- Added `README.md` as the main operating guide for all scripts and outputs.
+- Next editor plan is now explicit: preserve raw `.m` records for round-trip, modularize stagger rendering and picking, build resource palettes, implement terrain/overlay/object editing, then decode scenario/unit/event side files.
