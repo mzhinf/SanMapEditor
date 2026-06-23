@@ -57,12 +57,16 @@ canvas { width: 100%; height: 100%; display: block; }
 <div id="app">
   <div class="toolbar">
     <div class="title" id="stageTitle">stage</div>
+    <label>Stage</label>
+    <select id="stagePicker"><option value="">current</option></select>
     <label>Tool</label>
     <select id="tool" title="查看=只选中格子；绘制=把当前资源写到当前层；平移=拖动地图"><option value="inspect">查看</option><option value="paint">绘制</option><option value="pan">平移</option></select>
     <label>Layer</label>
     <select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option></select>
     <label>Value</label>
     <input id="brush" type="number" value="0" step="1">
+    <input id="loadMFile" type="file" accept=".m" hidden>
+    <button id="openMFile">Open .m</button>
     <button id="resetView">Reset view</button>
     <button id="undoEdit">Undo</button>
     <button id="resetCell">Reset cell</button>
@@ -128,6 +132,7 @@ const els = {
   layer: document.getElementById('layer'), brush: document.getElementById('brush'), patchCount: document.getElementById('patchCount'),
   patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceFilter: document.getElementById('resourceFilter'),
   resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
+  openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
 };
 function fieldIndex(name) { return state.meta.fields.indexOf(name); }
 function recordIndex(cell) { return cell.row * state.meta.width + cell.col; }
@@ -136,6 +141,7 @@ function cellKey(cell) { return `${cell.col},${cell.row}`; }
 function patchKey(cell, field) { return `${cellKey(cell)}:${field}`; }
 function cellToWorld(col, row) { const [ox, oy] = state.meta.origin; return { x: ox + col * 40 + (row & 1 ? 20 : 0), y: oy + row * 10 }; }
 function displayImage() { return state.renderCanvas || state.image; }
+function canvasSizeForMeta(meta = state.meta) { return { width: meta.width * 40 + 20 + 128, height: meta.height * 10 + 20 + 128 }; }
 function worldToCell(x, y) {
   const [ox, oy] = state.meta.origin;
   const row = Math.floor((y - oy) / 10);
@@ -161,11 +167,12 @@ function draw() {
 }
 function drawMinimap() {
   const image = displayImage();
-  if (!state.minimap || !image) return;
+  if (!image) return;
+  const source = state.minimap || image;
   const rect = mini.getBoundingClientRect(); miniCtx.clearRect(0, 0, rect.width, rect.height);
-  const scale = Math.min(rect.width / state.minimap.width, rect.height / state.minimap.height);
-  const w = state.minimap.width * scale; const h = state.minimap.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2;
-  miniCtx.imageSmoothingEnabled = true; miniCtx.drawImage(state.minimap, ox, oy, w, h);
+  const scale = Math.min(rect.width / source.width, rect.height / source.height);
+  const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2;
+  miniCtx.imageSmoothingEnabled = true; miniCtx.drawImage(source, ox, oy, w, h);
   const mainRect = canvas.getBoundingClientRect();
   const view = { x: -state.transform.x / state.transform.scale, y: -state.transform.y / state.transform.scale, w: mainRect.width / state.transform.scale, h: mainRect.height / state.transform.scale };
   miniCtx.strokeStyle = '#f59e0b'; miniCtx.lineWidth = 2; miniCtx.strokeRect(ox + view.x / image.width * w, oy + view.y / image.height * h, view.w / image.width * w, view.h / image.height * h);
@@ -280,11 +287,12 @@ function drawResource(layer, value, col, row, targetCtx) {
   targetCtx.drawImage(atlas, sx, sy, sw, sh, dx, dy, sw, sh);
 }
 function rebuildEditedImage() {
-  if (!state.image || !state.resources) return;
-  if (!state.renderCanvas) {
+  if (!state.resources || !state.meta) return;
+  const size = canvasSizeForMeta();
+  if (!state.renderCanvas || state.renderCanvas.width !== size.width || state.renderCanvas.height !== size.height) {
     state.renderCanvas = document.createElement('canvas');
-    state.renderCanvas.width = state.image.width;
-    state.renderCanvas.height = state.image.height;
+    state.renderCanvas.width = size.width;
+    state.renderCanvas.height = size.height;
     state.renderCtx = state.renderCanvas.getContext('2d');
   }
   const rctx = state.renderCtx;
@@ -370,12 +378,85 @@ function applyPaint(cell) {
   const field = els.layer.value; const value = Number.parseInt(els.brush.value, 10); if (!Number.isFinite(value)) return;
   applyChangeSet([{ x: cell.col, y: cell.row, field, after: value }]);
 }
+function resetEditState(meta) {
+  state.meta = meta;
+  state.originalRecords = meta.records.map(record => record.slice());
+  state.patches.clear();
+  state.undoStack = [];
+  state.selected = null;
+  state.transform = { x: 24, y: 24, scale: 0.8 };
+  els.title.textContent = meta.stage;
+  for (const layer of meta.editableLayers) { state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null; }
+  rebuildEditedImage();
+  refreshSide();
+  refreshPatches();
+  resizeCanvas();
+  renderResourceList();
+}
+function parseStageM(buffer, name = 'local.m') {
+  const view = new DataView(buffer);
+  if (buffer.byteLength < 16) throw new Error('file too small for .m header');
+  const width = view.getUint32(0, true);
+  const height = view.getUint32(4, true);
+  const magic = new TextDecoder('ascii').decode(new Uint8Array(buffer, 8, 8));
+  if (magic !== 'Hello1.0') throw new Error('not a Hello1.0 .m file');
+  const expected = 16 + width * height * 16;
+  if (buffer.byteLength < expected) throw new Error(`truncated .m records: expected ${expected} bytes, got ${buffer.byteLength}`);
+  const records = [];
+  for (let i = 0; i < width * height; i++) {
+    const off = 16 + i * 16;
+    records.push([
+      view.getInt16(off, true), view.getInt16(off + 2, true), view.getInt16(off + 4, true), view.getInt16(off + 6, true),
+      view.getUint8(off + 8), view.getUint8(off + 9), view.getUint8(off + 10), view.getUint8(off + 11),
+      view.getUint8(off + 12), view.getUint8(off + 13), view.getUint8(off + 14), view.getUint8(off + 15),
+    ]);
+  }
+  return {
+    format: 'san-editor-stage-v1', stage: name.replace(/\.m$/i, ''), width, height, layout: 'stagger', origin: [64, 64],
+    tile: { width: 40, height: 20, row_step: 10, odd_row_x: 20 },
+    fields: state.meta.fields.slice(), editableLayers: state.meta.editableLayers.slice(), palette: state.meta.palette,
+    image: null, minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' }, resources: state.meta.resources, records,
+    render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height }).width, canvasSizeForMeta({ width, height }).height] },
+  };
+}
+async function loadLocalMFile(file) {
+  if (!file) return;
+  try {
+    const meta = parseStageM(await file.arrayBuffer(), file.name);
+    state.minimap = null;
+    resetEditState(meta);
+    els.stagePicker.value = '';
+    els.status.textContent = `Loaded ${file.name}`;
+  } catch (err) {
+    els.status.textContent = String(err.message || err);
+  }
+}
+async function loadStagePicker() {
+  try {
+    const index = await fetch('../index.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+    const stages = index?.stages || [];
+    if (!stages.length) return;
+    els.stagePicker.textContent = '';
+    for (const entry of stages) {
+      const option = document.createElement('option');
+      option.value = entry.stage;
+      option.textContent = `${entry.stage} (${entry.width}x${entry.height})`;
+      if (entry.stage === state.meta.stage) option.selected = true;
+      els.stagePicker.append(option);
+    }
+  } catch (_err) {
+    els.stagePicker.disabled = true;
+  }
+}
 function downloadPatch() { const payload = { format: 'san-editor-patch-v1', stage: state.meta.stage, fields: state.meta.fields, minimap: { dirtyCells: [...state.patches.values()].filter(p => p.minimapDirty).map(p => [p.x, p.y]) }, changes: [...state.patches.values()] }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${state.meta.stage}_patch.json`; a.click(); URL.revokeObjectURL(a.href); }
 canvas.addEventListener('pointerdown', ev => { canvas.setPointerCapture(ev.pointerId); const world = clientToWorld(ev); const cell = worldToCell(world.x, world.y); const tool = els.tool.value; if (tool === 'pan') { state.dragging = true; state.dragStart = { x: ev.clientX, y: ev.clientY, tx: state.transform.x, ty: state.transform.y }; return; } if (cell) { state.selected = cell; if (tool === 'paint') applyPaint(cell); refreshSide(); draw(); } });
 canvas.addEventListener('pointermove', ev => { if (!state.dragging) return; state.transform.x = state.dragStart.tx + ev.clientX - state.dragStart.x; state.transform.y = state.dragStart.ty + ev.clientY - state.dragStart.y; draw(); });
 canvas.addEventListener('pointerup', () => { state.dragging = false; });
 canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; draw(); }, { passive: false });
-mini.addEventListener('pointerdown', ev => { if (!state.minimap || !state.image) return; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / state.minimap.width, rect.height / state.minimap.height); const w = state.minimap.width * scale; const h = state.minimap.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * state.image.width; const y = (ev.clientY - rect.top - oy) / h * state.image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; draw(); });
+mini.addEventListener('pointerdown', ev => { const image = displayImage(); if (!image) return; const source = state.minimap || image; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / source.width, rect.height / source.height); const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * image.width; const y = (ev.clientY - rect.top - oy) / h * image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; draw(); });
+els.openMFile.addEventListener('click', () => { els.loadMFile.click(); });
+els.loadMFile.addEventListener('change', () => { loadLocalMFile(els.loadMFile.files?.[0]); els.loadMFile.value = ''; });
+els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
 document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; draw(); });
 els.undoEdit.addEventListener('click', undoLastEdit);
 els.resetCell.addEventListener('click', resetSelectedLayerChange);
@@ -403,12 +484,10 @@ async function boot() {
   });
   await Promise.all(drawPromises);
   buildResourceIndex();
-  rebuildEditedImage();
-  els.title.textContent = state.meta.stage;
-  for (const layer of state.meta.editableLayers) { state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null; }
-  refreshSide(); refreshPatches(); resizeCanvas(); renderResourceList();
+  resetEditState(state.meta);
+  await loadStagePicker();
 }
-window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, rebuildEditedImage, cellToWorld, fieldIndex, recordAt };
+window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>

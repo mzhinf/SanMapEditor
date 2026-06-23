@@ -225,6 +225,26 @@ def export_minimap(map_path: Path, out_path: Path, max_width: int = 280) -> None
     image.resize(size, Image.Resampling.BILINEAR).save(out_path)
 
 
+def write_editor_index(out_dir: Path, stages: list[dict]) -> None:
+    options = "\n".join(
+        f'<option value="{entry["path"]}">{entry["stage"]} ({entry["width"]}x{entry["height"]})</option>'
+        for entry in stages
+    )
+    html = (
+        '<!doctype html>\n<html lang="zh-CN">\n<head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<title>San Map Editor Index</title>'
+        '<style>body{font-family:Segoe UI,Arial,sans-serif;margin:32px;background:#f4f2ec;color:#202124}'
+        'main{max-width:720px}select,button{height:32px;font:inherit}select{min-width:260px}a{color:#0f766e}</style></head>'
+        '<body><main><h1>San Map Editor</h1><p>Select an exported stage editor.</p>'
+        f'<select id="stage">{options}</select> <button id="open">Open</button>'
+        '<p><a href="index.json">index.json</a></p></main>'
+        "<script>document.getElementById('open').onclick=()=>{const v=document.getElementById('stage').value;if(v) location.href=v;};</script>"
+        '</body></html>\n'
+    )
+    (out_dir / "index.html").write_text(html, encoding="utf-8")
+
+
 def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, layers: str, palette_source: str) -> dict:
     game_dir = find_game_dir(root)
     stage_path = game_dir / f"{stage}.m"
@@ -256,6 +276,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     stages[stage] = {"stage": stage, "path": f"{stage}/editor.html", "width": width, "height": height}
     existing["stages"] = sorted(stages.values(), key=lambda item: item["stage"])
     index_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    write_editor_index(out_dir, existing["stages"])
 
     return {"stage": stage, "width": width, "height": height, "out": str(stage_dir), "records": len(records)}
 
@@ -264,6 +285,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", nargs="?", default=".", type=Path)
     parser.add_argument("--stage", default="stage11")
+    parser.add_argument("--all", action="store_true", help="Export editor bundles for every stage*.m file")
     parser.add_argument("--out", default="derived/editor", type=Path)
     parser.add_argument("--layout", choices=["stagger"], default="stagger")
     parser.add_argument("--layers", default="xyz")
@@ -272,8 +294,15 @@ def main() -> int:
 
     root = args.root.resolve()
     out_dir = args.out if args.out.is_absolute() else root / args.out
-    result = export_editor_bundle(root, args.stage, out_dir, args.layout, args.layers, args.palette)
-    print(json.dumps(result, ensure_ascii=False))
+    if args.all:
+        game_dir = find_game_dir(root)
+        results = []
+        for stage_path in sorted(game_dir.glob("stage*.m")):
+            results.append(export_editor_bundle(root, stage_path.stem, out_dir, args.layout, args.layers, args.palette))
+        print(json.dumps({"count": len(results), "stages": results}, ensure_ascii=False))
+    else:
+        result = export_editor_bundle(root, args.stage, out_dir, args.layout, args.layers, args.palette)
+        print(json.dumps(result, ensure_ascii=False))
     return 0
 
 

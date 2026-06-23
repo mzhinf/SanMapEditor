@@ -221,3 +221,10 @@
 - Added transaction-based edit history, `Ctrl+Z`/Undo, `Reset cell`, and `Reset all` controls.
 - `Reset cell` reverts the selected cell on the selected layer; `Reset all` reverts all dirty patches. Reset operations are undoable.
 - Regenerated `derived/editor/stage11` and verified in browser UI: Paint -> Ctrl+Z, Paint -> Reset cell, two Paints -> Reset all, and Reset all -> Ctrl+Z all behaved as expected.
+
+
+## Update 2026-06-24 Stage And Local M Loading
+- Added `Open .m` to the browser editor. It parses `Hello1.0` `.m` files client-side, resets undo/patch state, and rebuilds the map from loaded CEL draw atlases without needing a pre-rendered `map.png`.
+- Added Stage dropdown support in generated editors by reading `../index.json` and navigating between exported stage bundles.
+- Added `tools/export_editor_bundle.py --all` and generated `derived/editor/index.html` alongside `index.json`.
+- Regenerated `stage11` and `stage20`; browser verification confirmed the stage picker lists both and the index page loads.

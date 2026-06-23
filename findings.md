@@ -232,3 +232,23 @@ Edit controls:
 - Reset operations are also transactions, so `Ctrl+Z` after `Reset all` restores the reset batch.
 
 Verification: in the browser editor, Paint produced one patch, `Ctrl+Z` returned to zero patches, `Reset cell` returned one selected-layer patch to zero, `Reset all` returned two patches to zero, and `Ctrl+Z` after `Reset all` restored those two patches.
+
+
+## Stage And Local `.m` Loading Update 2026-06-24
+
+The editor now supports two map-loading paths:
+
+- Exported stage picker: each generated `editor.html` reads `../index.json` and shows a Stage dropdown. Selecting another exported stage navigates to that stage's editor bundle.
+- Local `.m` loader: `Open .m` reads a user-selected `Hello1.0` `.m` file in the browser, parses its 16-byte records, resets edit history, and rebuilds the map directly from the already loaded CEL draw atlases.
+
+The local `.m` path does not require a pre-rendered `map.png`; canvas dimensions are derived from the `.m` header using the recovered stagger layout: `width * 40 + 20 + 128` by `height * 10 + 20 + 128`. The minimap falls back to the live rendered map when no generated `minimap.png` exists.
+
+`tools/export_editor_bundle.py` also has a new `--all` option:
+
+```powershell
+& $py tools/export_editor_bundle.py . --all
+```
+
+This exports every `stage*.m` bundle and writes `derived/editor/index.html` plus `derived/editor/index.json`. Be aware that current bundles still include resource atlases per stage, so exporting all stages is useful but disk-heavy until resource atlases are moved to a shared directory.
+
+Verification: regenerated `stage11` and `stage20`, loaded `stage11/editor.html`, confirmed the Stage dropdown showed both exported stages, and confirmed `derived/editor/index.html` lists exported stage editors.

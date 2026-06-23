@@ -113,3 +113,8 @@ Phase 5
 ## Update 2026-06-24 Undo/Reset Complete
 - Completed editor history controls for Phase 5: Ctrl+Z, Reset cell, Reset all, and stable original-record patch baselines.
 - Remaining Phase 5 work: stage/.m selection loading, dirty-neighborhood redraw optimization, safe patch-to-`.m` copy writing, and `.s/.x` minimap/cache confirmation.
+
+
+## Update 2026-06-24 Stage/File Loading Complete
+- Completed the first `.m` loading slice for Phase 5: local browser parsing of `.m` files, exported-stage switching through `index.json`, and `--all` batch export support.
+- Remaining Phase 5 work: safe patch-to-`.m` copy writing, shared resource atlas optimization, dirty-neighborhood redraw optimization, and `.s/.x` minimap/cache confirmation.
