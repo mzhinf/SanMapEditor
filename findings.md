@@ -159,3 +159,17 @@
 - The first editor bundle uses `.m` records as the authoritative editable table and preserves all 12 decoded fields per cell: `acwx`, `acwy`, `acwz`, `word06`, `byte08..byte12`, `final_palette`, `byte14`, `byte15`.
 - The editor prototype writes JSON patch data rather than modifying original `.m` files. This keeps the round-trip path reversible while field semantics are still being decoded.
 - Runtime palette selection now defaults to `tools/palette.py::SAN_RGB_PALETTE`, with BMP palette names remaining available for comparison.
+
+## Update 2026-06-23 Editor Resource Palettes And Minimap
+
+The editable visual map is built from `stageNN.m` records plus `kingdom.cel` pixels:
+
+- `record + 0x00 int16 acwx`: base terrain diamond. This is the ground layer and should generally be present for every map cell.
+- `record + 0x02 int16 acwy`: transparent overlay/transition diamond. This carries shorelines, road/edge/transition details, and is `-1` when absent.
+- `record + 0x04 int16 acwz`: object/building strip or footprint reference. It is rendered with the CEL anchor rule and may be `-1`; some non-negative values are occupancy/footprint cells.
+
+Editor implications:
+
+- Replacement cannot be numeric-only; the editor must expose resource palettes for `acwx`, `acwy`, and `acwz` so the user sees the actual drawable graphic before painting.
+- `tools/export_editor_bundle.py` now exports `resources.json` and atlas PNGs for all drawable entries in those three layers. Current-stage used resources are sorted first and include a `used` count.
+- The minimap should be treated as a derived view, not an unrelated bitmap. A terrain/object edit marks the affected cells as minimap-dirty; later write-back should regenerate the minimap/cache representation from the same `.m` record table, and only then update `.s/.x` if those files are confirmed as game minimap/cache outputs.

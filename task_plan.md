@@ -93,3 +93,7 @@ Phase 5
 - Started the map editor phase with a protected data-model workflow: export stage records and rendered CEL map into `derived/editor/<stage>/`.
 - First editor prototype supports map browsing, stagger cell picking, record inspection, local `acwx/acwy/acwz` edits, and JSON patch export.
 - Next editor work: render changed tiles live from CEL cache, add tile/object palette panels, then implement patch-to-`.m` writing for copied stages.
+
+## Update 2026-06-23 Editor Resource Palette Phase
+- Completed the first resource selection step: editor bundles now include visible `acwx/acwy/acwz` resource atlases and usage-sorted resource metadata.
+- Added minimap as a derived editor view with dirty-cell patch metadata. Next work is live tile redraw and safe patch-to-`.m` copy writing.

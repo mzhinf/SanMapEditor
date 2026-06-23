@@ -192,3 +192,9 @@
 - Added `tools/export_editor_bundle.py` and `tools/editor_app.html`.
 - Exported `derived/editor/stage11/` with `map.png`, `stage.json`, and `editor.html`.
 - Verified the generated editor page through a local Chrome headless screenshot at `http://127.0.0.1:8787/stage11/editor.html`.
+
+## Update 2026-06-23 Resource Palette And Minimap Pass
+- Added editor resource atlas export for `acwx`, `acwy`, and `acwz` under `derived/editor/<stage>/`.
+- Added `resources.json` with resource indices, atlas coordinates, image dimensions, anchors, and current-stage usage counts.
+- Updated the editor to show resource palettes, select a drawable resource as the brush value, display a minimap, and include minimap dirty cells in exported patches.
+- Verified `stage11` bundle regeneration and resource counts: `acwx` 1,944, `acwy` 2,162, `acwz` 4,209 drawable entries.
