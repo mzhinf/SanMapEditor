@@ -234,3 +234,22 @@ Exported previews: `derived/kingdom/acwz_align_compare.png` and `derived/kingdom
   - `stage01_iso_xyz_crop120000.png` / `stage01_iso_xyz_crop120000_thumb.png`
 - `derived/m_layers/` remains useful as editable raw index/flag extraction, but it is not the final visual map reconstruction.
 - Remaining renderer work: confirm exact viewport/world coordinate transform from the exe, improve acwz z-order and footprint handling, and add tile/object picking metadata for editor use.
+
+## Update 2026-06-23 Stage11 Screenshot Calibration
+- Initialized a local git repository and committed the current code/docs as `bc1021b` before making renderer changes.
+- Compared the user-provided `derived/stage11.png` with renderer outputs.
+- Recovered the viewport/world-to-screen transform from `Emperor.exe` around VA `0x419dc0`:
+  - visible row screen y uses `row_offset * 10 + 10`
+  - visible columns use x step `0x28` = 40 pixels
+  - odd/even visible rows shift x by 20 pixels
+  - the viewport clips against `0x230` = 560 pixels in the DirectDraw path
+- Added `stagger` layout to `tools/render_m_cel_map.py`:
+  - `screen_x = col * 40 + (20 if row is odd else 0)`
+  - `screen_y = row * 10`
+  - this is now the renderer default because it matches the actual game screenshot far better than the full diamond `iso` layout.
+- Added `--flip-x`, `--crop X Y W H`, and `--scale N` options for viewport/camera comparison.
+- Fixed acwx base tile compositing: inside the exe diamond scanline mask, acwx pixels are copied opaquely; acwy/acwz remain zero-color transparent overlays.
+- Generated close stage11 comparison outputs:
+  - `derived/cel_maps/stage11_stagger_xyz_scale2.png`
+  - `derived/cel_maps/stage11_stagger_xyz_viewport93_57_1642_1684_scale2.png` (3284x3368, matching the screenshot dimensions)
+- Remaining differences vs `stage11.png`: UI and soldiers are not part of `.m`/`kingdom.cel` terrain rendering; they must come from UI resources and `.spr`/unit systems. Some acwz z-order/footprint details still need refinement, but the terrain/world transform is now aligned.
