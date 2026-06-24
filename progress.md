@@ -246,3 +246,9 @@
 - Added `tools/analyze_stage_sidecars.py` to summarize `.m`, `.s/.x`, and `.stg/.spr/.dor/.evt` stage files plus nearby `Emperor.exe` suffix-string contexts.
 - New sampled finding: across `stage01/stage11/stage20/stage29`, `.s` and `.x` are 72.7% to 86.3% byte-identical, and `.x` consistently overlaps more of the `.m final_palette` value set than `.s`.
 
+## Update 2026-06-24 Sidecar Record Skeletons
+- Upgraded `tools/analyze_stage_sidecars.py` to extract `.stg` cp950 titles, estimate primary record-table layouts for `.stg/.spr/.dor/.evt`, and report `.s/.x` non-240 mask relationships plus direct `Emperor.exe` suffix xrefs.
+- Confirmed `.stg` contains scenario titles at `0x08` (for example `stage11`: `練習一劉備出發`, `stage20`: `為圖長久取四郡`) and likely year-range candidates at `0x24/0x28`.
+- Confirmed `.evt` has a strong `72`-byte primary record cadence with extracted script tokens such as `talk`, `VIEW`, `MAP`, `MAPALL`, `MOVE`, and `TIMEOVER`.
+- Refined `.s/.x` understanding: across sampled stages, `.s` never contains a non-240 pixel where `.x` is 240, while `.x` contains a small superset of extra non-240 pixels beyond `.s`.
+

@@ -320,6 +320,8 @@ It reports:
 
 Current findings from `stage01/stage11/stage20/stage29`: `.s` and `.x` are 72.7% to 86.3% identical byte-for-byte, while `.x` consistently overlaps more of the `.m final_palette` value set than `.s`. That pushes them closer to paired derived grids or caches than to unrelated resource files.
 
+The upgraded helper also extracts `.stg` scenario titles with `cp950`, estimates primary record-table layout for `.stg/.spr/.dor/.evt`, and reports `.s/.x` mask relationships. In the sampled stages, `.s` never has a non-240 pixel where `.x` is 240, while `.x` has 24 to 190 extra non-240 pixels beyond `.s`; that makes `.x` look like the fuller color cache and `.s` like a stricter masked companion.
+
 ## Chinese Format Notes
 
 - [Chinese binary format notes](docs/FORMAT_NOTES.zh.md): current reverse-engineering notes for `.m`, `kingdom.cel/.atr`, and the stage sidecar files `.s/.x/.stg/.spr/.dor/.evt`.
