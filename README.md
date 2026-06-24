@@ -241,3 +241,30 @@ The local `.m` path does not require a pre-rendered `map.png`; canvas dimensions
 This exports every `stage*.m` bundle and writes `derived/editor/index.html` plus `derived/editor/index.json`. Be aware that current bundles still include resource atlases per stage, so exporting all stages is useful but disk-heavy until resource atlases are moved to a shared directory.
 
 Verification: regenerated `stage11` and `stage20`, loaded `stage11/editor.html`, confirmed the Stage dropdown showed both exported stages, and confirmed `derived/editor/index.html` lists exported stage editors.
+
+
+## Patch-To-`.m` Copy Writing 2026-06-24
+
+`tools/apply_editor_patch.py` applies an exported `san-editor-patch-v1` JSON patch to a copied `.m` file. It never overwrites the original game directory by default.
+
+Typical use:
+
+```powershell
+& $py tools/apply_editor_patch.py derived/editor/stage11_patch.json . --out derived/edited
+```
+
+Useful options:
+
+- `--dry-run`: validate the patch and source `.m` without writing.
+- `--source path/to/stageNN.m`: use an explicit source `.m`, useful for patches exported from a locally opened `.m` file.
+- `--out derived/edited`: write `derived/edited/<stage>.m`; if `--out` ends with `.m`, it is treated as the exact output path.
+- `--force`: apply even when a patch `before` value does not match the source `.m`; normally this mismatch is refused.
+
+Safety behavior:
+
+- The source `.m` must be a `Hello1.0` map file.
+- Every change cell must be within the source map bounds.
+- Every `before` value is checked against the source file before writing.
+- Supported fields match the editor record schema: `acwx/acwy/acwz/word06/byte08..byte15/final_palette`.
+
+Verification: a synthetic `stage11` patch changed cell `0,1 acwx` from `36` to `37` in `derived/edited_test/stage11.m`; a mismatched patch was rejected with a JSON error and no output write.

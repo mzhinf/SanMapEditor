@@ -228,3 +228,10 @@
 - Added Stage dropdown support in generated editors by reading `../index.json` and navigating between exported stage bundles.
 - Added `tools/export_editor_bundle.py --all` and generated `derived/editor/index.html` alongside `index.json`.
 - Regenerated `stage11` and `stage20`; browser verification confirmed the stage picker lists both and the index page loads.
+
+
+## Update 2026-06-24 Patch-To-M Writer
+- Added `tools/apply_editor_patch.py`, a safe JSON patch applicator that writes edited `.m` copies instead of touching original game files.
+- The writer validates `Hello1.0` headers, map bounds, supported fields, value ranges, and patch `before` values before writing.
+- Verified dry-run and real output with a synthetic `stage11` patch: `0,1 acwx` changed from `36` to `37` in `derived/edited_test/stage11.m`.
+- Verified mismatch protection with a bad patch; the CLI now returns a clean JSON error instead of a traceback.

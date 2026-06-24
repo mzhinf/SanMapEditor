@@ -118,3 +118,8 @@ Phase 5
 ## Update 2026-06-24 Stage/File Loading Complete
 - Completed the first `.m` loading slice for Phase 5: local browser parsing of `.m` files, exported-stage switching through `index.json`, and `--all` batch export support.
 - Remaining Phase 5 work: safe patch-to-`.m` copy writing, shared resource atlas optimization, dirty-neighborhood redraw optimization, and `.s/.x` minimap/cache confirmation.
+
+
+## Update 2026-06-24 Patch-To-M Writer Complete
+- Completed safe patch-to-`.m` copy writing for Phase 5. The editor can export JSON patches and `tools/apply_editor_patch.py` can validate/apply them to copied `.m` files.
+- Remaining Phase 5 work: optional UI integration for write-back, shared resource atlas optimization, dirty-neighborhood redraw optimization, and `.s/.x` minimap/cache confirmation.
