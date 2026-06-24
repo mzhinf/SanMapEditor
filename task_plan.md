@@ -134,3 +134,8 @@ Phase 5
 - Continued reverse engineering with family-level clustering instead of raw per-record dumps.
 - Confirmed `.stg` and `.evt` are both mixed-template fixed-stride containers, and added candidate field extraction keyed by stage dimensions.
 - Next reverse-engineering focus: split `.stg` by `224/92/96` families and `.evt` by `72/55/189+` families, then isolate id / owner / coordinate columns within each family separately.
+
+## Update 2026-06-24 Sidecar Workbook Export
+- Added a readable export milestone for the reverse-engineering checklist: `.stg/.evt` data can now be flattened and opened as `derived/sidecar_analysis/stg_evt_analysis.xlsx`.
+- This does not finish the field decode, but it removes a lot of manual hex/JSON scanning and gives a better base for isolating owner/id/coordinate columns.
+- Next reverse-engineering focus after this export: use the workbook's `????` / `????` / `????` sheets to split `.stg` families by slot pattern and then pin the first truly spatial columns inside `city_or_structure`, `general_entry`, and `faction_or_ruler`.

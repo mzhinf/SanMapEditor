@@ -290,3 +290,14 @@ Verification: a synthetic `stage11` patch changed cell `0,1 acwx` from `36` to `
 - `.stg` now looks like a multi-template 76-byte container. The strongest current split is by marker words: `224` for entity-style rows (generals/troops/bandits), `92` for city/寨 rows, and `96` for faction/ruler rows.
 - `.evt` is also multi-template. In `stage01.evt`, many rows are repeated name-slot tables with names sliding through offsets `0/8/16/24/32/48/56/64` and companion control words `72`, `55`, and `189..257`. In `stage20.evt`, the script layer separates into flow/prompt/objective families.
 - The new `candidate_small_u16_fields` output is useful triage: it highlights word columns that repeatedly stay within stage width/height scale, which makes them good candidates for local ids, owners, and map coordinates.
+
+## Update 2026-06-24 Sidecar Workbook Export
+- Added a workbook-oriented export path for current sidecar reverse engineering:
+  - `tools/export_stage_sidecar_tables.py`
+  - `tools/export_stage_sidecar_workbook.mjs`
+  - outputs under `derived/sidecar_analysis/`
+- The workbook now exposes `.stg/.evt` information at four granularities: stage overview, family totals, candidate fields, and full text-bearing records.
+- Cross-stage totals from the export make the family split much more concrete:
+  - `.stg`: `troop_entry 863`, `bandit_entry 245`, `faction_or_ruler 60`, `general_entry 58`, `city_or_structure 39`
+  - `.evt`: `flow_text 2128`, `text_mixed_record 358`, `name_slot_72_family 182`, `name_slot_highid_family 102`, `condition_or_objective 64`
+- New structural finding: `.stg` name/tag pairs land in repeating 20-byte slots (`12/17`, `28/33`, `48/53`, `68/73` etc.), while `.evt flow_text` strings slide across many offsets (`0/4/8/12/36/40/52/60/64/68`). This is stronger evidence that both containers multiplex several subtemplates instead of storing one fixed entity row type.

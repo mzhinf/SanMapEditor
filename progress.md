@@ -264,3 +264,9 @@
 - Confirmed `.stg` is not one uniform 76-byte row type: `224` families track generals/troops/bandits, `92` families track city/寨-style location records, and `96` families track faction/ruler-style records.
 - Confirmed `.evt` also breaks into reusable fixed families: `stage01.evt` has rolling name-slot families driven by `72`, `55`, and `189+` control words, while `stage20.evt` has separate flow/prompt/objective text families.
 - Added stage-width/stage-height-aware `candidate_small_u16_fields` output so the next pass can focus on likely id/owner/coordinate columns instead of scanning every word offset by hand.
+
+## Update 2026-06-24 Sidecar Workbook Export
+- Added `tools/export_stage_sidecar_tables.py` to flatten `.stg/.evt` reverse-engineering results into workbook-friendly JSON tables.
+- Added `tools/export_stage_sidecar_workbook.mjs` to build `derived/sidecar_analysis/stg_evt_analysis.xlsx` plus preview PNGs using artifact-tool.
+- Verified the exported workbook visually: `????` and `????` render legibly, with the expected 33-stage overview and family totals.
+- New cross-stage finding: `.stg` text-bearing families reuse stepped text slots, while `.evt flow_text` slides across many offsets, which strengthens the multi-template command-structure hypothesis.
