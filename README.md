@@ -288,3 +288,8 @@ Safety behavior:
 - Supported fields match the editor record schema: `acwx/acwy/acwz/word06/byte08..byte15/final_palette`.
 
 Verification: a synthetic `stage11` patch changed cell `0,1 acwx` from `36` to `37` in `derived/edited_test/stage11.m`; a mismatched patch was rejected with a JSON error and no output write.
+
+## 中文格式文档
+
+- [三国霸业地图与关卡文件二进制结构笔记](docs/FORMAT_NOTES.zh.md)：记录 `.m`、`kingdom.cel/.atr`、`.s/.x/.stg/.spr/.dor/.evt` 的当前二进制结构、证据和待验证项。
+

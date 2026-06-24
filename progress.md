@@ -235,3 +235,9 @@
 - The writer validates `Hello1.0` headers, map bounds, supported fields, value ranges, and patch `before` values before writing.
 - Verified dry-run and real output with a synthetic `stage11` patch: `0,1 acwx` changed from `36` to `37` in `derived/edited_test/stage11.m`.
 - Verified mismatch protection with a bad patch; the CLI now returns a clean JSON error instead of a traceback.
+
+## Update 2026-06-24 Chinese Binary Format Notes
+- Added docs/FORMAT_NOTES.zh.md in Chinese, documenting the current binary layout for .m cells, kingdom.cel/.atr resources, and stage sidecar files (.s/.x/.stg/.spr/.dor/.evt).
+- Clarified that .m cells are 16-byte records, not just acwx/acwy/acwz; the editor must preserve all decoded auxiliary bytes for round-trip safety.
+- Documented the current hypothesis that city ids, unit data, doors/entrances, events, and passability/cache semantics live across .stg/.spr/.dor/.evt and .s/.x rather than only inside the three visible map layers.
+
