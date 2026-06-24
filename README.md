@@ -324,6 +324,8 @@ The upgraded helper also extracts `.stg` scenario titles with `cp950`, estimates
 
 The current helper now also emits `decoded_strings_preview` and `record_string_previews` for `.stg` and `.evt`, plus meta-prefix summaries for `.spr` and `.dor`. That exposed a much stronger semantic split: `.stg` carries city/general/troop/faction-facing names such as `荊州`, `襄陽`, `關羽`, `諸葛亮`, `步兵`, and `中立國家`; `.evt` carries objective/prompt/dialogue labels such as `勝利`, `失敗`, `佔領四郡`, `黃忠加入提示`, and `劉備出現`. On the other side, `stage01.spr` is effectively empty after the stable `180/36` meta pair, and `stage11.dor` is a 28-byte header-only file with an all-zero body, so both sidecars appear optional rather than mandatory for every stage.
 
+The helper now also emits `record_family_summaries`, which starts to turn the mixed fixed-size records into workable families. In the sampled `.stg` files, `224`-tagged families line up with generals/troops/bandits, `92`-tagged families line up with cities and寨/据点, and `96`-tagged families line up with faction/ruler-style entries. In `stage01.evt`, repeated `72` / `55` / `189+` control-word families form rolling name-slot tables, while `stage20.evt` surfaces separate flow/prompt/objective text families. That does not finish the field decode, but it gives a stable next handle for finding ids, owners, and coordinates.
+
 ## Chinese Format Notes
 
 - [Chinese binary format notes](docs/FORMAT_NOTES.zh.md): current reverse-engineering notes for `.m`, `kingdom.cel/.atr`, and the stage sidecar files `.s/.x/.stg/.spr/.dor/.evt`.

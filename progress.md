@@ -258,3 +258,9 @@
 - Confirmed `.stg` is already carrying scenario-facing semantic names rather than only a title: sampled strings include cities like `平原` / `荊州` / `襄陽`, generals like `劉備` / `關羽` / `諸葛亮`, troop labels like `步兵` / `弓箭兵`, and faction text like `中立國家`.
 - Confirmed `.evt` carries objective/prompt/dialogue labels such as `勝利`, `失敗`, `佔領四郡`, `敵兵全死`, `黃忠加入提示`, and `劉備出現`, so it is a script-plus-text semantic layer rather than a raw numeric trigger bitmap.
 - Confirmed `stage01.spr` is effectively empty after the stable `180/36` meta pair, while `stage11.dor` is a 28-byte header-only file with an all-zero body. That makes both sidecars look optional on a per-stage basis.
+
+## Update 2026-06-24 Sidecar Record Families
+- Added heuristic `record_family_summaries` to `tools/analyze_stage_sidecars.py`, with Chinese code comments for the new family-classification and candidate-field logic.
+- Confirmed `.stg` is not one uniform 76-byte row type: `224` families track generals/troops/bandits, `92` families track city/寨-style location records, and `96` families track faction/ruler-style records.
+- Confirmed `.evt` also breaks into reusable fixed families: `stage01.evt` has rolling name-slot families driven by `72`, `55`, and `189+` control words, while `stage20.evt` has separate flow/prompt/objective text families.
+- Added stage-width/stage-height-aware `candidate_small_u16_fields` output so the next pass can focus on likely id/owner/coordinate columns instead of scanning every word offset by hand.

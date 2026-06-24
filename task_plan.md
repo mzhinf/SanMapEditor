@@ -129,3 +129,8 @@ Phase 5
 - Upgraded the sidecar helper to emit `.stg/.evt` string previews and `.spr/.dor` meta-prefix summaries.
 - Confirmed `.stg` already contains city/general/troop/faction semantics, `.evt` contains objective/prompt/dialogue semantics, and `.spr/.dor` can be empty on a per-stage basis.
 - Next reverse-engineering focus: classify `.stg` 76-byte subrecord families and `.evt` 72-byte command families, then pin their coordinate/id fields.
+
+## Update 2026-06-24 Sidecar Record Families
+- Continued reverse engineering with family-level clustering instead of raw per-record dumps.
+- Confirmed `.stg` and `.evt` are both mixed-template fixed-stride containers, and added candidate field extraction keyed by stage dimensions.
+- Next reverse-engineering focus: split `.stg` by `224/92/96` families and `.evt` by `72/55/189+` families, then isolate id / owner / coordinate columns within each family separately.

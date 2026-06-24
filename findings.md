@@ -285,3 +285,8 @@ Verification: a synthetic `stage11` patch changed cell `0,1 acwx` from `36` to `
 - The 76-byte `.stg` record preview suggests a mixed entity table rather than one uniform record kind: early records look like scenario/faction metadata, later records surface city names, then general names, then troop names.
 - `.evt` string previews surfaced explicit objective/prompt/dialogue phrases such as `勝利`, `失敗`, `佔領四郡`, `敵兵全死`, `黃忠加入提示`, `劉備出現`, and `到達涿縣`. Together with `talk` / `VIEW`, this strongly supports a script-command layer with embedded or referenced text parameters.
 - `.spr` is optional by stage: `stage01.spr` contains only the `Soldier Data` magic plus the stable `180/36` meta dwords and then zeroes. `.dor` is also optional by stage: `stage11.dor` is only 28 bytes and has an all-zero body after the header.
+
+## Update 2026-06-24 Sidecar Record Families
+- `.stg` now looks like a multi-template 76-byte container. The strongest current split is by marker words: `224` for entity-style rows (generals/troops/bandits), `92` for city/寨 rows, and `96` for faction/ruler rows.
+- `.evt` is also multi-template. In `stage01.evt`, many rows are repeated name-slot tables with names sliding through offsets `0/8/16/24/32/48/56/64` and companion control words `72`, `55`, and `189..257`. In `stage20.evt`, the script layer separates into flow/prompt/objective families.
+- The new `candidate_small_u16_fields` output is useful triage: it highlights word columns that repeatedly stay within stage width/height scale, which makes them good candidates for local ids, owners, and map coordinates.
