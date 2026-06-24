@@ -241,3 +241,8 @@
 - Clarified that .m cells are 16-byte records, not just acwx/acwy/acwz; the editor must preserve all decoded auxiliary bytes for round-trip safety.
 - Documented the current hypothesis that city ids, unit data, doors/entrances, events, and passability/cache semantics live across .stg/.spr/.dor/.evt and .s/.x rather than only inside the three visible map layers.
 
+## Update 2026-06-24 Editor Navigation And Sidecar Grid Analysis
+- Updated `tools/editor_app.html` so the editor uses right-drag viewport panning in both Inspect and Paint instead of a separate Pan mode, and added arrow-key movement for the current selected cell.
+- Added `tools/analyze_stage_sidecars.py` to summarize `.m`, `.s/.x`, and `.stg/.spr/.dor/.evt` stage files plus nearby `Emperor.exe` suffix-string contexts.
+- New sampled finding: across `stage01/stage11/stage20/stage29`, `.s` and `.x` are 72.7% to 86.3% byte-identical, and `.x` consistently overlaps more of the `.m final_palette` value set than `.s`.
+

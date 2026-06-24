@@ -203,7 +203,8 @@ Tool modes:
 
 - Inspect: select a cell and show its decoded `.m` record without changing data.
 - Paint: write the current resource index into the active layer for the selected cell.
-- Pan: drag the map view.
+- Right-drag on the canvas: move the map view without leaving Inspect or Paint.
+- Arrow keys: move the current selected cell one step at a time; keyboard movement is ignored while typing in inputs or selects.
 
 Next implementation plan for lower-priority items:
 
@@ -263,6 +264,16 @@ This exports every `stage*.m` bundle and writes `derived/editor/index.html` plus
 Verification: regenerated `stage11` and `stage20`, loaded `stage11/editor.html`, confirmed the Stage dropdown showed both exported stages, and confirmed `derived/editor/index.html` lists exported stage editors.
 
 
+## Editor Navigation Update 2026-06-24
+
+The editor no longer needs a dedicated Pan tool. Inspect and Paint stay active while the viewport uses more map-editor-like controls:
+
+- Right mouse button on the canvas: drag the map view.
+- Arrow keys: move the current selected cell up, down, left, or right.
+- Existing left-click behavior is unchanged: Inspect selects, Paint writes the current brush value.
+
+Verification: regenerated `derived/editor/stage11` with the updated template and confirmed the generated `tools/editor_app.html` bundle now exposes only `Inspect` and `Paint` tool options while the keyboard and right-drag handlers are present in the shipped editor HTML.
+
 ## Patch-To-`.m` Copy Writing 2026-06-24
 
 `tools/apply_editor_patch.py` applies an exported `san-editor-patch-v1` JSON patch to a copied `.m` file. It never overwrites the original game directory by default.
@@ -289,7 +300,26 @@ Safety behavior:
 
 Verification: a synthetic `stage11` patch changed cell `0,1 acwx` from `36` to `37` in `derived/edited_test/stage11.m`; a mismatched patch was rejected with a JSON error and no output write.
 
-## 中文格式文档
 
-- [三国霸业地图与关卡文件二进制结构笔记](docs/FORMAT_NOTES.zh.md)：记录 `.m`、`kingdom.cel/.atr`、`.s/.x/.stg/.spr/.dor/.evt` 的当前二进制结构、证据和待验证项。
+## Sidecar Grid Analysis 2026-06-24
 
+Added `tools/analyze_stage_sidecars.py`, a reusable reverse-engineering helper for stage sidecar files and fixed grids.
+
+Typical use:
+
+```powershell
+& $py tools/analyze_stage_sidecars.py . --stage stage01 --stage stage11 --stage stage20
+```
+
+It reports:
+
+- `.m` width/height and `final_palette` distributions.
+- `.s` / `.x` byte distributions, overlap with `.m final_palette`, and byte-for-byte similarity between the two fixed grids.
+- Header previews for `.stg/.spr/.dor/.evt`.
+- Nearby `Emperor.exe` string contexts for `.s/.x/.m/.evt/.dor/.spr`.
+
+Current findings from `stage01/stage11/stage20/stage29`: `.s` and `.x` are 72.7% to 86.3% identical byte-for-byte, while `.x` consistently overlaps more of the `.m final_palette` value set than `.s`. That pushes them closer to paired derived grids or caches than to unrelated resource files.
+
+## Chinese Format Notes
+
+- [Chinese binary format notes](docs/FORMAT_NOTES.zh.md): current reverse-engineering notes for `.m`, `kingdom.cel/.atr`, and the stage sidecar files `.s/.x/.stg/.spr/.dor/.evt`.

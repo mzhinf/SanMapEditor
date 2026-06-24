@@ -60,7 +60,7 @@ canvas { width: 100%; height: 100%; display: block; }
     <label>Stage</label>
     <select id="stagePicker"><option value="">current</option></select>
     <label>Tool</label>
-    <select id="tool" title="查看=只选中格子；绘制=把当前资源写到当前层；平移=拖动地图"><option value="inspect">查看</option><option value="paint">绘制</option><option value="pan">平移</option></select>
+    <select id="tool" title="Inspect selects a cell. Paint writes the current resource. Right-drag moves the map."><option value="inspect">Inspect</option><option value="paint">Paint</option></select>
     <label>Layer</label>
     <select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option></select>
     <label>Value</label>
@@ -150,6 +150,27 @@ function worldToCell(x, y) {
   return { col, row };
 }
 function clientToWorld(ev) { const rect = canvas.getBoundingClientRect(); return { x: (ev.clientX - rect.left - state.transform.x) / state.transform.scale, y: (ev.clientY - rect.top - state.transform.y) / state.transform.scale }; }
+function isEditableTarget(target) { return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable); }
+function moveSelected(dx, dy) {
+  if (!state.meta) return;
+  const next = state.selected ? { col: state.selected.col + dx, row: state.selected.row + dy } : { col: 0, row: 0 };
+  next.col = Math.max(0, Math.min(state.meta.width - 1, next.col));
+  next.row = Math.max(0, Math.min(state.meta.height - 1, next.row));
+  state.selected = next;
+  refreshSide();
+  refreshPatches();
+  draw();
+}
+function startDrag(ev) {
+  canvas.setPointerCapture(ev.pointerId);
+  state.dragging = true;
+  state.dragStart = { pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY, tx: state.transform.x, ty: state.transform.y };
+}
+function stopDrag(ev = null) {
+  if (ev && state.dragStart && ev.pointerId !== state.dragStart.pointerId) return;
+  state.dragging = false;
+  state.dragStart = null;
+}
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.max(1, Math.floor(rect.width * dpr)); canvas.height = Math.max(1, Math.floor(rect.height * dpr)); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -449,9 +470,30 @@ async function loadStagePicker() {
   }
 }
 function downloadPatch() { const payload = { format: 'san-editor-patch-v1', stage: state.meta.stage, fields: state.meta.fields, minimap: { dirtyCells: [...state.patches.values()].filter(p => p.minimapDirty).map(p => [p.x, p.y]) }, changes: [...state.patches.values()] }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${state.meta.stage}_patch.json`; a.click(); URL.revokeObjectURL(a.href); }
-canvas.addEventListener('pointerdown', ev => { canvas.setPointerCapture(ev.pointerId); const world = clientToWorld(ev); const cell = worldToCell(world.x, world.y); const tool = els.tool.value; if (tool === 'pan') { state.dragging = true; state.dragStart = { x: ev.clientX, y: ev.clientY, tx: state.transform.x, ty: state.transform.y }; return; } if (cell) { state.selected = cell; if (tool === 'paint') applyPaint(cell); refreshSide(); draw(); } });
-canvas.addEventListener('pointermove', ev => { if (!state.dragging) return; state.transform.x = state.dragStart.tx + ev.clientX - state.dragStart.x; state.transform.y = state.dragStart.ty + ev.clientY - state.dragStart.y; draw(); });
-canvas.addEventListener('pointerup', () => { state.dragging = false; });
+canvas.addEventListener('contextmenu', ev => { ev.preventDefault(); });
+canvas.addEventListener('pointerdown', ev => {
+  if (ev.button === 2) {
+    startDrag(ev);
+    return;
+  }
+  if (ev.button !== 0) return;
+  const world = clientToWorld(ev);
+  const cell = worldToCell(world.x, world.y);
+  if (!cell) return;
+  state.selected = cell;
+  if (els.tool.value === 'paint') applyPaint(cell);
+  refreshSide();
+  draw();
+});
+canvas.addEventListener('pointermove', ev => {
+  if (!state.dragging || !state.dragStart || ev.pointerId !== state.dragStart.pointerId) return;
+  state.transform.x = state.dragStart.tx + ev.clientX - state.dragStart.x;
+  state.transform.y = state.dragStart.ty + ev.clientY - state.dragStart.y;
+  draw();
+});
+canvas.addEventListener('pointerup', ev => { stopDrag(ev); });
+canvas.addEventListener('pointercancel', ev => { stopDrag(ev); });
+canvas.addEventListener('lostpointercapture', ev => { stopDrag(ev); });
 canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; draw(); }, { passive: false });
 mini.addEventListener('pointerdown', ev => { const image = displayImage(); if (!image) return; const source = state.minimap || image; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / source.width, rect.height / source.height); const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * image.width; const y = (ev.clientY - rect.top - oy) / h * image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; draw(); });
 els.openMFile.addEventListener('click', () => { els.loadMFile.click(); });
@@ -466,7 +508,19 @@ document.getElementById('clearFilter').addEventListener('click', () => { els.res
 els.layer.addEventListener('change', () => { renderResourceList(); refreshSide(); refreshPatches(); });
 els.resourceFilter.addEventListener('input', renderResourceList);
 els.resourceSort.addEventListener('change', renderResourceList);
-window.addEventListener('keydown', ev => { if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && !ev.shiftKey) { ev.preventDefault(); undoLastEdit(); } });
+window.addEventListener('keydown', ev => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
+    ev.preventDefault();
+    undoLastEdit();
+    return;
+  }
+  if (isEditableTarget(ev.target)) return;
+  if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+  if (ev.key === 'ArrowLeft') { ev.preventDefault(); moveSelected(-1, 0); return; }
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); moveSelected(1, 0); return; }
+  if (ev.key === 'ArrowUp') { ev.preventDefault(); moveSelected(0, -1); return; }
+  if (ev.key === 'ArrowDown') { ev.preventDefault(); moveSelected(0, 1); }
+});
 window.addEventListener('resize', resizeCanvas);
 async function loadImage(src) { const image = new Image(); image.src = src; await image.decode(); return image; }
 async function boot() {
