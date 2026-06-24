@@ -270,3 +270,8 @@
 - Added `tools/export_stage_sidecar_workbook.mjs` to build `derived/sidecar_analysis/stg_evt_analysis.xlsx` plus preview PNGs using artifact-tool.
 - Verified the exported workbook visually: `????` and `????` render legibly, with the expected 33-stage overview and family totals.
 - New cross-stage finding: `.stg` text-bearing families reuse stepped text slots, while `.evt flow_text` slides across many offsets, which strengthens the multi-template command-structure hypothesis.
+
+## Update 2026-06-24 Format Notes Encoding Fix
+- Rewrote the corrupted tail section in `docs/FORMAT_NOTES.zh.md` as clean UTF-8 Chinese.
+- Expanded the `.stg` / `.evt` notes from phenomenon-level observations into a more structured binary-layout summary: file header, main stride, tail bytes, family totals, text-slot reuse, and current high-priority candidate fields.
+

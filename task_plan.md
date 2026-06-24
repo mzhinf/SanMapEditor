@@ -139,3 +139,8 @@ Phase 5
 - Added a readable export milestone for the reverse-engineering checklist: `.stg/.evt` data can now be flattened and opened as `derived/sidecar_analysis/stg_evt_analysis.xlsx`.
 - This does not finish the field decode, but it removes a lot of manual hex/JSON scanning and gives a better base for isolating owner/id/coordinate columns.
 - Next reverse-engineering focus after this export: use the workbook's `????` / `????` / `????` sheets to split `.stg` families by slot pattern and then pin the first truly spatial columns inside `city_or_structure`, `general_entry`, and `faction_or_ruler`.
+
+## Update 2026-06-24 Format Notes Encoding Fix
+- Cleaned the damaged Chinese notes block in `docs/FORMAT_NOTES.zh.md` and replaced it with a structured `.stg/.evt` binary-layout section.
+- The reverse-engineering notes now preserve the current understanding in a readable form, which should make the next family-by-family field decode much less error-prone.
+

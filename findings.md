@@ -301,3 +301,8 @@ Verification: a synthetic `stage11` patch changed cell `0,1 acwx` from `36` to `
   - `.stg`: `troop_entry 863`, `bandit_entry 245`, `faction_or_ruler 60`, `general_entry 58`, `city_or_structure 39`
   - `.evt`: `flow_text 2128`, `text_mixed_record 358`, `name_slot_72_family 182`, `name_slot_highid_family 102`, `condition_or_objective 64`
 - New structural finding: `.stg` name/tag pairs land in repeating 20-byte slots (`12/17`, `28/33`, `48/53`, `68/73` etc.), while `.evt flow_text` strings slide across many offsets (`0/4/8/12/36/40/52/60/64/68`). This is stronger evidence that both containers multiplex several subtemplates instead of storing one fixed entity row type.
+
+## Update 2026-06-24 Format Notes Encoding Fix
+- The corrupted `?`-filled tail block in `docs/FORMAT_NOTES.zh.md` was not source-data corruption; it was a bad text append. It has now been replaced with a clean UTF-8 Chinese section.
+- The new section records `.stg` as `8-byte header + 76-byte mixed-template record table + tail bytes` and `.evt` as `8-byte header + 72-byte mixed-template command table + tail bytes`, with representative sample sizes and family-level totals.
+
