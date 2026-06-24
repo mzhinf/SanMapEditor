@@ -60,6 +60,86 @@ def extract_ascii_tokens(blob: bytes, limit: int = 16) -> list[str]:
     return seen
 
 
+def decode_text_candidate(raw: bytes) -> str | None:
+    if len(raw) >= 4 and all(32 <= byte < 127 for byte in raw):
+        return raw.decode("ascii")
+    try:
+        text = raw.decode("cp950")
+    except UnicodeDecodeError:
+        return None
+    if not any(ord(char) > 127 for char in text):
+        return None
+    if not all((32 <= byte < 127) or byte >= 0x81 for byte in raw):
+        return None
+    return text
+
+
+def extract_text_segments(blob: bytes, limit: int = 24, max_bytes: int = 48) -> list[dict[str, object]]:
+    results: list[dict[str, object]] = []
+    seen: set[str] = set()
+    start = 0
+    for index, byte in enumerate(blob + b"\x00"):
+        if byte != 0:
+            continue
+        raw = blob[start:index]
+        offset = start
+        start = index + 1
+        if not (2 <= len(raw) <= max_bytes):
+            continue
+        text = decode_text_candidate(raw)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append({"offset": offset, "text": text})
+        if len(results) >= limit:
+            break
+    return results
+
+
+def build_record_model(blob: bytes, header: int, stride: int, confidence: str) -> dict[str, object]:
+    payload = max(0, len(blob) - header)
+    return {
+        "assumed_header": header,
+        "stride": stride,
+        "confidence": confidence,
+        "record_count_floor": payload // stride,
+        "tail_bytes": payload % stride,
+        "exact_divisible": payload % stride == 0,
+    }
+
+
+def extract_record_string_previews(
+    blob: bytes,
+    header: int,
+    stride: int,
+    *,
+    limit: int = 12,
+    max_strings_per_record: int = 4,
+) -> list[dict[str, object]]:
+    previews: list[dict[str, object]] = []
+    record_count = max(0, (len(blob) - header) // stride)
+    for record_index in range(record_count):
+        start = header + record_index * stride
+        record = blob[start : start + stride]
+        strings = extract_text_segments(record, limit=max_strings_per_record, max_bytes=24)
+        if not strings:
+            continue
+        u32_head = [
+            struct.unpack_from("<I", record, offset)[0]
+            for offset in range(0, min(24, len(record) - 3), 4)
+        ]
+        previews.append(
+            {
+                "record_index": record_index,
+                "strings": strings,
+                "u32_head": u32_head,
+            }
+        )
+        if len(previews) >= limit:
+            break
+    return previews
+
+
 def summarize_sidecar(path: Path) -> dict[str, object]:
     suffix = path.suffix.lower().lstrip(".")
     blob = path.read_bytes()
@@ -77,22 +157,47 @@ def summarize_sidecar(path: Path) -> dict[str, object]:
     if model:
         header = model["header"]
         stride = model["stride"]
-        payload = max(0, len(blob) - header)
-        summary["record_model"] = {
-            "assumed_header": header,
-            "stride": stride,
-            "confidence": model["confidence"],
-            "record_count_floor": payload // stride,
-            "tail_bytes": payload % stride,
-            "exact_divisible": payload % stride == 0,
-        }
+        summary["record_model"] = build_record_model(blob, header, stride, model["confidence"])
     if suffix == "stg":
         summary["title_cp950"] = decode_cp950_zstr(blob, 8, 40)
         if len(blob) >= 0x2C:
             summary["year_start_candidate"] = struct.unpack_from("<I", blob, 0x24)[0]
             summary["year_end_candidate"] = struct.unpack_from("<I", blob, 0x28)[0]
+        summary["decoded_strings_preview"] = extract_text_segments(blob)
+        summary["record_string_previews"] = extract_record_string_previews(blob, 8, 76)
     elif suffix == "evt":
         summary["ascii_tokens"] = extract_ascii_tokens(blob)
+        summary["decoded_strings_preview"] = extract_text_segments(blob)
+        summary["record_string_previews"] = extract_record_string_previews(blob, 8, 72)
+    elif suffix == "spr":
+        meta: dict[str, object] = {}
+        if blob.startswith(b"Soldier Data"):
+            meta["ascii_magic"] = "Soldier Data"
+            meta["magic_len"] = 12
+        if len(blob) >= 20:
+            meta["meta_dwords"] = [struct.unpack_from("<I", blob, 12)[0], struct.unpack_from("<I", blob, 16)[0]]
+            payload = blob[20:]
+            meta["post_meta_nonzero_bytes"] = sum(1 for byte in payload if byte)
+            meta["post_meta_all_zero"] = not any(payload)
+            meta["record_model_after_meta20"] = build_record_model(blob[20:], 0, 36, "low")
+            record_count = len(payload) // 36
+            meta["active_records_after_meta20"] = sum(
+                1
+                for index in range(record_count)
+                if any(payload[index * 36 : (index + 1) * 36])
+            )
+        summary["meta_prefix"] = meta
+    elif suffix == "dor":
+        meta = {}
+        if blob.startswith(b"Door    Data"):
+            meta["ascii_magic"] = "Door    Data"
+            meta["magic_len"] = 12
+        if len(blob) >= 16:
+            meta["meta_dword"] = struct.unpack_from("<I", blob, 12)[0]
+            payload = blob[16:]
+            meta["post_header_nonzero_bytes"] = sum(1 for byte in payload if byte)
+            meta["post_header_all_zero"] = not any(payload)
+        summary["meta_prefix"] = meta
     return summary
 
 

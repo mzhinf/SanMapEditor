@@ -123,3 +123,9 @@ Phase 5
 ## Update 2026-06-24 Patch-To-M Writer Complete
 - Completed safe patch-to-`.m` copy writing for Phase 5. The editor can export JSON patches and `tools/apply_editor_patch.py` can validate/apply them to copied `.m` files.
 - Remaining Phase 5 work: optional UI integration for write-back, shared resource atlas optimization, dirty-neighborhood redraw optimization, and `.s/.x` minimap/cache confirmation.
+
+## Update 2026-06-24 Sidecar Semantic Strings
+- Continued the reverse-engineering checklist instead of editor UI work.
+- Upgraded the sidecar helper to emit `.stg/.evt` string previews and `.spr/.dor` meta-prefix summaries.
+- Confirmed `.stg` already contains city/general/troop/faction semantics, `.evt` contains objective/prompt/dialogue semantics, and `.spr/.dor` can be empty on a per-stage basis.
+- Next reverse-engineering focus: classify `.stg` 76-byte subrecord families and `.evt` 72-byte command families, then pin their coordinate/id fields.

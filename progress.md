@@ -252,3 +252,9 @@
 - Confirmed `.evt` has a strong `72`-byte primary record cadence with extracted script tokens such as `talk`, `VIEW`, `MAP`, `MAPALL`, `MOVE`, and `TIMEOVER`.
 - Refined `.s/.x` understanding: across sampled stages, `.s` never contains a non-240 pixel where `.x` is 240, while `.x` contains a small superset of extra non-240 pixels beyond `.s`.
 
+
+## Update 2026-06-24 Sidecar Semantic Strings
+- Extended `tools/analyze_stage_sidecars.py` again so it now emits `decoded_strings_preview` / `record_string_previews` for `.stg` and `.evt`, plus meta-prefix summaries for `.spr` and `.dor`.
+- Confirmed `.stg` is already carrying scenario-facing semantic names rather than only a title: sampled strings include cities like `平原` / `荊州` / `襄陽`, generals like `劉備` / `關羽` / `諸葛亮`, troop labels like `步兵` / `弓箭兵`, and faction text like `中立國家`.
+- Confirmed `.evt` carries objective/prompt/dialogue labels such as `勝利`, `失敗`, `佔領四郡`, `敵兵全死`, `黃忠加入提示`, and `劉備出現`, so it is a script-plus-text semantic layer rather than a raw numeric trigger bitmap.
+- Confirmed `stage01.spr` is effectively empty after the stable `180/36` meta pair, while `stage11.dor` is a 28-byte header-only file with an all-zero body. That makes both sidecars look optional on a per-stage basis.
