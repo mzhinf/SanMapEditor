@@ -106,14 +106,34 @@ Builds the first editor-ready bundle: a rendered CEL map image, editable record 
 & $py tools/export_editor_bundle.py . --stage stage11
 ```
 
+Export every available `stage*.m` bundle:
+
+```powershell
+& $py tools/export_editor_bundle.py . --all
+```
+
 Outputs:
 
 - `derived/editor/stage11/map.png`
 - `derived/editor/stage11/stage.json`
 - `derived/editor/stage11/editor.html`
+- `derived/editor/index.html`
 - `derived/editor/index.json`
 
 Current editor scope: map browsing, zoom/pan, stagger cell picking, `.m` record inspection, local `acwx/acwy/acwz` edits, and JSON patch export. It does not overwrite the original `.m` files yet.
+
+How to open the editor:
+
+```powershell
+& $py -m http.server 8787 --bind 127.0.0.1 --directory derived/editor
+```
+
+Then open one of these URLs in the browser:
+
+- `http://127.0.0.1:8787/index.html`
+- `http://127.0.0.1:8787/stage11/editor.html`
+
+If `stage11/editor.html` does not open, the usual cause is that the static server is not running; the generated files alone are not enough because the editor fetches `stage.json`, `resources.json`, and atlas images over HTTP.
 
 ### `tools/render_m_cel_map.py`
 
