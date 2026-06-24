@@ -144,3 +144,12 @@ Phase 5
 - Cleaned the damaged Chinese notes block in `docs/FORMAT_NOTES.zh.md` and replaced it with a structured `.stg/.evt` binary-layout section.
 - The reverse-engineering notes now preserve the current understanding in a readable form, which should make the next family-by-family field decode much less error-prone.
 
+## Update 2026-06-24 STG Alignment Pass
+- Added a second-pass `.stg` alignment analysis instead of treating each text offset as a separate field layout.
+- Next reverse-engineering focus after this pass: use the aligned templates to keep drilling `general_entry`, `faction_or_ruler`, and `city_or_structure`, especially around the now-likely faction-id columns and the still-unresolved city fields.
+
+
+## Update 2026-06-24 Stage.ini Export
+
+- Added a new reverse-engineering milestone for `stage.ini`: export to readable JSON/Excel tables and rebuild back to a byte-identical binary.
+- Next recommended focus after this export: pin the actual main-table general-id column, then map `stage.ini` global dictionaries back into the editor resource pickers and `.evt` object references.

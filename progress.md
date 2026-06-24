@@ -275,3 +275,15 @@
 - Rewrote the corrupted tail section in `docs/FORMAT_NOTES.zh.md` as clean UTF-8 Chinese.
 - Expanded the `.stg` / `.evt` notes from phenomenon-level observations into a more structured binary-layout summary: file header, main stride, tail bytes, family totals, text-slot reuse, and current high-priority candidate fields.
 
+## Update 2026-06-24 STG Alignment Pass
+- Added `tools/analyze_stg_family_alignment.py` and generated `derived/sidecar_analysis/stg_family_alignment.json`.
+- Verified that several `.stg` families are better explained as one template rotating across the 76-byte record than as unrelated record types.
+- Pinned the first high-confidence cross-family relationship: `general_entry.w02` matches the faction ids exposed by `faction_or_ruler.w12`.
+- Pinned the first high-confidence troop code table: `troop_entry.w12/w14` now map stably onto `步兵/槍兵/騎兵/弓箭兵/水兵/投石車`.
+
+
+## Update 2026-06-24 Stage.ini Export
+
+- Added `tools/stage_ini_codec.py` plus export/build scripts for `stage.ini`.
+- Exported `derived/stage_ini_analysis/stage_ini_tables.json` and `derived/stage_ini_analysis/stage_ini_analysis.xlsx`.
+- Verified `tools/build_stage_ini.py` can rebuild a byte-identical `stage_roundtrip.ini` from the exported JSON.

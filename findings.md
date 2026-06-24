@@ -306,3 +306,23 @@ Verification: a synthetic `stage11` patch changed cell `0,1 acwx` from `36` to `
 - The corrupted `?`-filled tail block in `docs/FORMAT_NOTES.zh.md` was not source-data corruption; it was a bad text append. It has now been replaced with a clean UTF-8 Chinese section.
 - The new section records `.stg` as `8-byte header + 76-byte mixed-template record table + tail bytes` and `.evt` as `8-byte header + 72-byte mixed-template command table + tail bytes`, with representative sample sizes and family-level totals.
 
+## Update 2026-06-24 STG Alignment Pass
+- Added `tools/analyze_stg_family_alignment.py`, which rotates `.stg` family records onto shared anchor columns before summarizing fields.
+- Confirmed the “same template, shifted slot” hypothesis for `.stg`:
+  - `general_entry` aligns cleanly on `224 @ w04`
+  - `faction_or_ruler` aligns cleanly on `96 @ w00`
+  - `city_or_structure` aligns reasonably on `92 @ w02`
+  - `troop_entry` aligns cleanly on `224 @ w00`
+- New field-level findings:
+  - `general_entry.w02` strongly behaves like faction id and matches `.stg faction_or_ruler.w12`
+  - `faction_or_ruler.w12` strongly behaves like faction id
+  - `troop_entry.w12/w14` collapse into stable troop-code pairs: `步兵 219/116`, `槍兵 220/117`, `騎兵 221/118`, `弓箭兵 222/119`, `水兵 223/120`, `投石車 224/121`
+  - `city_or_structure.w14` looks like a place-id candidate for full city rows, while `w18` does not yet match faction ids reliably
+
+
+## Update 2026-06-24 Stage.ini Export
+
+- Added a dedicated `stage.ini` parsing/rebuild path: `tools/stage_ini_codec.py`, `tools/export_stage_ini_tables.py`, `tools/export_stage_ini_workbook.mjs`, and `tools/build_stage_ini.py`.
+- Confirmed `stage.ini` is a binary master database rather than a text ini: a `277 * 224` main table plus a `174 * 76` tail table.
+- Confirmed the tail table shares the same city id space as per-stage `.stg` records, including direct matches such as `鄴=7`, `譙=18`, and `宛=20`.
+- Verified JSON -> `stage.ini` rebuild is byte-identical to the original file.

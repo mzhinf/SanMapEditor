@@ -332,26 +332,22 @@ The helper now also emits `record_family_summaries`, which starts to turn the mi
 
 ## Sidecar Workbook Export 2026-06-24
 
-????? `.stg/.evt` ?????????????????????????
+为了继续拆解 .stg/.evt，仓库现在提供了“先导出 JSON，再生成可筛选工作簿”的链路。
 
-1. ?? sidecar ?????????? JSON?
+1. 导出 sidecar 结构化 JSON：
 
 ```powershell
 & $py tools/export_stage_sidecar_tables.py .
 ```
 
-2. ?? artifact-tool ?? Excel ????
+2. 生成 Excel 工作簿：
 
 ```powershell
 $node = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
-$mods = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules'
-if (-not (Test-Path 'tools\node_modules')) {
-    New-Item -ItemType Junction -Path 'tools\node_modules' -Target $mods | Out-Null
-}
 & $node tools/export_stage_sidecar_workbook.mjs
 ```
 
-?????
+主要产物：
 
 - `derived/sidecar_analysis/stage_sidecar_tables.json`
 - `derived/sidecar_analysis/stg_evt_analysis.xlsx`
@@ -359,11 +355,68 @@ if (-not (Test-Path 'tools\node_modules')) {
 - `derived/sidecar_analysis/previews/family_totals.png`
 - `derived/sidecar_analysis/previews/text_slots.png`
 
-??????????
+推荐阅读顺序：
 
-1. `??`???????????????????
-2. `????`????? family ???????????????
-3. `????`?????/????? record ??????????
-4. `stg??` / `evt??`?? `family_guess` ?????????? `w00..w37/35` ??????
+1. 先看“说明”和“关卡总览”，确认每个关卡有哪些 sidecar。
+2. 再看“家族总计”，确定 .stg / .evt 当前已经分出的 record family。
+3. 然后看“文本槽位”和“候选字段”，定位最像 id / owner / 坐标的小整数列。
+4. 最后下钻到 `stg记录` / `evt记录`，逐条看 `family_guess`、`text_layout`、`w00..w37/35`。
 
-?????artifact-tool ??? `.xlsx` ???????? `stg_evt_analysis.xlsx.inspect.ndjson` ?????????????????????????
+工作簿只是阅读层；真正用于后续程序消费与复算的，是同目录下的 JSON 导出。
+
+### `tools/analyze_stg_family_alignment.py`
+
+对 .stg 做第二轮“按锚点旋转对齐”的汇总分析，方便把同模板平移过的记录重新放回同一列上比较。
+
+```powershell
+& $py tools/analyze_stg_family_alignment.py .
+```
+
+主要产物：
+
+- `derived/sidecar_analysis/stg_family_alignment.json`
+
+当前这一轮对齐最有价值的结论：
+
+- `general_entry`：把 `224` 对齐到 `w04` 后，`w02` 很像势力 id，并且能回对到 .stg faction_or_ruler。
+- `faction_or_ruler`：把 `96` 对齐到 `w00` 后，`w12` 很像势力自身的编号列。
+- `troop_entry`：把 `224` 对齐到 `w00` 后，`w12/w14` 会稳定落成兵种编码对，例如 `步兵=219/116`、`槍兵=220/117`、`騎兵=221/118`、`弓箭兵=222/119`、`水兵=223/120`、`投石車=224/121`。
+- `city_or_structure`：把 `92` 对齐到 `w02` 后，`w14` 很像完整城市记录里的地点 id，而 `w18` 还不能稳定解释成势力 id。
+
+## Stage.ini Export 2026-06-24
+
+为了把全局母表和单关 .stg/.evt 区分开，仓库新增了 `stage.ini` 的专用解析与回写脚本：
+
+- `tools/stage_ini_codec.py`：`stage.ini` 解析/重建核心。
+- `tools/export_stage_ini_tables.py`：导出结构化 JSON 表。
+- `tools/export_stage_ini_workbook.mjs`：把 JSON 生成 Excel 工作簿与预览 PNG。
+- `tools/build_stage_ini.py`：从导出的 JSON 回写新的 `stage.ini`。
+
+典型用法：
+
+```powershell
+& $py tools/export_stage_ini_tables.py .
+$node = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
+& $node tools/export_stage_ini_workbook.mjs
+& $py tools/build_stage_ini.py derived/stage_ini_analysis/stage_ini_tables.json --compare-with '三国霸业\stage.ini' --out derived/stage_ini_analysis/stage_roundtrip.ini
+```
+
+主要产物：
+
+- `derived/stage_ini_analysis/stage_ini_tables.json`
+- `derived/stage_ini_analysis/stage_ini_analysis.xlsx`
+- `derived/stage_ini_analysis/previews/main_family_totals.png`
+- `derived/stage_ini_analysis/previews/tail_family_totals.png`
+- `derived/stage_ini_analysis/previews/city_master.png`
+- `derived/stage_ini_analysis/previews/troop_master.png`
+- `derived/stage_ini_analysis/stage_roundtrip.ini`
+
+当前高置信结论：
+
+- `stage.ini` 不是文本 ini，而是二进制母表。
+- 文件头后第一段是 `277 * 224` 字节主表，主要像全局武将/角色母表。
+- 主表之后还有 `174 * 76` 字节尾表，结构风格接近 .stg，混有城市、兵种、盗贼、技能/文本字典等全局记录。
+- 尾表中的城市 id 已经能和关卡 .stg 多点对证，例如 `鄴=7`、`譙=18`、`宛=20`、`吳=31`。
+- `tools/build_stage_ini.py` 已验证可以基于导出 JSON 做字节级 round-trip，当前导出的 `stage_roundtrip.ini` 与原始 `stage.ini` 完全一致。
+
+说明：Excel 工作簿是阅读层；真正用于可逆回写的是 JSON。当前 build 脚本默认优先使用每条记录的 `raw_hex` 原样回写，若缺失则退回使用 `u16_words` 重新打包。
