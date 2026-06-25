@@ -1,289 +1,62 @@
 # Progress Log
 
-## Session: 2026-06-23
+## 2026-06-23
 
-### Phase 1: 目录盘点与格式假设
-- **Status:** in_progress
-- **Started:** 2026-06-23
-- Actions taken:
-  - 阅读 `planning-with-files` 技能说明。
-  - 阅读浏览器控制技能说明，准备后续用于查看/验证地图渲染结果。
-  - 盘点 `H:\Workstation\san` 和 `H:\Workstation\san\三国霸业`。
-  - 发现大量 `stageNN.*` 关卡文件、`kingdom.cel/.atr`、`Graphics.dat` 等资源候选。
-  - 尝试运行 planning session catchup，发现默认 `python` 命令不可用。
-- Files created/modified:
-  - `task_plan.md` (created)
-  - `findings.md` (created)
-  - `progress.md` (created)
+- 盘点游戏目录，确认 `stageNN.*`、`kingdom.cel/.atr`、DAT 容器与 `Emperor.exe` 为核心对象。
+- 确认 `.m` 文件头为 `width + height + Hello1.0`，cell 记录固定 16 字节。
+- 完成 `kingdom.cel/.atr` 的第一轮图层拆解。
+- 恢复基于 `acwx/acwy/acwz` 的真实地图渲染。
+- 从 `Emperor.exe` 收口 `stage11` 所需的 world-to-screen 变换。
+- 建立浏览器地图编辑器原型，支持 Inspect / Paint / 本地 `.m` 加载 / Undo / Reset / patch 导出。
 
-### Phase 2: 静态分析 Emperor.exe
-- **Status:** pending
-- Actions taken:
-  -
-- Files created/modified:
-  -
+## 2026-06-24
 
-### Phase 3: 解析地图与资源文件
-- **Status:** pending
-- Actions taken:
-  -
-- Files created/modified:
-  -
+- 补齐编辑器资源面板、即时重绘、右键拖动地图、方向键移动选中格。
+- 完成安全 patch -> `.m` 复制写回脚本。
+- 建立 `.stg/.evt/.spr/.dor/.s/.x` 的第一轮 sidecar 分析脚本与工作簿导出。
+- 修复 `docs/FORMAT_NOTES.zh.md` 中的中文编码污染一次，但后续又发现其余文档仍有残留污染。
+- 确认 `stage.ini` 可导出 JSON / Excel，并可从 JSON 回写字节级一致文件。
 
-### Phase 4: 复原地图渲染
-- **Status:** pending
-- Actions taken:
-  -
-- Files created/modified:
-  -
+## 2026-06-25
 
-### Phase 5: 编辑器基础交付
-- **Status:** pending
-- Actions taken:
-  -
-- Files created/modified:
-  -
+- 重做 `uft8-game-txt` 与 `stage.ini` 的关联方式，改为基于原始 dword 流，而不是先信任 family_guess。
+- 确认当前稳定映射：
+  - `general.txt`：步长 `57 dwords`
+  - `castle.txt`：步长 `25 dwords`
+  - `magic.txt`：步长 `19 dwords`
+  - `soldier.txt`：步长 `20 dwords`
+- 区分分析版工作簿与纯转换版工作簿。
+- 新增纯 Python 的 Excel 导出、导入、回写链路：
+  - `tools/export_stage_ini_txt_workbook.py`
+  - `tools/import_stage_ini_txt_workbook.py`
+  - `tools/build_stage_ini_from_txt_workbook.py`
+- 修复 Python 导出 `xlsx` 时的非法 XML 控制字符问题。
+- 验证结果：
+  - `stage_ini_linked_tables.xlsx` 可由 Python 正常导出
+  - `stage_ini_conversion_tables.xlsx` 可由 Python 正常导出
+  - 未修改的 `stage_ini_conversion_tables.xlsx` 可回写为与原始 `stage.ini` 完全一致的新文件
+  - `sha256 = 29584de26770323a09849d180331d936e9c112f55936d76b08f4f6f6a63663b8`
 
-## Test Results
-| Test | Input | Expected | Actual | Status |
-|------|-------|----------|--------|--------|
-| Directory inventory | `Get-ChildItem 三国霸业` | List candidate assets | Found stage files and resource containers | pass |
+## 本次文档收口（已完成）
 
-## Error Log
-| Timestamp | Error | Attempt | Resolution |
-|-----------|-------|---------|------------|
-| 2026-06-23 | `python` command unavailable | 1 | Will locate bundled/runtime Python or use Node/PowerShell. |
+- `README.md` 已重写为干净 UTF-8 中文版本。
+- `docs/FORMAT_NOTES.zh.md` 已重写，并单列 `stage.ini` 二进制构成。
+- 新增 `docs/DOC_WORKFLOW.zh.md`，把文档更新责任和提交前检查表写死。
+- `task_plan.md`、`findings.md`、`progress.md` 已同步为新的有效基线。
+- 验证：Python 按 UTF-8 读取上述文档成功，确认乱码来自控制台代码页而非文件内容。
 
-## 5-Question Reboot Check
-| Question | Answer |
-|----------|--------|
-| Where am I? | Phase 1: inventory and initial format hypotheses. |
-| Where am I going? | Static exe analysis, resource parsing, then map rendering. |
-| What's the goal? | Recover game map data and render output for a future map editor. |
-| What have I learned? | Stage files are explicit candidates; fixed 25600-byte files are likely grids. |
-| What have I done? | Read skills, listed files, created planning files. |
+## 验证记录
 
----
-*Update after completing each phase or encountering errors*
+| 项目 | 结果 |
+| --- | --- |
+| `stage.ini` JSON -> binary 回写 | 字节级一致 |
+| `stage_ini_conversion_tables.xlsx -> stage.ini` 回写 | 字节级一致 |
+| 编辑器本地 `.m` 加载 | 通过 |
+| 编辑器 patch 写回复制件 | 通过 |
+| 核心文档 UTF-8 读取 | 通过 |
 
-## Update 2026-06-23 Asset Audit
-- Located bundled Python through Codex workspace dependencies.
-- Created and ran `tools/analyze_assets.py`.
-- Confirmed `Emperor.exe` references stage/resource filenames and `.m` files are fixed-record maps.
-- Test passed: `tools/analyze_assets.py 三国霸业` produced PE info, strings, file statistics, and fixed-record `.m` evidence.
-- Error logged: Bash-style heredoc is invalid in PowerShell; switched to a repeatable Python script.
+## 当前风险
 
-## Update 2026-06-23 Delivery Verification
-- Wrote `docs/FORMAT_NOTES.md` with recovered file structures.
-- Wrote `tools/export_map_previews.py` and ran it against the full game directory.
-- Exported 33 `.m` map previews, 66 `.s/.x` grid previews, and 4 DAT resource sheets.
-- Created `derived/viewer.html` for browsing recovered maps and layers.
-- Started local static server on `127.0.0.1:8765` for browser verification because `file://` is blocked by the in-app browser policy.
-- Browser verification passed: viewer loads 33 stages; default `stage01.m` reports 336x1072; switching to `stage20.s` reports 480x480 and updates button state.
-- Errors encountered and resolved:
-  - `view_image` was blocked by the Windows sandbox wrapper; used local runtime image emission for visual checks.
-  - Browser blocked `file://`; used localhost server.
-  - PowerShell expanded JavaScript template literals in generated HTML; rewrote with a placeholder replacement.
-
-## Update 2026-06-23 Kingdom Tile Work
-- Reclassified `.s/.x` as minimap/cache candidates rather than final editable tile maps, matching the user's observation.
-- Decoded `kingdom.cel/.atr` structure:
-  - ATR has 6-byte `acwx/acwy/acwz` attribute records.
-  - CEL has fixed 20x20 `acwx/acwy` chunks and variable-size `acwz` object/building chunks.
-- Created `tools/extract_kingdom.py` to export CEL/ATR tables, tile sheets, and `.m` field0 reconstruction maps.
-- Generated `derived/kingdom/kingdom_atr_records.tsv`, `kingdom_cel_chunks.tsv`, `cel_acwx_sheet.png`, `cel_acwy_sheet.png`, `cel_acwz_sheet.png`, and `stageNN_field0_attr.png` files.
-- Verified visually that `acwx/acwy` are terrain tiles and `acwz` contains isometric building/object slices.
-- Verified `.m` record field0 is a primary ATR/tile index: field0 attr rendering preserves map structure and matches final rendered pixels substantially on many stages.
-
-## 2026-06-23 ACWZ Center Alignment Pass
-- Generated `derived/kingdom/acwz_align_compare.png` with bottom, center, and header-y alignment columns.
-- Confirmed center alignment is visually better for city/object reconstruction.
-- Generated `derived/kingdom/acwz_stitched_city_center.png` as the current preferred preview.
-- Added `tools/stitch_kingdom_tiles.py` to make acwz center stitching and acwx/acwy 6x6 meta sheets repeatable.
-- Updated `docs/FORMAT_NOTES.md` and `findings.md` with the acwz alignment and acwy uncertainty notes.
-
-## Update 2026-06-23 Emperor.exe ACWZ Draw Logic
-- Installed and used Capstone to disassemble `Emperor.exe` locally.
-- `kingdom.cel` loader is at file offset `0x27480` / VA `0x427480`.
-- `acwz` draw branch is around file offset `0x19f0b` / VA `0x419f0b`.
-- The draw branch reads the stage/map record word at `[record + 4]` as the `acwz` logical index, then looks up `0x473654[index]`.
-- The decoded `acwz` header is used as anchor metadata:
-  - `+0`: x anchor / x offset
-  - `+4`: y anchor / y offset
-  - `+8`: width
-  - `+0x0c`: height
-  - `+0x10`: temporary pixel buffer during load, freed after creating the surface
-- Draw formula recovered from the exe: `dest_x = screen_x - header0`, `dest_y = screen_y - header1`, then width/height are clipped before DirectDraw Blt.
-- For all 4,214 decoded `acwz` chunks, `header1 == height`, so every strip is bottom-anchored to its owning map cell baseline.
-- Surface pointers are stored separately in a table around `0x4871fc`, with logical-to-surface short mapping at `0x47eaa8`.
-- Generated `derived/kingdom/acwz_stitched_city_exe_anchor_x20.png`, a closer preview using `cell_x += 20`, `dest_x = cell_x - header0`, `dest_y = baseline - header1`, and transparent color 0 compositing.
-- Remaining issue: a full city sprite is not a single image; it is multiple map cells referencing consecutive `acwz` strips. Exact vertical micro-alignment requires recovering each strip's real map cell `screen_y` from stage placement logic.
-
-## Update 2026-06-23 M Record Multilayer Decode
-- Rolled back the incorrect `acwz_stitched_city_exe_anchor_x20.png` experiment; current acwz stitching is parked, with `acwz_stitched_city_center.png` retained only as a visual reference.
-- Corrected the kingdom resource model from a mixed marker scan to the counted block layout used by `Emperor.exe`:
-  - `acwx` block: 6,480 logical slots, 2,052 ATR-present entries.
-  - `acwy` block: 8,640 logical slots, 2,223 ATR-present entries.
-  - `acwz` block: 17,280 logical slots, 2,069 ATR-present entries.
-- `.m` record schema now has a stable first-pass interpretation:
-  - `+0x00 int16`: `acwx` base terrain tile index; always present in observed stages.
-  - `+0x02 int16`: `acwy` overlay/transition index; `-1` when absent.
-  - `+0x04 int16`: `acwz` object/building/footprint index; `-1` when absent. Some non-negative entries point to empty logical slots, likely object footprint/occupancy cells.
-  - `+0x06 int16`: observed zero in exported `.m` files.
-  - `+0x08/+0x09`: auxiliary bytes; common values suggest terrain/object flags, not fully named yet.
-  - `+0x0a`: variant/object byte. `Emperor.exe` compares this against `0x65..0x6e`, matching common values 101..110.
-  - `+0x0b`: small subindex/group byte; often appears in 36-cell groups, likely footprint/subtile index.
-  - `+0x0d`: final rendered palette index/cache byte.
-  - `+0x0c/+0x0e/+0x0f`: observed zero in saved `.m` files; runtime renderer has mode/flag checks against related in-memory offsets.
-- Added `tools/export_m_layers.py` to export editor-oriented layers under `derived/m_layers/`:
-  - `acwx.i16`, `acwy.i16`, `acwz.i16`
-  - `byte08.bin`, `byte09.bin`, `byte10.bin`, `byte11.bin`, `final_palette.bin`
-  - `*_attr.png` previews and `meta.json` per stage
-  - global `m_record_summary.tsv` and `kingdom_blocks.json`
-- Visual layer check on `stage01` confirms: `acwx_attr` is the full base terrain; `acwy_attr` is contour/shore/road/transition overlay; `acwz_attr` is sparse object/city footprint placement.
-
-## Update 2026-06-23 CEL-Based True Map Rendering
-- User correctly pointed out that `derived/m_layers` previews are diagnostic/minimap-like because they visualize ATR `attr_hi` values rather than drawing real `kingdom.cel` resources.
-- Recovered the real acwx/acwy terrain drawing pattern from `Emperor.exe`: fixed 400-byte CEL terrain chunks are packed diamond scanlines, not literal 20x20 square bitmaps.
-- The executable uses a 20-row diamond table with row x-offset/packed-source/length:
-  - lengths: `2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 38, 34, 30, 26, 22, 18, 14, 10, 6, 2`
-  - x offsets: `19, 17, 15, 13, 11, 9, 7, 5, 3, 1, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19`
-  - target terrain cell footprint: 40x20 pixels.
-- Added `tools/render_m_cel_map.py`, which parses the counted `kingdom.cel` blocks and renders `.m` records using actual CEL pixels:
-  - `field0` draws acwx base terrain diamonds.
-  - `field1` draws acwy overlay/transition diamonds with zero as transparent.
-  - `field2` draws acwz objects using the exe anchor rule `dest_x = screen_x - header0`, `dest_y = screen_y - header1`; current placement is first-pass and still needs z-order/footprint refinement.
-- `iso` layout is the valid current direction. The simple `rect` layout was generated only for comparison and has visible diamond gaps.
-- Generated real CEL map previews under `derived/cel_maps/`:
-  - `stage20_iso_xy.png` / `stage20_iso_xy_thumb.png`
-  - `stage20_iso_xyz.png` / `stage20_iso_xyz_thumb.png`
-  - `stage01_iso_xyz_crop120000.png` / `stage01_iso_xyz_crop120000_thumb.png`
-- `derived/m_layers/` remains useful as editable raw index/flag extraction, but it is not the final visual map reconstruction.
-- Remaining renderer work: confirm exact viewport/world coordinate transform from the exe, improve acwz z-order and footprint handling, and add tile/object picking metadata for editor use.
-
-## Update 2026-06-23 Stage11 Screenshot Calibration
-- Initialized a local git repository and committed the current code/docs as `bc1021b` before making renderer changes.
-- Compared the user-provided `derived/stage11.png` with renderer outputs.
-- Recovered the viewport/world-to-screen transform from `Emperor.exe` around VA `0x419dc0`:
-  - visible row screen y uses `row_offset * 10 + 10`
-  - visible columns use x step `0x28` = 40 pixels
-  - odd/even visible rows shift x by 20 pixels
-  - the viewport clips against `0x230` = 560 pixels in the DirectDraw path
-- Added `stagger` layout to `tools/render_m_cel_map.py`:
-  - `screen_x = col * 40 + (20 if row is odd else 0)`
-  - `screen_y = row * 10`
-  - this is now the renderer default because it matches the actual game screenshot far better than the full diamond `iso` layout.
-- Added `--flip-x`, `--crop X Y W H`, and `--scale N` options for viewport/camera comparison.
-- Fixed acwx base tile compositing: inside the exe diamond scanline mask, acwx pixels are copied opaquely; acwy/acwz remain zero-color transparent overlays.
-- Generated close stage11 comparison outputs:
-  - `derived/cel_maps/stage11_stagger_xyz_scale2.png`
-  - `derived/cel_maps/stage11_stagger_xyz_viewport93_57_1642_1684_scale2.png` (3284x3368, matching the screenshot dimensions)
-- Remaining differences vs `stage11.png`: UI and soldiers are not part of `.m`/`kingdom.cel` terrain rendering; they must come from UI resources and `.spr`/unit systems. Some acwz z-order/footprint details still need refinement, but the terrain/world transform is now aligned.
-
-## Update 2026-06-23 Palette and README Pass
-- Used Codex bundled Python for session catchup because the default `python` command is unavailable.
-- Audited BMP palettes and `Emperor.exe` PE resources/import strings.
-- Confirmed the river color issue is caused by using `stage.bmp` as the default palette; switched script defaults to `BIGMAP01.bmp`.
-- Created `README.md` with script usage, outputs, palette notes, and the next-stage map editor plan.
-- Updated `tools/render_m_cel_map.py` so non-default `--palette` renders include `_pal<name>` in the output filename, preventing palette comparison outputs from overwriting each other.
-
-## Update 2026-06-23 Editor Prototype Start
-- Switched tool defaults to `SAN_RGB_PALETTE` from `tools/palette.py`; BMP palettes are now opt-in through `--palette`.
-- Added `tools/export_editor_bundle.py` and `tools/editor_app.html`.
-- Exported `derived/editor/stage11/` with `map.png`, `stage.json`, and `editor.html`.
-- Verified the generated editor page through a local Chrome headless screenshot at `http://127.0.0.1:8787/stage11/editor.html`.
-
-## Update 2026-06-23 Resource Palette And Minimap Pass
-- Added editor resource atlas export for `acwx`, `acwy`, and `acwz` under `derived/editor/<stage>/`.
-- Added `resources.json` with resource indices, atlas coordinates, image dimensions, anchors, and current-stage usage counts.
-- Updated the editor to show resource palettes, select a drawable resource as the brush value, display a minimap, and include minimap dirty cells in exported patches.
-- Verified `stage11` bundle regeneration and resource counts: `acwx` 1,944, `acwy` 2,162, `acwz` 4,209 drawable entries.
-
-
-## Update 2026-06-24 Editor Inspection Fixes
-- Verified `derived/editor/stage11/stage.json`: `acwy` has 1702 non-empty cells / 391 non-empty ids, and `acwz` has 744 non-empty cells / 133 non-empty ids. The data is not all `-1`; the layers are sparse and tall `acwz` sprites can visually cover cells that are not the owning anchor record.
-- Updated `tools/editor_app.html` so tool names are visible as Inspect/Paint/Pan equivalents in Chinese, resources can be sorted by index or usage, resource labels use `xN` for current-stage usage count, and the Cell panel shows nearby non-empty `acwy/acwz` anchors.
-- Updated `tools/export_editor_bundle.py` so generated resource catalogs are sorted by numeric index by default.
-- Regenerated `derived/editor/stage11` and verified the page in the in-app browser: resource labels start with indices 0..7, sort defaults to index, and stage stats show the expected non-empty `acwy/acwz` counts.
-- Syntax check passed using compile() without writing `__pycache__`; direct `py_compile` was blocked by an existing `tools/__pycache__` permission issue.
-
-
-## Update 2026-06-24 Live Redraw
-- Added draw-ready resource atlas generation to `tools/export_editor_bundle.py`: `draw_acwx.png`, `draw_acwy.png`, and `draw_acwz.png` are exported next to thumbnail resource sheets.
-- Updated `resources.json` to `san-editor-resources-v2`; entries now include both thumbnail `atlas` rectangles and draw-source `draw` rectangles.
-- Updated `tools/editor_app.html` to load draw atlases, rebuild an offscreen editable map image from current records, and immediately show visual edits after Paint.
-- Changed patch/selection markers to outlines so edited tile pixels remain visible.
-- Regenerated `derived/editor/stage11`; browser UI verification passed with one Paint action producing one patch and a local screenshot byte diff of 901.
-
-
-## Update 2026-06-24 Undo And Reset
-- Added immutable original-record snapshots in the browser editor so patch `before` values remain tied to the source `.m` records across repeated edits.
-- Added transaction-based edit history, `Ctrl+Z`/Undo, `Reset cell`, and `Reset all` controls.
-- `Reset cell` reverts the selected cell on the selected layer; `Reset all` reverts all dirty patches. Reset operations are undoable.
-- Regenerated `derived/editor/stage11` and verified in browser UI: Paint -> Ctrl+Z, Paint -> Reset cell, two Paints -> Reset all, and Reset all -> Ctrl+Z all behaved as expected.
-
-
-## Update 2026-06-24 Stage And Local M Loading
-- Added `Open .m` to the browser editor. It parses `Hello1.0` `.m` files client-side, resets undo/patch state, and rebuilds the map from loaded CEL draw atlases without needing a pre-rendered `map.png`.
-- Added Stage dropdown support in generated editors by reading `../index.json` and navigating between exported stage bundles.
-- Added `tools/export_editor_bundle.py --all` and generated `derived/editor/index.html` alongside `index.json`.
-- Regenerated `stage11` and `stage20`; browser verification confirmed the stage picker lists both and the index page loads.
-
-
-## Update 2026-06-24 Patch-To-M Writer
-- Added `tools/apply_editor_patch.py`, a safe JSON patch applicator that writes edited `.m` copies instead of touching original game files.
-- The writer validates `Hello1.0` headers, map bounds, supported fields, value ranges, and patch `before` values before writing.
-- Verified dry-run and real output with a synthetic `stage11` patch: `0,1 acwx` changed from `36` to `37` in `derived/edited_test/stage11.m`.
-- Verified mismatch protection with a bad patch; the CLI now returns a clean JSON error instead of a traceback.
-
-## Update 2026-06-24 Chinese Binary Format Notes
-- Added docs/FORMAT_NOTES.zh.md in Chinese, documenting the current binary layout for .m cells, kingdom.cel/.atr resources, and stage sidecar files (.s/.x/.stg/.spr/.dor/.evt).
-- Clarified that .m cells are 16-byte records, not just acwx/acwy/acwz; the editor must preserve all decoded auxiliary bytes for round-trip safety.
-- Documented the current hypothesis that city ids, unit data, doors/entrances, events, and passability/cache semantics live across .stg/.spr/.dor/.evt and .s/.x rather than only inside the three visible map layers.
-
-## Update 2026-06-24 Editor Navigation And Sidecar Grid Analysis
-- Updated `tools/editor_app.html` so the editor uses right-drag viewport panning in both Inspect and Paint instead of a separate Pan mode, and added arrow-key movement for the current selected cell.
-- Added `tools/analyze_stage_sidecars.py` to summarize `.m`, `.s/.x`, and `.stg/.spr/.dor/.evt` stage files plus nearby `Emperor.exe` suffix-string contexts.
-- New sampled finding: across `stage01/stage11/stage20/stage29`, `.s` and `.x` are 72.7% to 86.3% byte-identical, and `.x` consistently overlaps more of the `.m final_palette` value set than `.s`.
-
-## Update 2026-06-24 Sidecar Record Skeletons
-- Upgraded `tools/analyze_stage_sidecars.py` to extract `.stg` cp950 titles, estimate primary record-table layouts for `.stg/.spr/.dor/.evt`, and report `.s/.x` non-240 mask relationships plus direct `Emperor.exe` suffix xrefs.
-- Confirmed `.stg` contains scenario titles at `0x08` (for example `stage11`: `練習一劉備出發`, `stage20`: `為圖長久取四郡`) and likely year-range candidates at `0x24/0x28`.
-- Confirmed `.evt` has a strong `72`-byte primary record cadence with extracted script tokens such as `talk`, `VIEW`, `MAP`, `MAPALL`, `MOVE`, and `TIMEOVER`.
-- Refined `.s/.x` understanding: across sampled stages, `.s` never contains a non-240 pixel where `.x` is 240, while `.x` contains a small superset of extra non-240 pixels beyond `.s`.
-
-
-## Update 2026-06-24 Sidecar Semantic Strings
-- Extended `tools/analyze_stage_sidecars.py` again so it now emits `decoded_strings_preview` / `record_string_previews` for `.stg` and `.evt`, plus meta-prefix summaries for `.spr` and `.dor`.
-- Confirmed `.stg` is already carrying scenario-facing semantic names rather than only a title: sampled strings include cities like `平原` / `荊州` / `襄陽`, generals like `劉備` / `關羽` / `諸葛亮`, troop labels like `步兵` / `弓箭兵`, and faction text like `中立國家`.
-- Confirmed `.evt` carries objective/prompt/dialogue labels such as `勝利`, `失敗`, `佔領四郡`, `敵兵全死`, `黃忠加入提示`, and `劉備出現`, so it is a script-plus-text semantic layer rather than a raw numeric trigger bitmap.
-- Confirmed `stage01.spr` is effectively empty after the stable `180/36` meta pair, while `stage11.dor` is a 28-byte header-only file with an all-zero body. That makes both sidecars look optional on a per-stage basis.
-
-## Update 2026-06-24 Sidecar Record Families
-- Added heuristic `record_family_summaries` to `tools/analyze_stage_sidecars.py`, with Chinese code comments for the new family-classification and candidate-field logic.
-- Confirmed `.stg` is not one uniform 76-byte row type: `224` families track generals/troops/bandits, `92` families track city/寨-style location records, and `96` families track faction/ruler-style records.
-- Confirmed `.evt` also breaks into reusable fixed families: `stage01.evt` has rolling name-slot families driven by `72`, `55`, and `189+` control words, while `stage20.evt` has separate flow/prompt/objective text families.
-- Added stage-width/stage-height-aware `candidate_small_u16_fields` output so the next pass can focus on likely id/owner/coordinate columns instead of scanning every word offset by hand.
-
-## Update 2026-06-24 Sidecar Workbook Export
-- Added `tools/export_stage_sidecar_tables.py` to flatten `.stg/.evt` reverse-engineering results into workbook-friendly JSON tables.
-- Added `tools/export_stage_sidecar_workbook.mjs` to build `derived/sidecar_analysis/stg_evt_analysis.xlsx` plus preview PNGs using artifact-tool.
-- Verified the exported workbook visually: `????` and `????` render legibly, with the expected 33-stage overview and family totals.
-- New cross-stage finding: `.stg` text-bearing families reuse stepped text slots, while `.evt flow_text` slides across many offsets, which strengthens the multi-template command-structure hypothesis.
-
-## Update 2026-06-24 Format Notes Encoding Fix
-- Rewrote the corrupted tail section in `docs/FORMAT_NOTES.zh.md` as clean UTF-8 Chinese.
-- Expanded the `.stg` / `.evt` notes from phenomenon-level observations into a more structured binary-layout summary: file header, main stride, tail bytes, family totals, text-slot reuse, and current high-priority candidate fields.
-
-## Update 2026-06-24 STG Alignment Pass
-- Added `tools/analyze_stg_family_alignment.py` and generated `derived/sidecar_analysis/stg_family_alignment.json`.
-- Verified that several `.stg` families are better explained as one template rotating across the 76-byte record than as unrelated record types.
-- Pinned the first high-confidence cross-family relationship: `general_entry.w02` matches the faction ids exposed by `faction_or_ruler.w12`.
-- Pinned the first high-confidence troop code table: `troop_entry.w12/w14` now map stably onto `步兵/槍兵/騎兵/弓箭兵/水兵/投石車`.
-
-
-## Update 2026-06-24 Stage.ini Export
-
-- Added `tools/stage_ini_codec.py` plus export/build scripts for `stage.ini`.
-- Exported `derived/stage_ini_analysis/stage_ini_tables.json` and `derived/stage_ini_analysis/stage_ini_analysis.xlsx`.
-- Verified `tools/build_stage_ini.py` can rebuild a byte-identical `stage_roundtrip.ini` from the exported JSON.
+1. `.stg` / `.evt` 仍未完成字段命名，暂时不能做完整语义编辑器。
+2. `.s/.x` 的写回流程尚未确认，不应贸然生成覆盖。
+3. `acwz` 的完整 footprint / z-order 仍有尾差。

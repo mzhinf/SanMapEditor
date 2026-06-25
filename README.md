@@ -1,6 +1,36 @@
-# 三国霸业地图复原工具
+# 三国霸业地图恢复与编辑器工具
 
-这个仓库保存对《三国霸业》地图与资源格式的复原脚本、格式笔记和阶段性规划。原始游戏文件保留在 `三国霸业/`，生成物默认写入 `derived/`；这两个目录都不提交到 git。
+本仓库用于逆向《三国霸业》PC 版的地图、资源容器与关卡语义文件，并在此基础上构建可回写的地图编辑器。
+
+当前已经完成两条主线：
+
+1. `stageNN.m` + `kingdom.cel/.atr` 的真实地图渲染与编辑器原型。
+2. `stage.ini` 的二进制拆解、Excel 导出，以及字节级 round-trip 回写。
+
+原始游戏文件保留在 [三国霸业](</H:/Workstation/san/三国霸业/>)，分析产物默认输出到 `derived/` 或 `outputs/`。
+
+## 当前结论
+
+- `stageNN.m` 是地图主表，每个 cell 固定 16 字节，不只是 `acwx/acwy/acwz` 三层索引。
+- `kingdom.cel/.atr` 提供地图图形资源，其中：
+  - `acwx` 是基础地形层。
+  - `acwy` 是叠加/过渡层。
+  - `acwz` 是建筑/物件层。
+- `stage.ini` 不是文本 ini，而是全局二进制母表：
+  - 文件头：8 字节
+  - 主表：`277 * 224` 字节
+  - 尾表：`174 * 76` 字节
+- `uft8-game-txt/` 中已有 5 类 txt 与 `stage.ini` 建立了稳定关联：
+  - `general.txt`
+  - `castle.txt`
+  - `magic.txt`
+  - `soldier.txt`
+  - `History.txt`（仅辅助，不参与自动回写）
+
+更详细的格式说明见：
+
+- [格式笔记（中文）](docs/FORMAT_NOTES.zh.md)
+- [文档维护约定](docs/DOC_WORKFLOW.zh.md)
 
 ## 环境
 
@@ -10,413 +40,102 @@
 $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
 ```
 
-脚本会自动在当前目录或子目录里寻找包含 `Emperor.exe` 的游戏目录。默认 palette 暂时使用 `tools/palette.py` 中的 `SAN_RGB_PALETTE`；如需对比外部 BMP 色盘，可以通过 `--palette BIGMAP01.bmp` 或其他 BMP 文件名显式指定。
-
 ## 常用脚本
 
-### `tools/analyze_assets.py`
+### 地图渲染与编辑器
 
-盘点游戏目录、PE 基本信息、可见字符串、阶段文件尺寸和格式线索。
-
-```powershell
-& $py tools/analyze_assets.py .
-```
-
-用途：第一次接触新拷贝的游戏目录时确认资源是否完整，也可复核 `Emperor.exe` 是否仍引用相同文件名。
-
-### `tools/export_map_previews.py`
-
-导出早期诊断图：`.m` 最终缓存图、`.s/.x` 网格图，以及 DAT 容器预览表。
-
-```powershell
-& $py tools/export_map_previews.py .
-```
-
-主要输出：
-
-- `derived/maps/*_m.png`
-- `derived/grids/*_s.png`、`derived/grids/*_x.png`
-- `derived/dat_sheets/*_sheet.png`
-
-说明：这些图适合诊断资源关系；`grids` 更像小地图或缓存层，不是最终的可编辑大地图。
-
-### `tools/extract_kingdom.py`
-
-解析 `kingdom.cel` / `kingdom.atr`，导出 CEL/ATR 表格和 tile sheet。
-
-```powershell
-& $py tools/extract_kingdom.py .
-```
-
-主要输出：
-
-- `derived/kingdom/kingdom_atr_records.tsv`
-- `derived/kingdom/kingdom_cel_chunks.tsv`
-- `derived/kingdom/cel_acwx_sheet.png`
-- `derived/kingdom/cel_acwy_sheet.png`
-- `derived/kingdom/cel_acwz_sheet.png`
-
-说明：此脚本保留了较早的扫描式解析结果，用于人工检查资源；最终地图渲染应优先参考 `render_m_cel_map.py` 的 counted CEL 解析。
-
-### `tools/stitch_kingdom_tiles.py`
-
-生成 `acwz` 城池/建筑条带的手工拼接预览，以及 `acwx/acwy` 6x6 meta sheet。
-
-```powershell
-& $py tools/stitch_kingdom_tiles.py .
-```
-
-主要输出：
-
-- `derived/kingdom/acwz_stitched_city_center.png`
-- `derived/kingdom/acwx_meta_6x6_sheet.png`
-- `derived/kingdom/acwy_meta_6x6_sheet.png`
-
-说明：`acwz` 独立拼接目前只作为观察参考；真实地图应按照 `.m` 记录和 `Emperor.exe` 的 anchor/z-order 逻辑绘制。
-
-### `tools/export_m_layers.py`
-
-把 `.m` 记录拆成可编辑的多层索引和辅助 flag 文件。
-
-```powershell
-& $py tools/export_m_layers.py .
-```
-
-主要输出：
-
-- `derived/m_layers/stageNN/acwx.i16`
-- `derived/m_layers/stageNN/acwy.i16`
-- `derived/m_layers/stageNN/acwz.i16`
-- `derived/m_layers/stageNN/byte08.bin`
-- `derived/m_layers/stageNN/byte09.bin`
-- `derived/m_layers/stageNN/byte10.bin`
-- `derived/m_layers/stageNN/byte11.bin`
-- `derived/m_layers/stageNN/final_palette.bin`
-- `derived/m_layers/m_record_summary.tsv`
-- `derived/m_layers/kingdom_blocks.json`
-
-说明：这些是编辑器数据模型的雏形。预览图是属性/索引诊断图，不等同于最终游戏画面。
-
-
-### `tools/export_editor_bundle.py`
-
-Builds the first editor-ready bundle: a rendered CEL map image, editable record JSON, and a static HTML editor.
-
-```powershell
-& $py tools/export_editor_bundle.py . --stage stage11
-```
-
-Export every available `stage*.m` bundle:
-
-```powershell
-& $py tools/export_editor_bundle.py . --all
-```
-
-Outputs:
-
-- `derived/editor/stage11/map.png`
-- `derived/editor/stage11/stage.json`
-- `derived/editor/stage11/editor.html`
-- `derived/editor/index.html`
-- `derived/editor/index.json`
-
-Current editor scope: map browsing, zoom/pan, stagger cell picking, `.m` record inspection, local `acwx/acwy/acwz` edits, and JSON patch export. It does not overwrite the original `.m` files yet.
-
-How to open the editor:
-
-```powershell
-& $py -m http.server 8787 --bind 127.0.0.1 --directory derived/editor
-```
-
-Then open one of these URLs in the browser:
-
-- `http://127.0.0.1:8787/index.html`
-- `http://127.0.0.1:8787/stage11/editor.html`
-
-If `stage11/editor.html` does not open, the usual cause is that the static server is not running; the generated files alone are not enough because the editor fetches `stage.json`, `resources.json`, and atlas images over HTTP.
-
-### `tools/render_m_cel_map.py`
-
-使用 `stageNN.m` 的 `acwx/acwy/acwz` 索引和 `kingdom.cel` 真实像素绘制游戏地图。
+渲染真实地图：
 
 ```powershell
 & $py tools/render_m_cel_map.py . --stage stage11 --layout stagger --layers xyz --crop 93 57 1642 1684 --scale 2
 ```
 
-常用参数：
+导出编辑器 bundle：
 
-- `--stage stage11`：选择 `stageNN.m`。
-- `--layout stagger`：默认布局；已和 `Emperor.exe` / `stage11.png` 对齐。
-- `--layers xyz`：`x=acwx` 基础地形，`y=acwy` 叠加/过渡，`z=acwz` 物件/建筑。
-- `--crop X Y W H`：渲染后裁切视口。
-- `--scale 2`：最近邻放大，便于和截图对比。
-- `--palette SAN_RGB_PALETTE`：默认值，来自 `tools/palette.py`；可显式指定 BMP palette 做对比，非默认 palette 输出文件名会附加 `_pal<name>`。
-
-当前确认的地图坐标变换：
-
-```text
-screen_x = col * 40 + (20 if row is odd else 0)
-screen_y = row * 10
+```powershell
+& $py tools/export_editor_bundle.py . --stage stage11
 ```
 
-`stage11` 的截图级对比命令会生成：
-
-```text
-derived/cel_maps/stage11_stagger_xyz_viewport93_57_1642_1684_scale2.png
-```
-
-## Palette 结论
-
-`Emperor.exe` 的 PE resource 中没有 `RT_BITMAP`，目前没有发现内嵌 DIB palette。EXE 导入了 `SetSystemPaletteUse`、`GetSystemPaletteEntries` 和 `DirectDrawCreate`，并在字符串表中引用外部 BMP 文件，包括 `stage.bmp`。
-
-实机截图校准显示：河流常用索引 `11/12/13` 在 `BIGMAP01.bmp`、`mainmenu.bmp` 等通用 palette 中是蓝色，和 `derived/stage11.png` 一致；`stage.bmp` 将这些索引映成亮绿。当前工具默认使用 `tools/palette.py` 的 `SAN_RGB_PALETTE`，便于后续集中调整。
-
-
-## 下一步地图编辑器方案
-
-1. 数据模型层：以 `.m` 的 16 字节记录为主表，拆出 `acwx/acwy/acwz` 三个 int16 图层、辅助 flag 字节、最终 cache 字节，并保留原始 record 以支持无损 round-trip。
-2. 渲染/选取层：把 `render_m_cel_map.py` 的 stagger world-to-screen 逻辑模块化，提供 cell-to-screen、screen-to-cell、tile footprint、object anchor 和 z-order 查询。
-3. 资源面板：从 `kingdom.cel/.atr` 生成可搜索 tile/object palette，按 `acwx` 地形、`acwy` 过渡/道路/岸线、`acwz` 建筑/物件分组。
-4. 编辑操作：先实现基础地形绘制、overlay 绘制、object 放置/删除，再补 passability、事件、单位和城门数据。
-5. 保存策略：第一阶段只写新的 `.m` 副本和 JSON sidecar；第二阶段在验证 record 字段语义后支持覆盖导出完整 `stageNN.*` 组合。
-6. 验证闭环：每次编辑后生成 CEL 渲染预览，与原图或游戏截图对比；对关键 stage 保留小型自动回归测试。
-
-优先级最高的未解问题：`acwz` 的完整 z-order/footprint、`byte08/09/10/11` 的语义、`.spr/.dor/.evt/.stg` 与地图对象之间的引用关系。
-
-
-## Editor Notes 2026-06-24
-
-`stage11.m` is not all `-1` on the overlay/object layers. The current export contains:
-
-- `acwy`: 1702 non-empty cells, 391 distinct non-empty ids.
-- `acwz`: 744 non-empty cells, 133 distinct non-empty ids.
-
-These layers are sparse by design. `acwx` is the base terrain and is present on every cell; `acwy` is an optional transparent overlay/transition layer; `acwz` is an optional object/building/footprint reference. A tall `acwz` sprite can cover neighboring cells, so clicking a visible building pixel may inspect a neighboring ground cell whose own `acwz` value is still `-1`. The editor now shows nearby non-empty `acwy/acwz` anchors in the Cell panel to make this clearer.
-
-Resource list behavior:
-
-- The generated resource catalog is sorted by numeric index by default.
-- The editor can switch between numeric order and current-stage usage order.
-- A label like `123 x7` means resource index `123` appears 7 times in the current `.m` file.
-
-Tool modes:
-
-- Inspect: select a cell and show its decoded `.m` record without changing data.
-- Paint: write the current resource index into the active layer for the selected cell.
-- Right-drag on the canvas: move the map view without leaving Inspect or Paint.
-- Arrow keys: move the current selected cell one step at a time; keyboard movement is ignored while typing in inputs or selects.
-
-Next implementation plan for lower-priority items:
-
-1. Live redraw edits: export draw-ready CEL tile/object atlases, add an overlay canvas, and repaint dirty cells immediately using the same stagger transform as `render_m_cel_map.py`. `acwx` redraw replaces the base diamond, `acwy` draws transparent overlay pixels, and `acwz` uses the recovered anchor rule plus local z-order refresh.
-2. Select/load `.m` files: add an editor index page for exported stages first, then add a browser File API path that parses `Hello1.0` `.m` files locally and pairs them with the already exported `kingdom.cel` resource catalog.
-3. Minimap/cache write-back: treat minimap as derived from edited `.m` records first. Continue `Emperor.exe` xref research before writing `.s/.x`; current evidence says they are minimap/cache-like, but the exact write-back mapping is not confirmed yet.
-
-
-## Live Redraw Update 2026-06-24
-
-The editor now exports draw-ready CEL atlases in addition to thumbnail resource sheets:
-
-- `draw_acwx.png`: original 40x20 base terrain diamonds.
-- `draw_acwy.png`: original 40x20 transparent overlay diamonds, with palette index 0 transparent.
-- `draw_acwz.png`: packed original object/building sprites, preserving `xAnchor/yAnchor` metadata.
-
-`resources.json` is now `san-editor-resources-v2`. Each resource entry keeps the thumbnail `atlas` rectangle for the resource browser and a `draw` rectangle for live map rendering.
-
-The browser editor now rebuilds an offscreen editable map image from the current `.m` records whenever Paint changes a cell. It draws the three layers in the same order as the renderer: all `acwx`, then all `acwy`, then all `acwz`; `acwz` uses `screen_x + 20 - xAnchor` and `screen_y + 20 - yAnchor`. Patch and selection markers are now outlines only, so they do not hide the edited tile pixels.
-
-Verification: regenerated `derived/editor/stage11`, loaded `http://127.0.0.1:8787/stage11/editor.html`, performed a real Paint action through the browser UI, and confirmed the clicked region screenshot changed (`byteDiff=901`) while the patch list changed to one dirty edit.
-
-Known limitation: the first live-redraw version rebuilds the whole stage image after each Paint. This is simple and correct for the current `stage11` bundle, but a later pass should redraw only a dirty neighborhood and improve `acwz` footprint/z-order refresh for larger maps.
-
-
-## Undo And Reset Update 2026-06-24
-
-The editor now keeps an immutable copy of the original `.m` records and computes patches against that baseline. This fixes repeated edits to the same cell/layer: the patch `before` value remains the original value, while `after` follows the current edited value.
-
-Edit controls:
-
-- `Ctrl+Z` / `Undo`: undo the most recent edit transaction.
-- `Reset cell`: reset the currently selected cell on the currently selected layer (`acwx`, `acwy`, or `acwz`) back to the original `.m` value.
-- `Reset all`: reset every current patch back to the original `.m` values.
-- Reset operations are also transactions, so `Ctrl+Z` after `Reset all` restores the reset batch.
-
-Verification: in the browser editor, Paint produced one patch, `Ctrl+Z` returned to zero patches, `Reset cell` returned one selected-layer patch to zero, `Reset all` returned two patches to zero, and `Ctrl+Z` after `Reset all` restored those two patches.
-
-
-## Stage And Local `.m` Loading Update 2026-06-24
-
-The editor now supports two map-loading paths:
-
-- Exported stage picker: each generated `editor.html` reads `../index.json` and shows a Stage dropdown. Selecting another exported stage navigates to that stage's editor bundle.
-- Local `.m` loader: `Open .m` reads a user-selected `Hello1.0` `.m` file in the browser, parses its 16-byte records, resets edit history, and rebuilds the map directly from the already loaded CEL draw atlases.
-
-The local `.m` path does not require a pre-rendered `map.png`; canvas dimensions are derived from the `.m` header using the recovered stagger layout: `width * 40 + 20 + 128` by `height * 10 + 20 + 128`. The minimap falls back to the live rendered map when no generated `minimap.png` exists.
-
-`tools/export_editor_bundle.py` also has a new `--all` option:
+导出全部已发现关卡：
 
 ```powershell
 & $py tools/export_editor_bundle.py . --all
 ```
 
-This exports every `stage*.m` bundle and writes `derived/editor/index.html` plus `derived/editor/index.json`. Be aware that current bundles still include resource atlases per stage, so exporting all stages is useful but disk-heavy until resource atlases are moved to a shared directory.
-
-Verification: regenerated `stage11` and `stage20`, loaded `stage11/editor.html`, confirmed the Stage dropdown showed both exported stages, and confirmed `derived/editor/index.html` lists exported stage editors.
-
-
-## Editor Navigation Update 2026-06-24
-
-The editor no longer needs a dedicated Pan tool. Inspect and Paint stay active while the viewport uses more map-editor-like controls:
-
-- Right mouse button on the canvas: drag the map view.
-- Arrow keys: move the current selected cell up, down, left, or right.
-- Existing left-click behavior is unchanged: Inspect selects, Paint writes the current brush value.
-
-Verification: regenerated `derived/editor/stage11` with the updated template and confirmed the generated `tools/editor_app.html` bundle now exposes only `Inspect` and `Paint` tool options while the keyboard and right-drag handlers are present in the shipped editor HTML.
-
-## Patch-To-`.m` Copy Writing 2026-06-24
-
-`tools/apply_editor_patch.py` applies an exported `san-editor-patch-v1` JSON patch to a copied `.m` file. It never overwrites the original game directory by default.
-
-Typical use:
+启动本地静态服务：
 
 ```powershell
-& $py tools/apply_editor_patch.py derived/editor/stage11_patch.json . --out derived/edited
+& $py -m http.server 8787 --bind 127.0.0.1 --directory derived/editor
 ```
 
-Useful options:
+浏览器入口：
 
-- `--dry-run`: validate the patch and source `.m` without writing.
-- `--source path/to/stageNN.m`: use an explicit source `.m`, useful for patches exported from a locally opened `.m` file.
-- `--out derived/edited`: write `derived/edited/<stage>.m`; if `--out` ends with `.m`, it is treated as the exact output path.
-- `--force`: apply even when a patch `before` value does not match the source `.m`; normally this mismatch is refused.
+- [stage11 编辑器](http://127.0.0.1:8787/stage11/editor.html)
+- [编辑器索引](http://127.0.0.1:8787/index.html)
 
-Safety behavior:
+### `stage.ini` 结构导出
 
-- The source `.m` must be a `Hello1.0` map file.
-- Every change cell must be within the source map bounds.
-- Every `before` value is checked against the source file before writing.
-- Supported fields match the editor record schema: `acwx/acwy/acwz/word06/byte08..byte15/final_palette`.
-
-Verification: a synthetic `stage11` patch changed cell `0,1 acwx` from `36` to `37` in `derived/edited_test/stage11.m`; a mismatched patch was rejected with a JSON error and no output write.
-
-
-## Sidecar Grid Analysis 2026-06-24
-
-Added `tools/analyze_stage_sidecars.py`, a reusable reverse-engineering helper for stage sidecar files and fixed grids.
-
-Typical use:
-
-```powershell
-& $py tools/analyze_stage_sidecars.py . --stage stage01 --stage stage11 --stage stage20
-```
-
-It reports:
-
-- `.m` width/height and `final_palette` distributions.
-- `.s` / `.x` byte distributions, overlap with `.m final_palette`, and byte-for-byte similarity between the two fixed grids.
-- Header previews for `.stg/.spr/.dor/.evt`.
-- Nearby `Emperor.exe` string contexts for `.s/.x/.m/.evt/.dor/.spr`.
-
-Current findings from `stage01/stage11/stage20/stage29`: `.s` and `.x` are 72.7% to 86.3% identical byte-for-byte, while `.x` consistently overlaps more of the `.m final_palette` value set than `.s`. That pushes them closer to paired derived grids or caches than to unrelated resource files.
-
-The upgraded helper also extracts `.stg` scenario titles with `cp950`, estimates primary record-table layout for `.stg/.spr/.dor/.evt`, and reports `.s/.x` mask relationships. In the sampled stages, `.s` never has a non-240 pixel where `.x` is 240, while `.x` has 24 to 190 extra non-240 pixels beyond `.s`; that makes `.x` look like the fuller color cache and `.s` like a stricter masked companion.
-
-The current helper now also emits `decoded_strings_preview` and `record_string_previews` for `.stg` and `.evt`, plus meta-prefix summaries for `.spr` and `.dor`. That exposed a much stronger semantic split: `.stg` carries city/general/troop/faction-facing names such as `荊州`, `襄陽`, `關羽`, `諸葛亮`, `步兵`, and `中立國家`; `.evt` carries objective/prompt/dialogue labels such as `勝利`, `失敗`, `佔領四郡`, `黃忠加入提示`, and `劉備出現`. On the other side, `stage01.spr` is effectively empty after the stable `180/36` meta pair, and `stage11.dor` is a 28-byte header-only file with an all-zero body, so both sidecars appear optional rather than mandatory for every stage.
-
-The helper now also emits `record_family_summaries`, which starts to turn the mixed fixed-size records into workable families. In the sampled `.stg` files, `224`-tagged families line up with generals/troops/bandits, `92`-tagged families line up with cities and寨/据点, and `96`-tagged families line up with faction/ruler-style entries. In `stage01.evt`, repeated `72` / `55` / `189+` control-word families form rolling name-slot tables, while `stage20.evt` surfaces separate flow/prompt/objective text families. That does not finish the field decode, but it gives a stable next handle for finding ids, owners, and coordinates.
-
-## Chinese Format Notes
-
-- [Chinese binary format notes](docs/FORMAT_NOTES.zh.md): current reverse-engineering notes for `.m`, `kingdom.cel/.atr`, and the stage sidecar files `.s/.x/.stg/.spr/.dor/.evt`.
-
-## Sidecar Workbook Export 2026-06-24
-
-为了继续拆解 .stg/.evt，仓库现在提供了“先导出 JSON，再生成可筛选工作簿”的链路。
-
-1. 导出 sidecar 结构化 JSON：
-
-```powershell
-& $py tools/export_stage_sidecar_tables.py .
-```
-
-2. 生成 Excel 工作簿：
-
-```powershell
-$node = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
-& $node tools/export_stage_sidecar_workbook.mjs
-```
-
-主要产物：
-
-- `derived/sidecar_analysis/stage_sidecar_tables.json`
-- `derived/sidecar_analysis/stg_evt_analysis.xlsx`
-- `derived/sidecar_analysis/previews/overview.png`
-- `derived/sidecar_analysis/previews/family_totals.png`
-- `derived/sidecar_analysis/previews/text_slots.png`
-
-推荐阅读顺序：
-
-1. 先看“说明”和“关卡总览”，确认每个关卡有哪些 sidecar。
-2. 再看“家族总计”，确定 .stg / .evt 当前已经分出的 record family。
-3. 然后看“文本槽位”和“候选字段”，定位最像 id / owner / 坐标的小整数列。
-4. 最后下钻到 `stg记录` / `evt记录`，逐条看 `family_guess`、`text_layout`、`w00..w37/35`。
-
-工作簿只是阅读层；真正用于后续程序消费与复算的，是同目录下的 JSON 导出。
-
-### `tools/analyze_stg_family_alignment.py`
-
-对 .stg 做第二轮“按锚点旋转对齐”的汇总分析，方便把同模板平移过的记录重新放回同一列上比较。
-
-```powershell
-& $py tools/analyze_stg_family_alignment.py .
-```
-
-主要产物：
-
-- `derived/sidecar_analysis/stg_family_alignment.json`
-
-当前这一轮对齐最有价值的结论：
-
-- `general_entry`：把 `224` 对齐到 `w04` 后，`w02` 很像势力 id，并且能回对到 .stg faction_or_ruler。
-- `faction_or_ruler`：把 `96` 对齐到 `w00` 后，`w12` 很像势力自身的编号列。
-- `troop_entry`：把 `224` 对齐到 `w00` 后，`w12/w14` 会稳定落成兵种编码对，例如 `步兵=219/116`、`槍兵=220/117`、`騎兵=221/118`、`弓箭兵=222/119`、`水兵=223/120`、`投石車=224/121`。
-- `city_or_structure`：把 `92` 对齐到 `w02` 后，`w14` 很像完整城市记录里的地点 id，而 `w18` 还不能稳定解释成势力 id。
-
-## Stage.ini Export 2026-06-24
-
-为了把全局母表和单关 .stg/.evt 区分开，仓库新增了 `stage.ini` 的专用解析与回写脚本：
-
-- `tools/stage_ini_codec.py`：`stage.ini` 解析/重建核心。
-- `tools/export_stage_ini_tables.py`：导出结构化 JSON 表。
-- `tools/export_stage_ini_workbook.mjs`：把 JSON 生成 Excel 工作簿与预览 PNG。
-- `tools/build_stage_ini.py`：从导出的 JSON 回写新的 `stage.ini`。
-
-典型用法：
+导出 `stage.ini` 结构化 JSON：
 
 ```powershell
 & $py tools/export_stage_ini_tables.py .
-$node = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
-& $node tools/export_stage_ini_workbook.mjs
-& $py tools/build_stage_ini.py derived/stage_ini_analysis/stage_ini_tables.json --compare-with '三国霸业\stage.ini' --out derived/stage_ini_analysis/stage_roundtrip.ini
 ```
 
-主要产物：
+从 JSON 回写 `stage.ini`：
 
-- `derived/stage_ini_analysis/stage_ini_tables.json`
-- `derived/stage_ini_analysis/stage_ini_analysis.xlsx`
-- `derived/stage_ini_analysis/previews/main_family_totals.png`
-- `derived/stage_ini_analysis/previews/tail_family_totals.png`
-- `derived/stage_ini_analysis/previews/city_master.png`
-- `derived/stage_ini_analysis/previews/troop_master.png`
-- `derived/stage_ini_analysis/stage_roundtrip.ini`
+```powershell
+& $py tools/build_stage_ini.py derived/stage_ini_analysis/stage_ini_tables.json --compare-with 三国霸业\stage.ini --out derived/stage_ini_analysis/stage_roundtrip.ini
+```
 
-当前高置信结论：
+### `stage.ini` 与 Excel 互转
 
-- `stage.ini` 不是文本 ini，而是二进制母表。
-- 文件头后第一段是 `277 * 224` 字节主表，主要像全局武将/角色母表。
-- 主表之后还有 `174 * 76` 字节尾表，结构风格接近 .stg，混有城市、兵种、盗贼、技能/文本字典等全局记录。
-- 尾表中的城市 id 已经能和关卡 .stg 多点对证，例如 `鄴=7`、`譙=18`、`宛=20`、`吳=31`。
-- `tools/build_stage_ini.py` 已验证可以基于导出 JSON 做字节级 round-trip，当前导出的 `stage_roundtrip.ini` 与原始 `stage.ini` 完全一致。
+导出两份工作簿：
 
-说明：Excel 工作簿是阅读层；真正用于可逆回写的是 JSON。当前 build 脚本默认优先使用每条记录的 `raw_hex` 原样回写，若缺失则退回使用 `u16_words` 重新打包。
+```powershell
+& $py tools/export_stage_ini_txt_workbook.py .
+```
+
+产物：
+
+- `outputs/stage_ini_txt_analysis/stage_ini_linked_tables.xlsx`
+- `outputs/stage_ini_txt_analysis/stage_ini_conversion_tables.xlsx`
+
+说明：
+
+- `linked_tables` 是分析版，保留定位与调试列。
+- `conversion_tables` 是纯转换版，只保留 `row_id`、`title` 和业务字段，适合实际编辑。
+
+把工作簿读回 JSON：
+
+```powershell
+& $py tools/import_stage_ini_txt_workbook.py --input outputs/stage_ini_txt_analysis/stage_ini_conversion_tables.xlsx --out derived/stage_ini_txt_analysis/stage_ini_conversion_import.json
+```
+
+从 Excel 回写新的 `stage.ini`：
+
+```powershell
+& $py tools/build_stage_ini_from_txt_workbook.py outputs/stage_ini_txt_analysis/stage_ini_conversion_tables.xlsx . --out derived/stage_ini_txt_analysis/stage_ini_from_conversion_workbook.ini --compare-with 三国霸业\stage.ini
+```
+
+当前已经验证：未修改的 `stage_ini_conversion_tables.xlsx` 可回写出与原始 `stage.ini` 字节完全一致的文件。
+
+## 文档维护约定
+
+从现在开始，本项目按固定规则维护文档，不再“代码先走、文档补不补看情况”：
+
+1. 二进制结构变化：同步更新 [docs/FORMAT_NOTES.zh.md](/H:/Workstation/san/docs/FORMAT_NOTES.zh.md)。
+2. 脚本用法变化：同步更新 [README.md](/H:/Workstation/san/README.md)。
+3. 阶段目标变化：同步更新 [task_plan.md](/H:/Workstation/san/task_plan.md)。
+4. 新结论或新证据：同步更新 [findings.md](/H:/Workstation/san/findings.md)。
+5. 本次做了什么、怎么验证：同步更新 [progress.md](/H:/Workstation/san/progress.md)。
+6. 提交 git 前，至少检查一次“文档是否仍能指导新人复现当前结果”。
+
+完整流程见 [docs/DOC_WORKFLOW.zh.md](/H:/Workstation/san/docs/DOC_WORKFLOW.zh.md)。
+
+## 下一步计划
+
+当前最值得做的 3 件事：
+
+1. 继续逆向 `stageNN.stg`，确认城池记录的 `city_id / owner_id / map coordinate`。
+2. 继续逆向 `stageNN.evt`，确认事件记录如何引用地图坐标、对象和全局 id。
+3. 从 `Emperor.exe` 继续确认 `.s/.x` 的生成和读取路径，把小地图/缓存写回补齐到编辑器链路。

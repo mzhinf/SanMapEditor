@@ -1,155 +1,89 @@
-# Task Plan: 三国霸业地图复原
+# Task Plan: 三国霸业地图编辑器逆向
 
-## Goal
-解析 `三国霸业/Emperor.exe` 和游戏资源格式，提取并复原可用于制作地图编辑器的地图数据与可视化结果。
+## 目标
 
-## Current Phase
-Phase 5
+解析《三国霸业》的地图与关卡数据格式，完成：
 
-## Phases
+1. 地图真实渲染
+2. 地图编辑器原型
+3. `stage.ini` 与 Excel 的可回写链路
+4. 继续补齐 `.stg/.evt/.s/.x` 的语义与写回能力
 
-### Phase 1: 目录盘点与格式假设
-- [x] 确认用户目标：为地图编辑器复原游戏地图
-- [x] 盘点游戏目录与地图/资源候选文件
-- [ ] 初步识别 exe、stage、dat、cel/atr 等格式关系
-- **Status:** in_progress
+## 当前阶段
 
-### Phase 2: 静态分析 Emperor.exe
-- [ ] 提取可读字符串、文件名引用、资源表
-- [ ] 判断 exe 是否包含压缩/打包资源或仅引用外部文件
-- [ ] 记录地图相关加载逻辑线索
-- **Status:** pending
+Phase 7：sidecar 深化逆向与小地图写回准备
 
-### Phase 3: 解析地图与资源文件
-- [ ] 推断 `stageNN.*` 文件用途和尺寸
-- [ ] 解析 tileset/图片资源容器
-- [ ] 输出结构化地图数据说明
-- **Status:** pending
+## 阶段状态
 
-### Phase 4: 复原地图渲染
-- [ ] 编写可重复运行的解析/导出脚本
-- [ ] 生成至少一个 stage 的地图预览图
-- [ ] 对比已有 BMP/资源特征验证坐标、尺寸、调色板
-- **Status:** pending
+### Phase 1：资源盘点与地图主表识别
+- [x] 识别 `stageNN.*`、`kingdom.cel/.atr`、DAT 容器、`Emperor.exe`
+- [x] 确认 `.m` 为固定 16 字节 cell 记录表
+- [x] 建立初版格式笔记
 
-### Phase 5: 编辑器基础交付
-- [ ] 整理格式文档
-- [ ] 提供后续地图编辑器可用的数据模型或 viewer 原型
-- [ ] 汇报已复原范围、限制和下一步
-- **Status:** pending
+### Phase 2：地图渲染恢复
+- [x] 从 `kingdom.cel/.atr` 恢复 `acwx/acwy/acwz`
+- [x] 从 `Emperor.exe` 确认 stagger world-to-screen 变换
+- [x] 生成与真实游戏画面接近的地图渲染图
 
-## Key Questions
-1. `stageNN.m/.s/.x/.stg/.spr/.dor/.evt` 分别保存什么数据？
-2. `kingdom.cel/.atr`、`Graphics.dat`、`Selects.dat`、`windows.dat` 是否是地图 tileset/精灵容器？
-3. `Emperor.exe` 中是否有可提取资源，还是主要提供文件格式和加载逻辑线索？
-4. 地图尺寸、tile 尺寸、调色板和对象坐标如何编码？
+### Phase 3：编辑器原型
+- [x] 浏览地图
+- [x] Inspect / Paint
+- [x] 本地 `.m` 加载
+- [x] 右键拖动视角
+- [x] 方向键移动选中 cell
+- [x] `Ctrl+Z`、`Reset cell`、`Reset all`
+- [x] 导出 JSON patch
+- [x] 安全写回复制后的 `.m`
 
-## Decisions Made
-| Decision | Rationale |
-|----------|-----------|
-| 先做静态格式复原，再做编辑器 UI | 没有格式就无法可靠编辑，先拿到可验证的地图渲染闭环。 |
-| 将脚本和导出结果放在项目根目录下的新工具/输出路径 | 避免改动原始游戏目录，便于重复运行和对比。 |
+### Phase 4：`stage.ini` 结构化导出与回写
+- [x] 导出 `stage.ini` JSON
+- [x] 回写字节级一致的 `stage.ini`
+- [x] 导出分析版 Excel
+- [x] 导出纯转换版 Excel
+- [x] 从纯转换版 Excel 回写字节级一致的 `stage.ini`
 
-## Errors Encountered
-| Error | Attempt | Resolution |
-|-------|---------|------------|
-| Windows `python` 命令不可用 | 1 | 后续改用 Codex bundled runtime、可用 venv，或 PowerShell/Node 解析。 |
+### Phase 5：`uft8-game-txt` 与 `stage.ini` 映射
+- [x] 建立 `general/castle/magic/soldier/history` 链接关系
+- [x] 确认 `general/castle/magic/soldier` 的稳定 dword 步长
+- [x] 区分分析版与转换版工作簿
+- [x] 补上 trailer row 分类
 
-## Notes
-- 原始游戏目录：`H:\Workstation\san\三国霸业`
-- 需要保护原始资源文件，只读分析，导出结果另存。
+### Phase 6：文档收口与流程固化
+- [x] 重写 `README.md`，移除乱码与失效说明
+- [x] 重写 `docs/FORMAT_NOTES.zh.md`，保留有效结论并单列 `stage.ini`
+- [x] 建立明确的文档维护约定
+- [x] 同步更新 `task_plan.md` / `findings.md` / `progress.md`
 
+### Phase 7：下一步逆向重点
+- [ ] 确认 `.stg` 城市记录的 `city_id / owner_id / coordinate`
+- [ ] 确认 `.evt` 的对象/坐标/目标引用方式
+- [ ] 继续从 `Emperor.exe` 确认 `.s/.x` 的真实生成与读取路径
 
-## Update 2026-06-23 Recovery Milestone
-- Phase 1/2/3/4 practical milestone reached: identified external map/resource formats, parsed `Emperor.exe` strings, decoded `.m` rendered maps, decoded `.s/.x` grids, and decoded DAT image containers.
-- Phase 5 is in progress: delivered scripts, recovered outputs, format notes, and a local viewer prototype.
-- Remaining work for a full editor: round-trip writing, semantic record decoding for `.stg/.spr/.dor/.evt`, and deeper `kingdom.cel/.atr` analysis.
+## 最高优先级问题
 
-## Update 2026-06-23 ACWZ Centering
-- Added a focused alignment phase after user review: `acwz` city/object strips should be stitched with vertical centering, not bottom-only alignment.
-- Created repeatable script `tools/stitch_kingdom_tiles.py`.
-- Current preferred preview: `derived/kingdom/acwz_stitched_city_center.png`.
-- Remaining related work: infer automatic `acwz` group boundaries across all 4,214 chunks and confirm sprite anchors against stage object placement.
+1. `.stg` 里城池实体到底如何落到地图上
+2. `.evt` 怎样引用地图对象与全局 id
+3. `.s/.x` 是否必须与 `.m` 联动回写
+4. `.m.byte08/09/10/11` 的最终语义
+5. `acwz` 的完整 footprint / z-order
 
-## Update 2026-06-23 M Layer Export
-- Shifted focus from acwz sprite stitching to editable .m multilayer map recovery.
-- Added tools/export_m_layers.py and generated derived/m_layers for all stage*.m files.
-- Next work: decode byte08/byte09 passability/terrain flags, byte10 object/state variants, and byte11 6x6 footprint subindex semantics.
+## 当前决策
 
+| 决策 | 原因 |
+| --- | --- |
+| 地图编辑仍以 `.m` 16 字节完整记录为主 | 未解字段不能丢，否则无法安全回写 |
+| `stage.ini` 通过 `raw_hex` 保底回写 | 可最大限度保留未知字节 |
+| 文档必须与代码同轮更新 | 当前项目已经证明，不写文档会快速积累错误与乱码 |
 
-## Update 2026-06-23 True CEL Map Rendering
-- Corrected course after user review: m_layers is diagnostic index extraction, not visual reconstruction.
-- Added tools/render_m_cel_map.py to draw real kingdom.cel acwx/acwy/acwz resources using Emperor.exe diamond scanline logic.
-- Generated real map previews in derived/cel_maps; iso layout is the current valid renderer direction.
-- Next: refine acwz z-order/footprint and extract exact world-to-screen transform from Emperor.exe.
+## 最近完成的里程碑
 
+- 地图渲染已与 `stage11.png` 基本对齐
+- 编辑器已支持本地 `.m` 编辑与 patch 写回复制件
+- `stage.ini` 已支持 Python 版 Excel 导出、导入与字节级回写
+- 文档体系已统一清理为 UTF-8 中文基线，并新增强制维护约定
 
-## Update 2026-06-23 Palette and Editor Planning
-- Palette calibration phase completed: no embedded EXE palette found; default map palette changed to `BIGMAP01.bmp` because it matches screenshot water colors.
-- Added `README.md` as the main operating guide for all scripts and outputs.
-- Next editor plan is now explicit: preserve raw `.m` records for round-trip, modularize stagger rendering and picking, build resource palettes, implement terrain/overlay/object editing, then decode scenario/unit/event side files.
+## 下一步建议执行顺序
 
-## Update 2026-06-23 Editor Prototype Start
-- Started the map editor phase with a protected data-model workflow: export stage records and rendered CEL map into `derived/editor/<stage>/`.
-- First editor prototype supports map browsing, stagger cell picking, record inspection, local `acwx/acwy/acwz` edits, and JSON patch export.
-- Next editor work: render changed tiles live from CEL cache, add tile/object palette panels, then implement patch-to-`.m` writing for copied stages.
-
-## Update 2026-06-23 Editor Resource Palette Phase
-- Completed the first resource selection step: editor bundles now include visible `acwx/acwy/acwz` resource atlases and usage-sorted resource metadata.
-- Added minimap as a derived editor view with dirty-cell patch metadata. Next work is live tile redraw and safe patch-to-`.m` copy writing.
-
-
-## Update 2026-06-24 Editor UX Clarification
-- Phase 5 remains in progress.
-- Completed this slice: verified editor layer data, clarified sparse `acwy/acwz` behavior, changed resource catalog ordering to numeric index by default, added usage sorting, improved inspect context, and documented next steps for live redraw, `.m` loading, and `.s/.x` minimap/cache confirmation.
-- Next phase focus: implement draw-ready resource atlases and dirty-cell live redraw before safe `.m` copy writing.
-
-
-## Update 2026-06-24 Live Redraw Complete
-- Completed the first live redraw slice for Phase 5: editor bundles now include draw-ready CEL atlases and the browser editor rebuilds the visible map from edited records after Paint.
-- Remaining Phase 5 work: optimize redraw to dirty neighborhoods, add `.m` file/stage selection loading, implement safe patch-to-`.m` copy writing, and continue `.s/.x` minimap/cache confirmation in `Emperor.exe`.
-
-
-## Update 2026-06-24 Undo/Reset Complete
-- Completed editor history controls for Phase 5: Ctrl+Z, Reset cell, Reset all, and stable original-record patch baselines.
-- Remaining Phase 5 work: stage/.m selection loading, dirty-neighborhood redraw optimization, safe patch-to-`.m` copy writing, and `.s/.x` minimap/cache confirmation.
-
-
-## Update 2026-06-24 Stage/File Loading Complete
-- Completed the first `.m` loading slice for Phase 5: local browser parsing of `.m` files, exported-stage switching through `index.json`, and `--all` batch export support.
-- Remaining Phase 5 work: safe patch-to-`.m` copy writing, shared resource atlas optimization, dirty-neighborhood redraw optimization, and `.s/.x` minimap/cache confirmation.
-
-
-## Update 2026-06-24 Patch-To-M Writer Complete
-- Completed safe patch-to-`.m` copy writing for Phase 5. The editor can export JSON patches and `tools/apply_editor_patch.py` can validate/apply them to copied `.m` files.
-- Remaining Phase 5 work: optional UI integration for write-back, shared resource atlas optimization, dirty-neighborhood redraw optimization, and `.s/.x` minimap/cache confirmation.
-
-## Update 2026-06-24 Sidecar Semantic Strings
-- Continued the reverse-engineering checklist instead of editor UI work.
-- Upgraded the sidecar helper to emit `.stg/.evt` string previews and `.spr/.dor` meta-prefix summaries.
-- Confirmed `.stg` already contains city/general/troop/faction semantics, `.evt` contains objective/prompt/dialogue semantics, and `.spr/.dor` can be empty on a per-stage basis.
-- Next reverse-engineering focus: classify `.stg` 76-byte subrecord families and `.evt` 72-byte command families, then pin their coordinate/id fields.
-
-## Update 2026-06-24 Sidecar Record Families
-- Continued reverse engineering with family-level clustering instead of raw per-record dumps.
-- Confirmed `.stg` and `.evt` are both mixed-template fixed-stride containers, and added candidate field extraction keyed by stage dimensions.
-- Next reverse-engineering focus: split `.stg` by `224/92/96` families and `.evt` by `72/55/189+` families, then isolate id / owner / coordinate columns within each family separately.
-
-## Update 2026-06-24 Sidecar Workbook Export
-- Added a readable export milestone for the reverse-engineering checklist: `.stg/.evt` data can now be flattened and opened as `derived/sidecar_analysis/stg_evt_analysis.xlsx`.
-- This does not finish the field decode, but it removes a lot of manual hex/JSON scanning and gives a better base for isolating owner/id/coordinate columns.
-- Next reverse-engineering focus after this export: use the workbook's `????` / `????` / `????` sheets to split `.stg` families by slot pattern and then pin the first truly spatial columns inside `city_or_structure`, `general_entry`, and `faction_or_ruler`.
-
-## Update 2026-06-24 Format Notes Encoding Fix
-- Cleaned the damaged Chinese notes block in `docs/FORMAT_NOTES.zh.md` and replaced it with a structured `.stg/.evt` binary-layout section.
-- The reverse-engineering notes now preserve the current understanding in a readable form, which should make the next family-by-family field decode much less error-prone.
-
-## Update 2026-06-24 STG Alignment Pass
-- Added a second-pass `.stg` alignment analysis instead of treating each text offset as a separate field layout.
-- Next reverse-engineering focus after this pass: use the aligned templates to keep drilling `general_entry`, `faction_or_ruler`, and `city_or_structure`, especially around the now-likely faction-id columns and the still-unresolved city fields.
-
-
-## Update 2026-06-24 Stage.ini Export
-
-- Added a new reverse-engineering milestone for `stage.ini`: export to readable JSON/Excel tables and rebuild back to a byte-identical binary.
-- Next recommended focus after this export: pin the actual main-table general-id column, then map `stage.ini` global dictionaries back into the editor resource pickers and `.evt` object references.
+1. 先做 `.stg city_or_structure` 的字段定位
+2. 再做 `.evt` 的坐标/对象引用定位
+3. 最后补 `.s/.x` 的缓存/小地图写回链路
