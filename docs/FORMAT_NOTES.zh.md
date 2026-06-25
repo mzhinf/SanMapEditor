@@ -226,28 +226,104 @@ dest_y = tile_screen_y + 20 - yAnchor
 + optional tail bytes
 ```
 
+### 5.1 当前可区分的记录家族
+
 已知高置信结论：
 
-- 城池、势力、武将、兵种文本都出现在 `.stg` 中。
-- 这不是单模板表，而是多模板混合容器。
-- 对齐分析后，至少能稳定区分：
+- `.stg` 不是单模板表，而是多模板混合容器。
+- 对齐分析后，当前至少能稳定区分：
   - `general_entry`
   - `faction_or_ruler`
   - `troop_entry`
+  - `city_92_family`
   - `city_or_structure`
+- 在 `stage01.stg` 中，真正落地图的城市实例目前主要出现在 `city_92_family`。
+- `city_or_structure` 更像模板/标签型记录，和真正的关卡城市实例并不等价。
 
-当前已知字段级线索：
+### 5.2 `general_entry` 归一化线索
 
-- `general_entry.w02` 很像 `faction_id`
-- `faction_or_ruler.w12` 很像 `faction_id`
-- `troop_entry.w12/w14` 已能稳定形成兵种编码对
-- `city_or_structure.w14` 很像 `place_id`
+对 `general_entry` 记录按 `224` 锚点、目标列 `n04` 归一化后，当前最稳的解释是：
 
-当前最值得继续追的方向：
+| 归一化列 | 当前理解 | 证据级别 |
+| --- | --- | --- |
+| `n02` | 势力槽位候选值 | 高置信推断 |
+| `n16` | 武将编号候选值 | 高置信推断 |
+| `n18` | 额外属性/排序值候选位 | 待验证 |
 
-1. `city_id`
-2. `owner_id`
-3. 关卡内地图坐标
+样本依据：
+
+- `tools/export_stg_phase7_links.py` 对 `stage01.stg` 导出的 `general_rows.csv` 中，66 条能对到 `History.txt` 的记录里，有 52 条满足 `general_id_candidate == history_general_id`。
+- 剩余未对上的记录并不是完全随机值，很多是 `n16 == 0` 的“简化型”记录，说明同一家族内部还混有缺省字段版本。
+
+### 5.3 `faction_or_ruler` 归一化线索
+
+对 `faction_or_ruler` 记录按 `96` 锚点、目标列 `n00` 归一化后，当前最稳的解释是：
+
+| 归一化列 | 当前理解 | 证据级别 |
+| --- | --- | --- |
+| `n12` | 关卡内势力槽位 | 高置信推断 |
+| `n14` | 君主武将编号候选值 | 高置信推断 |
+| `n16/n20/n22` | 势力状态/标志位候选值 | 待验证 |
+
+说明：
+
+- 不是每个势力都一定有独立的 `faction_or_ruler` 文本记录。
+- 但 `general_entry.n02` 与 `faction_or_ruler.n12` 会共同形成可跟踪的“势力槽位”空间。
+
+### 5.4 `city_92_family` 归一化线索
+
+对 `city_92_family` 记录按 `92` 锚点、目标列 `n00` 归一化后，当前最稳的解释是：
+
+| 归一化列 | 当前理解 | 证据级别 |
+| --- | --- | --- |
+| `n12` | 城市索引 `city_id` | 高置信推断 |
+| `n16` | 城市规模 `city_size` | 高置信推断 |
+| `n18` | 当前人口候选值 | 高置信推断 |
+| `n20` | 当前金候选值 | 高置信推断 |
+| `n22` | 当前粮候选值 | 高置信推断 |
+| `n26` | 当前开发值候选值 | 高置信推断 |
+| `n28` | 当前商业值候选值 | 高置信推断 |
+| `n30` | 当前治安值候选值 | 高置信推断 |
+
+`stage01` 的直接验证结果：
+
+- `tools/export_stg_phase7_links.py` 导出的 `city_rows.csv` 中，20 条城市记录全部满足：
+  - `city_id_candidate == castle_city_id`
+  - `city_size_candidate == castle_city_size`
+- 因此对 `stage01` 而言，城市坐标已经可以通过 `city_id` 稳定反查到 `castle.txt` / `stage.ini` 城市母表：
+  - 例如 `陳留 -> city_id 10 -> (217, 388)`
+  - `襄陽 -> city_id 22 -> (109, 824)`
+  - `建業 -> city_id 30 -> (323, 728)`
+
+当前仍未完全确认：
+
+- 直接 `owner_id` 是否也在 `city_92_family` 内部固定字段中。
+- 更可能的情况是：城市记录保存 `city_id + 当前城市状态`，而拥有者需结合附近的势力槽位或其他家族记录共同确定。
+
+### 5.5 当前 owner 追踪方法
+
+为继续逆向 `owner_id`，当前脚本会给每条城市记录补三列上下文信息：
+
+- `context_prev_slot`
+- `context_next_slot`
+- `context_owner_slot_consensus`
+
+其中：
+
+- `context_prev_slot` 是城市记录前方最近一个可识别势力槽位。
+- `context_next_slot` 是城市记录后方最近一个可识别势力槽位。
+- 当二者相等时，`context_owner_slot_consensus` 可作为当前最稳的 owner 槽位候选值。
+
+`stage01` 中已经能直接得到一批高置信 owner 候选：
+
+- `陳留 -> slot 2`
+- `梓潼 -> slot 4`
+- `江夏 -> slot 5`
+- `南皮 -> slot 7`
+- `長安 -> slot 8`
+- `下邳 / 小沛 / 許昌 / 新野 / 壽春 / 建業 / 會稽 / 柴桑 / 武都 / 永安 -> slot 9`
+
+但像 `襄陽`、`襄平`、`晉陽` 这类记录，前后槽位不一致，说明还不能仅靠邻接规则替代真正的字段解析。
 
 ## 6. `.evt`：事件/脚本表
 
@@ -288,8 +364,9 @@ dest_y = tile_screen_y + 20 - yAnchor
 
 ## 8. 当前最重要的未解问题
 
-1. `.stg` 的城市记录里，哪几个字段分别对应 `city_id / owner_id / coordinate`
-2. `.evt` 如何把事件对象映射回地图
-3. `.s/.x` 的真实生成流程和写回策略
-4. `.m.byte08/09/10/11` 的最终语义
-5. `acwz` 的完整 footprint 与 z-order
+1. `.stg` 城市记录中的直接 `owner_id` 字段
+2. `city_92_family` 与 `city_or_structure` 的完整分工
+3. `.evt` 如何把事件对象映射回地图
+4. `.s/.x` 的真实生成流程和写回策略
+5. `.m.byte08/09/10/11` 的最终语义
+6. `acwz` 的完整 footprint 与 z-order

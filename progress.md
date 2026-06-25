@@ -19,7 +19,7 @@
 
 ## 2026-06-25
 
-- 重做 `uft8-game-txt` 与 `stage.ini` 的关联方式，改为基于原始 dword 流，而不是先信任 family_guess。
+- 重做 `uft8-game-txt` 与 `stage.ini` 的关联方式，改为基于原始 dword 流，而不是先信任 `family_guess`。
 - 确认当前稳定映射：
   - `general.txt`：步长 `57 dwords`
   - `castle.txt`：步长 `25 dwords`
@@ -36,6 +36,18 @@
   - `stage_ini_conversion_tables.xlsx` 可由 Python 正常导出
   - 未修改的 `stage_ini_conversion_tables.xlsx` 可回写为与原始 `stage.ini` 完全一致的新文件
   - `sha256 = 29584de26770323a09849d180331d936e9c112f55936d76b08f4f6f6a63663b8`
+- 新增 `tools/export_stg_phase7_links.py`，把单关卡 `.stg` 的 `general_entry / faction_or_ruler / city_92_family` 归一化后导出成 JSON + CSV。
+- 导出 `stage01` 关联表：
+  - `derived/sidecar_analysis/phase7/stage01/stg_phase7_links.json`
+  - `derived/sidecar_analysis/phase7/stage01/general_rows.csv`
+  - `derived/sidecar_analysis/phase7/stage01/faction_rows.csv`
+  - `derived/sidecar_analysis/phase7/stage01/city_rows.csv`
+- `stage01.stg` 当前验证结果：
+  - 20 条 `city_92_family` 城市记录全部对上 `castle.txt` 的 `city_id`
+  - 20 条 `city_92_family` 城市记录全部对上 `castle.txt` 的 `city_size`
+  - 由 `city_id` 可稳定反查城市坐标，例如 `陳留 -> (217, 388)`、`襄陽 -> (109, 824)`、`建業 -> (323, 728)`
+  - 66 条能对到 `History.txt` 的 `general_entry` 中，52 条可直接对上 `general_id_candidate`
+  - 已为城市记录补上 `context_prev_slot / context_next_slot / context_owner_slot_consensus`，作为继续追 `owner_id` 的临时线索
 
 ## 本次文档收口（已完成）
 
@@ -43,6 +55,7 @@
 - `docs/FORMAT_NOTES.zh.md` 已重写，并单列 `stage.ini` 二进制构成。
 - 新增 `docs/DOC_WORKFLOW.zh.md`，把文档更新责任和提交前检查表写死。
 - `task_plan.md`、`findings.md`、`progress.md` 已同步为新的有效基线。
+- 本轮继续把 `.stg Phase 7` 的新结论同步写回文档，避免只停留在聊天上下文。
 - 验证：Python 按 UTF-8 读取上述文档成功，确认乱码来自控制台代码页而非文件内容。
 
 ## 验证记录
@@ -54,9 +67,13 @@
 | 编辑器本地 `.m` 加载 | 通过 |
 | 编辑器 patch 写回复制件 | 通过 |
 | 核心文档 UTF-8 读取 | 通过 |
+| `stage01.stg city_id -> castle.txt` 对齐 | 20/20 通过 |
+| `stage01.stg city_size -> castle.txt` 对齐 | 20/20 通过 |
 
 ## 当前风险
 
-1. `.stg` / `.evt` 仍未完成字段命名，暂时不能做完整语义编辑器。
-2. `.s/.x` 的写回流程尚未确认，不应贸然生成覆盖。
-3. `acwz` 的完整 footprint / z-order 仍有尾差。
+1. `.stg` 城市记录中的直接 `owner_id` 字段仍未锁定，当前只能用邻接槽位做临时推断。
+2. `city_or_structure` 与 `city_92_family` 的分工还未完全解释清楚。
+3. `.evt` 仍未完成字段命名，暂时不能做完整语义编辑器。
+4. `.s/.x` 的写回流程尚未确认，不应贸然生成覆盖。
+5. `acwz` 的完整 footprint / z-order 仍有尾差。

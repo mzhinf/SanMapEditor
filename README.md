@@ -20,6 +20,8 @@
   - 文件头：8 字节
   - 主表：`277 * 224` 字节
   - 尾表：`174 * 76` 字节
+- `stage01.stg` 内真正的城市实例当前主要落在 `city_92_family`，而不是 `city_or_structure`。
+- `stage01.stg` 的 `city_92_family` 归一化后，`city_id_candidate` 与 `castle.txt` 的城市索引 20/20 对齐，坐标可经 `city_id` 反查到 `castle.txt` / `stage.ini` 城市母表。
 - `uft8-game-txt/` 中已有 5 类 txt 与 `stage.ini` 建立了稳定关联：
   - `general.txt`
   - `castle.txt`
@@ -119,6 +121,27 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 
 当前已经验证：未修改的 `stage_ini_conversion_tables.xlsx` 可回写出与原始 `stage.ini` 字节完全一致的文件。
 
+### `.stg` Phase 7 对照导出
+
+导出单个关卡的 `.stg` 关联表：
+
+```powershell
+& $py tools/export_stg_phase7_links.py . --stage stage01
+```
+
+产物：
+
+- `derived/sidecar_analysis/phase7/stage01/stg_phase7_links.json`
+- `derived/sidecar_analysis/phase7/stage01/general_rows.csv`
+- `derived/sidecar_analysis/phase7/stage01/faction_rows.csv`
+- `derived/sidecar_analysis/phase7/stage01/city_rows.csv`
+
+用途：
+
+- 把 `stage01.stg` 的 `general_entry / faction_or_ruler / city_92_family` 归一化到同一张表。
+- 直接对照 `History.txt` 的武将编号/势力与 `castle.txt` 的城市索引/坐标。
+- 给城市记录补上 `context_prev_slot / context_next_slot / context_owner_slot_consensus`，便于继续追 `owner_id`。
+
 ## 文档维护约定
 
 从现在开始，本项目按固定规则维护文档，不再“代码先走、文档补不补看情况”：
@@ -136,6 +159,6 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 
 当前最值得做的 3 件事：
 
-1. 继续逆向 `stageNN.stg`，确认城池记录的 `city_id / owner_id / map coordinate`。
+1. 继续逆向 `stageNN.stg`，补齐城市记录的直接 `owner_id` 字段，并解释 `city_92_family` 与 `city_or_structure` 的分工。
 2. 继续逆向 `stageNN.evt`，确认事件记录如何引用地图坐标、对象和全局 id。
 3. 从 `Emperor.exe` 继续确认 `.s/.x` 的生成和读取路径，把小地图/缓存写回补齐到编辑器链路。
