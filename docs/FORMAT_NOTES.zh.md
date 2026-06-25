@@ -222,108 +222,149 @@ dest_y = tile_screen_y + 20 - yAnchor
 
 ```text
 8-byte header
-+ 76-byte mixed-template records
++ N * 76-byte mixed-template records
 + optional tail bytes
 ```
 
-### 5.1 当前可区分的记录家族
+`stage01.stg` 的当前实测：
 
-已知高置信结论：
+| 项目 | 值 | 证据级别 |
+| --- | --- | --- |
+| 文件大小 | `190208` 字节 | 已确认 |
+| 文件头 | `01 00 00 00 4c 00 00 00`，按 u16 为 `[1, 0, 76, 0]` | 已确认 |
+| 记录步长 | `76` 字节 | 已确认 |
+| 完整记录数 | `2502` 条 | 已确认 |
+| 尾部剩余 | `48` 字节 | 已确认 |
 
-- `.stg` 不是单模板表，而是多模板混合容器。
-- 对齐分析后，当前至少能稳定区分：
-  - `general_entry`
-  - `faction_or_ruler`
-  - `troop_entry`
-  - `city_92_family`
-  - `city_or_structure`
-- 在 `stage01.stg` 中，真正落地图的城市实例目前主要出现在 `city_92_family`。
-- `city_or_structure` 更像模板/标签型记录，和真正的关卡城市实例并不等价。
+重要修正：`.stg` 不能只导出“有文本的记录”。大量无文本的 `binary_record / zero_record` 是城池、武将、士兵块之间的续记录或填充记录，必须保留原始顺序。
 
-### 5.2 `general_entry` 归一化线索
+### 5.1 当前层级模型
+
+`stage01.stg` 当前最合理的读法是顺序脚本：
+
+```text
+剧本标题
+-> 势力/特殊块
+   -> 城池块
+      -> 城内武将
+      -> 城内士兵
+      -> 附属二进制记录
+```
+
+`tools/export_stg_hierarchy.py` 对 `stage01` 的当前导出结果：
+
+| 统计项 | 值 |
+| --- | --- |
+| 原始记录数 | `2502` |
+| 势力/特殊块 | `10` |
+| 城池块 | `38` |
+| 武将记录 | `86` |
+| 士兵记录 | `42` |
+
+已能直接观察到的块结构示例：
+
+| 势力块 | 城池块 | 例子 |
+| --- | --- | --- |
+| `劉備` | `平原` | `劉備 / 關羽 / 張飛 / 糜竺 / 糜芳 ...` 后接 3 条士兵记录 |
+| `曹操` | `陳留` | `夏侯淵 / 曹仁 / 曹休 / 曹洪 / 樂進 ...` 后接 3 条士兵记录 |
+| `孫堅` | `長沙` | `孫堅 / 黃蓋 / 韓當 / 朱治 / 程普 ...` 后接 3 条士兵记录 |
+| `劉表` | `襄陽 / 江夏 / 江陵` | 每座城后接该城武将与士兵记录 |
+| `中立國` | `襄平 / 北平 / 薊 / 晉陽 / 鄴 ...` | 中立城池可有武将，也可没有士兵记录 |
+
+因此，当前 owner/所属关系优先由“记录顺序里的势力块包含关系”解释，而不是优先寻找单个散落 `owner_id` 字段。
+
+### 5.2 当前可区分的记录家族与锚点
+
+`.stg` 是 76 字节混合模板容器，当前可用的主要线索如下：
+
+| 锚点/家族 | 当前理解 | 证据级别 |
+| --- | --- | --- |
+| `96` | 势力/特殊块锚点。可能被识别成 `faction_or_ruler`、`faction_96_family`，也可能因为文本偏移显示为 `text_mixed_record`，例如 `劉備 | 家`。 | 高置信推断 |
+| `92` | 城池块锚点。可能落在 `city_92_family`、`city_or_structure`、`text_mixed_record` 等不同 family 名下。 | 高置信推断 |
+| `224` | 武将或士兵记录锚点。结合 `History.txt` 与兵种名区分 `general_entry / troop_entry`。 | 高置信推断 |
+| `binary_record` | 无文本非零续记录。当前必须跟随原始顺序保留，不能丢弃。 | 已确认 |
+| `zero_record` | 全零记录或填充记录。当前同样保留。 | 已确认 |
+
+旧版 `family_guess` 只是启发式分类名，不是文件内字段名。尤其是 `city_or_structure` 不能再简单解释成“模板/标签型记录”：例如 `薊 | W城市3`、`鄴 | W城市` 在当前层级导出中会作为中立城池块边界。
+
+### 5.3 `general_entry` 归一化线索
 
 对 `general_entry` 记录按 `224` 锚点、目标列 `n04` 归一化后，当前最稳的解释是：
 
 | 归一化列 | 当前理解 | 证据级别 |
 | --- | --- | --- |
-| `n02` | 势力槽位候选值 | 高置信推断 |
+| `n02` | 势力/块编号候选值，仍需结合顺序层级解释 | 高置信推断 |
 | `n16` | 武将编号候选值 | 高置信推断 |
 | `n18` | 额外属性/排序值候选位 | 待验证 |
 
 样本依据：
 
-- `tools/export_stg_phase7_links.py` 对 `stage01.stg` 导出的 `general_rows.csv` 中，66 条能对到 `History.txt` 的记录里，有 52 条满足 `general_id_candidate == history_general_id`。
-- 剩余未对上的记录并不是完全随机值，很多是 `n16 == 0` 的“简化型”记录，说明同一家族内部还混有缺省字段版本。
+- 旧版 `tools/export_stg_phase7_links.py` 对 `stage01.stg` 导出的 `general_rows.csv` 中，66 条能对到 `History.txt` 的记录里，有 52 条满足 `general_id_candidate == history_general_id`。
+- 新版层级导出会额外把 `entity_224_family / text_mixed_record` 中能命中 `History.txt` 的记录归为武将，因此 `stage01` 当前可识别 86 条武将记录。
 
-### 5.3 `faction_or_ruler` 归一化线索
+### 5.4 势力块线索
 
-对 `faction_or_ruler` 记录按 `96` 锚点、目标列 `n00` 归一化后，当前最稳的解释是：
+`96` 锚点比 `faction_or_ruler` 这个旧 family 名更可靠。当前已确认 `stage01` 中至少有如下势力/特殊块边界：
 
-| 归一化列 | 当前理解 | 证据级别 |
-| --- | --- | --- |
-| `n12` | 关卡内势力槽位 | 高置信推断 |
-| `n14` | 君主武将编号候选值 | 高置信推断 |
-| `n16/n20/n22` | 势力状态/标志位候选值 | 待验证 |
+- `劉備`
+- `曹操`
+- `孫堅`
+- `劉焉`
+- `劉表`
+- `馬騰`
+- `袁紹`
+- `董卓`
+- `中立國`
+- `盜賊`
 
 说明：
 
-- 不是每个势力都一定有独立的 `faction_or_ruler` 文本记录。
-- 但 `general_entry.n02` 与 `faction_or_ruler.n12` 会共同形成可跟踪的“势力槽位”空间。
+- `劉備 | 家` 这类记录会同时命中 `History.txt` 武将名和 `96` 锚点；它应优先解释为势力块开头，而不是普通武将记录。
+- `faction_or_ruler.n12` 这类“槽位”仍有排查价值，但不能直接等同于 owner 字段。
 
-### 5.4 `city_92_family` 归一化线索
+### 5.5 城池块线索
 
-对 `city_92_family` 记录按 `92` 锚点、目标列 `n00` 归一化后，当前最稳的解释是：
+城池块不是只存在于 `city_92_family`。当前城池边界来源包括：
+
+- `city_92_family`：最容易归一化，20 条记录的 `city_id / city_size` 与 `castle.txt` 20/20 对齐。
+- `text_mixed_record`：例如 `平原`、`長沙`、`成都`、`江州`、`北平`，部分记录的 `92` 锚点落在附近或偏移位置。
+- `city_or_structure`：例如 `薊 | W城市3`、`鄴 | W城市`，当前在中立城池块中出现。
+
+对 `city_92_family` 记录按 `92` 锚点归一化后，仍然保留这些高置信字段：
 
 | 归一化列 | 当前理解 | 证据级别 |
 | --- | --- | --- |
 | `n12` | 城市索引 `city_id` | 高置信推断 |
 | `n16` | 城市规模 `city_size` | 高置信推断 |
-| `n18` | 当前人口候选值 | 高置信推断 |
-| `n20` | 当前金候选值 | 高置信推断 |
-| `n22` | 当前粮候选值 | 高置信推断 |
-| `n26` | 当前开发值候选值 | 高置信推断 |
-| `n28` | 当前商业值候选值 | 高置信推断 |
-| `n30` | 当前治安值候选值 | 高置信推断 |
+| `n18/n20/n22` | 当前人口/金/粮候选值 | 待验证 |
+| `n26/n28/n30` | 当前开发/商业/治安候选值 | 待验证 |
 
 `stage01` 的直接验证结果：
 
-- `tools/export_stg_phase7_links.py` 导出的 `city_rows.csv` 中，20 条城市记录全部满足：
-  - `city_id_candidate == castle_city_id`
-  - `city_size_candidate == castle_city_size`
-- 因此对 `stage01` 而言，城市坐标已经可以通过 `city_id` 稳定反查到 `castle.txt` / `stage.ini` 城市母表：
-  - 例如 `陳留 -> city_id 10 -> (217, 388)`
+- 20 条 `city_92_family` 城市记录全部满足 `city_id_candidate == castle_city_id`。
+- 20 条 `city_92_family` 城市记录全部满足 `city_size_candidate == castle_city_size`。
+- 城市坐标可通过 `city_id` 稳定反查到 `castle.txt` / `stage.ini` 城市母表，例如：
+  - `陳留 -> city_id 10 -> (217, 388)`
   - `襄陽 -> city_id 22 -> (109, 824)`
   - `建業 -> city_id 30 -> (323, 728)`
 
-当前仍未完全确认：
+### 5.6 关于 `slot/context_owner_slot_consensus` 的降级说明
 
-- 直接 `owner_id` 是否也在 `city_92_family` 内部固定字段中。
-- 更可能的情况是：城市记录保存 `city_id + 当前城市状态`，而拥有者需结合附近的势力槽位或其他家族记录共同确定。
+旧版 `tools/export_stg_phase7_links.py` 里出现的：
 
-### 5.5 当前 owner 追踪方法
-
-为继续逆向 `owner_id`，当前脚本会给每条城市记录补三列上下文信息：
-
+- `slot_candidate`
 - `context_prev_slot`
 - `context_next_slot`
 - `context_owner_slot_consensus`
 
-其中：
+现在全部降级为“历史排查线索”。它们不是 `.stg` 中已经确认的字段名，也不能再作为 owner 结论使用。
 
-- `context_prev_slot` 是城市记录前方最近一个可识别势力槽位。
-- `context_next_slot` 是城市记录后方最近一个可识别势力槽位。
-- 当二者相等时，`context_owner_slot_consensus` 可作为当前最稳的 owner 槽位候选值。
+当前 owner/所属关系的优先解释是：
 
-`stage01` 中已经能直接得到一批高置信 owner 候选：
-
-- `陳留 -> slot 2`
-- `梓潼 -> slot 4`
-- `江夏 -> slot 5`
-- `南皮 -> slot 7`
-- `長安 -> slot 8`
-- `下邳 / 小沛 / 許昌 / 新野 / 壽春 / 建業 / 會稽 / 柴桑 / 武都 / 永安 -> slot 9`
-
-但像 `襄陽`、`襄平`、`晉陽` 这类记录，前后槽位不一致，说明还不能仅靠邻接规则替代真正的字段解析。
+1. 先按原始记录顺序识别势力块。
+2. 再按城池名、`92` 锚点、`castle.txt` 识别城池块。
+3. 后续武将/士兵记录挂到当前城池块。
+4. 若后续找到直接 owner 字段，再用它校正层级模型。
 
 ## 6. `.evt`：事件/脚本表
 
@@ -364,8 +405,8 @@ dest_y = tile_screen_y + 20 - yAnchor
 
 ## 8. 当前最重要的未解问题
 
-1. `.stg` 城市记录中的直接 `owner_id` 字段
-2. `city_92_family` 与 `city_or_structure` 的完整分工
+1. `.stg` 势力块/城池块的直接字段边界与可写回范围
+2. 城池块内人口、金、粮、士兵数量/兵种字段的最终命名
 3. `.evt` 如何把事件对象映射回地图
 4. `.s/.x` 的真实生成流程和写回策略
 5. `.m.byte08/09/10/11` 的最终语义

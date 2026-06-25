@@ -77,13 +77,13 @@ screen_y = row * 10
 
 这说明完整编辑器不能只改 `.m`。
 
-### 7. `stage01.stg` 的城市实例已能稳定落回全局城市母表
+### 7. `stage01.stg` 已恢复为可读的顺序层级
 
-- 真正的关卡城市实例当前主要出现在 `city_92_family`。
-- `tools/export_stg_phase7_links.py` 对 `stage01.stg` 的导出结果里：
-  - 20 条城市记录全部满足 `city_id_candidate == castle_city_id`
-  - 20 条城市记录全部满足 `city_size_candidate == castle_city_size`
-- 因此对 `stage01` 而言，城市坐标已经可以经 `city_id` 稳定反查到 `castle.txt` / `stage.ini` 城市母表。
+- `.stg` 必须按原始 76 字节记录链处理，不能只看有文本的记录。
+- `stage01.stg` 实测为 8 字节头、2502 条完整记录、48 字节尾部。
+- 当前层级导出可得到 10 个势力/特殊块、38 个城池块：例如 `劉備 -> 平原`、`曹操 -> 陳留`、`孫堅 -> 長沙`、`劉表 -> 襄陽/江夏/江陵`、`中立國 -> 襄平/北平/薊/...`。
+- `city_92_family` 仍是最稳的字段子集：20 条记录全部对上 `castle.txt` 的 `city_id / city_size`。
+- 完整城池块不只落在 `city_92_family`，还会因偏移差异落到 `text_mixed_record`、`city_or_structure`。
 
 ## 当前高置信推断
 
@@ -96,19 +96,11 @@ screen_y = row * 10
 
 ### `.stg`
 
-- 是 76 字节混合模板记录容器
-- 已能区分 `general_entry`、`faction_or_ruler`、`troop_entry`、`city_92_family`、`city_or_structure`
-- 当前最稳的归一化字段：
-  - `general_entry.n02` -> 势力槽位候选值
-  - `general_entry.n16` -> 武将编号候选值
-  - `faction_or_ruler.n12` -> 势力槽位候选值
-  - `faction_or_ruler.n14` -> 君主武将编号候选值
-  - `city_92_family.n12` -> 城市索引 `city_id`
-  - `city_92_family.n16` -> 城市规模 `city_size`
-  - `city_92_family.n18/n20/n22` -> 当前人口/金/粮候选值
-  - `city_92_family.n26/n28/n30` -> 当前开发/商业/治安候选值
-- `city_or_structure` 仍更像模板/标签型记录，尚未和实际城市实例完全并上
-- `owner_id` 直接字段尚未锁定，但可先用相邻槽位推导出一批 `context_owner_slot_consensus`
+- 是 8 字节头 + 76 字节混合模板记录链 + 可选尾字节。
+- 当前按顺序层级解释 owner：势力块包含城池块，城池块包含武将/士兵/附属记录。
+- 主要锚点：`96` 势力块、`92` 城池块、`224` 武将/士兵记录。
+- `city_92_family.n12 -> city_id`、`city_92_family.n16 -> city_size` 已在 `stage01` 20/20 对齐。
+- `slot/context_owner_slot_consensus` 已降级为旧版排查线索，不再作为 owner 结论。
 
 ### `.evt`
 
@@ -134,8 +126,8 @@ screen_y = row * 10
 
 ## 当前最值得继续研究的方向
 
-1. `.stg` 城市记录中的直接 `owner_id` 字段
-2. `city_92_family` 与 `city_or_structure` 的完整分工
+1. `.stg` 层级块边界对应的直接字段与写回规则
+2. 城池块内人口、金、粮、士兵数量/兵种字段的最终命名
 3. `.evt` 如何引用地图对象、坐标与全局 id
 4. `.s/.x` 的真实生成与回写路径
 5. `acwz` 的完整 footprint 与 z-order

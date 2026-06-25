@@ -20,8 +20,9 @@
   - 文件头：8 字节
   - 主表：`277 * 224` 字节
   - 尾表：`174 * 76` 字节
-- `stage01.stg` 内真正的城市实例当前主要落在 `city_92_family`，而不是 `city_or_structure`。
-- `stage01.stg` 的 `city_92_family` 归一化后，`city_id_candidate` 与 `castle.txt` 的城市索引 20/20 对齐，坐标可经 `city_id` 反查到 `castle.txt` / `stage.ini` 城市母表。
+- `.stg` 当前按“8 字节头 + 76 字节原始记录链 + 可选尾字节”处理；`stage01.stg` 已按原始顺序导出 2502 条记录，尾部 48 字节。
+- `stage01.stg` 更像“剧本名 -> 势力块 -> 城池块 -> 城内武将/士兵/附属记录”的顺序脚本；当前层级导出可得到 10 个势力/特殊块、38 个城池块。
+- `city_92_family` 仍是最稳的城市字段子集：20 条记录的 `city_id / city_size` 与 `castle.txt` 20/20 对齐；但完整城池块还会落在 `text_mixed_record`、`city_or_structure` 等偏移变体中。
 - `uft8-game-txt/` 中已有 5 类 txt 与 `stage.ini` 建立了稳定关联：
   - `general.txt`
   - `castle.txt`
@@ -123,7 +124,36 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 
 ### `.stg` Phase 7 对照导出
 
-导出单个关卡的 `.stg` 关联表：
+导出单个关卡的 `.stg` 原始记录链：
+
+```powershell
+& $py tools/export_stg_raw_chain.py . --stage stage01
+```
+
+产物：
+
+- `derived/sidecar_analysis/raw_chain/stage01/stg_raw_chain.json`
+- `derived/sidecar_analysis/raw_chain/stage01/stg_raw_chain.csv`
+
+导出按原始顺序恢复的势力/城池层级：
+
+```powershell
+& $py tools/export_stg_hierarchy.py . --stage stage01
+```
+
+产物：
+
+- `derived/sidecar_analysis/hierarchy/stage01/stg_hierarchy.json`
+- `derived/sidecar_analysis/hierarchy/stage01/stg_hierarchy_records.csv`
+- `derived/sidecar_analysis/hierarchy/stage01/stg_force_city_summary.csv`
+
+用途：
+
+- 将 `.stg` 看成顺序记录链，恢复“势力 -> 城池 -> 武将/士兵”的可读结构。
+- 用 `castle.txt`、`History.txt` 交叉验证城池名、武将名与 id 空间。
+- 避免把旧脚本的 `slot/context_owner_slot_consensus` 当成已确认 owner 字段；它们只保留为历史排查线索。
+
+导出单个关卡的旧版字段对照表：
 
 ```powershell
 & $py tools/export_stg_phase7_links.py . --stage stage01
@@ -136,11 +166,7 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 - `derived/sidecar_analysis/phase7/stage01/faction_rows.csv`
 - `derived/sidecar_analysis/phase7/stage01/city_rows.csv`
 
-用途：
-
-- 把 `stage01.stg` 的 `general_entry / faction_or_ruler / city_92_family` 归一化到同一张表。
-- 直接对照 `History.txt` 的武将编号/势力与 `castle.txt` 的城市索引/坐标。
-- 给城市记录补上 `context_prev_slot / context_next_slot / context_owner_slot_consensus`，便于继续追 `owner_id`。
+用途：继续检查 `224 / 96 / 92` 锚点归一化后的字段候选值。
 
 ## 文档维护约定
 
@@ -159,6 +185,6 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 
 当前最值得做的 3 件事：
 
-1. 继续逆向 `stageNN.stg`，补齐城市记录的直接 `owner_id` 字段，并解释 `city_92_family` 与 `city_or_structure` 的分工。
+1. 继续逆向 `stageNN.stg`，把层级块写回能力、直接 owner 字段、士兵数量/兵种字段逐步拆清。
 2. 继续逆向 `stageNN.evt`，确认事件记录如何引用地图坐标、对象和全局 id。
 3. 从 `Emperor.exe` 继续确认 `.s/.x` 的生成和读取路径，把小地图/缓存写回补齐到编辑器链路。

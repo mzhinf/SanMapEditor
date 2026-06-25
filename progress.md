@@ -36,18 +36,22 @@
   - `stage_ini_conversion_tables.xlsx` 可由 Python 正常导出
   - 未修改的 `stage_ini_conversion_tables.xlsx` 可回写为与原始 `stage.ini` 完全一致的新文件
   - `sha256 = 29584de26770323a09849d180331d936e9c112f55936d76b08f4f6f6a63663b8`
-- 新增 `tools/export_stg_phase7_links.py`，把单关卡 `.stg` 的 `general_entry / faction_or_ruler / city_92_family` 归一化后导出成 JSON + CSV。
-- 导出 `stage01` 关联表：
-  - `derived/sidecar_analysis/phase7/stage01/stg_phase7_links.json`
-  - `derived/sidecar_analysis/phase7/stage01/general_rows.csv`
-  - `derived/sidecar_analysis/phase7/stage01/faction_rows.csv`
-  - `derived/sidecar_analysis/phase7/stage01/city_rows.csv`
+- 新增并修正 `.stg` 导出链路：
+  - `tools/export_stg_phase7_links.py`：保留旧版 `224 / 96 / 92` 字段归一化对照。
+  - `tools/export_stg_raw_chain.py`：直接按原始 76 字节 stride 导出完整记录链，不再跳过无文本记录。
+  - `tools/export_stg_hierarchy.py`：按原始顺序恢复势力/城池/武将/士兵层级。
+- 导出 `stage01` 新产物：
+  - `derived/sidecar_analysis/raw_chain/stage01/stg_raw_chain.json`
+  - `derived/sidecar_analysis/raw_chain/stage01/stg_raw_chain.csv`
+  - `derived/sidecar_analysis/hierarchy/stage01/stg_hierarchy.json`
+  - `derived/sidecar_analysis/hierarchy/stage01/stg_hierarchy_records.csv`
+  - `derived/sidecar_analysis/hierarchy/stage01/stg_force_city_summary.csv`
 - `stage01.stg` 当前验证结果：
-  - 20 条 `city_92_family` 城市记录全部对上 `castle.txt` 的 `city_id`
-  - 20 条 `city_92_family` 城市记录全部对上 `castle.txt` 的 `city_size`
-  - 由 `city_id` 可稳定反查城市坐标，例如 `陳留 -> (217, 388)`、`襄陽 -> (109, 824)`、`建業 -> (323, 728)`
-  - 66 条能对到 `History.txt` 的 `general_entry` 中，52 条可直接对上 `general_id_candidate`
-  - 已为城市记录补上 `context_prev_slot / context_next_slot / context_owner_slot_consensus`，作为继续追 `owner_id` 的临时线索
+  - 文件为 8 字节头、2502 条完整 76 字节记录、48 字节尾部。
+  - 层级导出得到 10 个势力/特殊块、38 个城池块、86 条武将记录、42 条士兵记录。
+  - 可读结构例子：`劉備 -> 平原`、`曹操 -> 陳留`、`孫堅 -> 長沙`、`劉表 -> 襄陽/江夏/江陵`、`中立國 -> 襄平/北平/薊/...`。
+  - `city_92_family` 仍有 20 条记录全部对上 `castle.txt` 的 `city_id / city_size`。
+  - `context_prev_slot / context_next_slot / context_owner_slot_consensus` 已降级为旧版排查线索，不再当作 owner 结论。
 
 ## 本次文档收口（已完成）
 
@@ -69,11 +73,13 @@
 | 核心文档 UTF-8 读取 | 通过 |
 | `stage01.stg city_id -> castle.txt` 对齐 | 20/20 通过 |
 | `stage01.stg city_size -> castle.txt` 对齐 | 20/20 通过 |
+| `stage01.stg` 原始记录链导出 | 2502 条记录 + 48 字节尾部，通过 |
+| `stage01.stg` 层级导出 | 10 个势力/特殊块、38 个城池块，通过 |
 
 ## 当前风险
 
-1. `.stg` 城市记录中的直接 `owner_id` 字段仍未锁定，当前只能用邻接槽位做临时推断。
-2. `city_or_structure` 与 `city_92_family` 的分工还未完全解释清楚。
+1. `.stg` 直接 owner 字段仍未锁定，当前优先按顺序层级解释所属关系。
+2. 城池块内人口、金、粮、士兵数量/兵种等字段仍需逐项命名。
 3. `.evt` 仍未完成字段命名，暂时不能做完整语义编辑器。
 4. `.s/.x` 的写回流程尚未确认，不应贸然生成覆盖。
 5. `acwz` 的完整 footprint / z-order 仍有尾差。
