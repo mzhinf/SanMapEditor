@@ -153,6 +153,20 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 - 用 `castle.txt`、`History.txt` 交叉验证城池名、武将名与 id 空间。
 - 避免把旧脚本的 `slot/context_owner_slot_consensus` 当成已确认 owner 字段；它们只保留为历史排查线索。
 
+导出城池状态与士兵记录候选表：
+
+```powershell
+& $py tools/export_stg_city_troop_analysis.py . --stage stage01
+```
+
+产物：
+
+- `derived/sidecar_analysis/city_troop/stage01/stg_city_troop_candidates.json`
+- `derived/sidecar_analysis/city_troop/stage01/city_state_candidates.csv`
+- `derived/sidecar_analysis/city_troop/stage01/troop_candidates.csv`
+
+用途：把城池头部按 `city_id` 位置展开为人口、金、粮、开发、商业、治安、上限、坐标、太守候选字段；士兵记录按 `224` 锚点展开并挂回所属城池。
+
 导出单个关卡的旧版字段对照表：
 
 ```powershell

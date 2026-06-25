@@ -52,6 +52,17 @@
   - 可读结构例子：`劉備 -> 平原`、`曹操 -> 陳留`、`孫堅 -> 長沙`、`劉表 -> 襄陽/江夏/江陵`、`中立國 -> 襄平/北平/薊/...`。
   - `city_92_family` 仍有 20 条记录全部对上 `castle.txt` 的 `city_id / city_size`。
   - `context_prev_slot / context_next_slot / context_owner_slot_consensus` 已降级为旧版排查线索，不再当作 owner 结论。
+- 新增 `tools/export_stg_city_troop_analysis.py`，导出城池状态字段与士兵记录候选表：
+  - `derived/sidecar_analysis/city_troop/stage01/stg_city_troop_candidates.json`
+  - `derived/sidecar_analysis/city_troop/stage01/city_state_candidates.csv`
+  - `derived/sidecar_analysis/city_troop/stage01/troop_candidates.csv`
+- `stage01.stg` 城池状态字段验证结果：
+  - `city_id / city_size / map_x / map_y` 全部 38/38 对齐 `castle.txt`。
+  - `city_id+6/+8/+10` 高置信对应当前人口/金/粮。
+  - `city_id+14/+16/+18` 高置信对应开发/商业/治安。
+  - `city_id+20/+22/+24` 高置信对应三项上限。
+  - `city_id+30` 是太守/城主武将 id 候选，23 条能映射 `History.txt`，其中 22 条在本城武将列表内。
+  - 42 条士兵记录已挂回城池，但数量/等级字段仍未最终命名。
 
 ## 本次文档收口（已完成）
 
@@ -75,11 +86,12 @@
 | `stage01.stg city_size -> castle.txt` 对齐 | 20/20 通过 |
 | `stage01.stg` 原始记录链导出 | 2502 条记录 + 48 字节尾部，通过 |
 | `stage01.stg` 层级导出 | 10 个势力/特殊块、38 个城池块，通过 |
+| `stage01.stg` 城池状态字段 | `city_id/city_size/x/y` 38/38 对齐，通过 |
 
 ## 当前风险
 
 1. `.stg` 直接 owner 字段仍未锁定，当前优先按顺序层级解释所属关系。
-2. 城池块内人口、金、粮、士兵数量/兵种等字段仍需逐项命名。
+2. 士兵记录中的数量、等级、兵种 id 字段仍需继续命名。
 3. `.evt` 仍未完成字段命名，暂时不能做完整语义编辑器。
 4. `.s/.x` 的写回流程尚未确认，不应贸然生成覆盖。
 5. `acwz` 的完整 footprint / z-order 仍有尾差。
