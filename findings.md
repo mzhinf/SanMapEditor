@@ -85,6 +85,15 @@ screen_y = row * 10
 - `city_92_family` 仍是最稳的字段子集：20 条记录全部对上 `castle.txt` 的 `city_id / city_size`。
 - 完整城池块不只落在 `city_92_family`，还会因偏移差异落到 `text_mixed_record`、`city_or_structure`。
 
+
+### 8. `.stg` Excel 互转链路已闭合
+
+- 新增 `tools/export_stg_workbook.py` 与 `tools/import_stg_workbook.py`。
+- `raw_records.raw_hex` 是 `.stg` 的字节级回写保底源，`meta.header_hex` 和 `meta.tail_hex` 原样保留。
+- `city_state` 按“城池起始记录 + 连续 u16 流 + city_id_stream_index + 相对偏移”回写，字段可以跨 76 字节记录边界。
+- `stage01.stg -> outputs/stg_workbooks/stage01_stg.xlsx -> derived/sidecar_analysis/stg_workbooks/stage01_from_workbook.stg` 已验证字节完全一致，sha256 为 `4857f3cddcae71bb807379d27175d6a23c97410013e27f3fdf1e215099c281e0`。
+- 修改第一个城池人口 `1200 -> 1201` 的烟测只产生 1 个字节差异，证明 `city_state` 覆盖路径能精准落点。
+
 ## 当前高置信推断
 
 ### `.m` 附加字节

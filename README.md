@@ -122,6 +122,37 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 
 当前已经验证：未修改的 `stage_ini_conversion_tables.xlsx` 可回写出与原始 `stage.ini` 字节完全一致的文件。
 
+
+### `.stg` 与 Excel 字节级互转
+
+导出 `stage01.stg` 工作簿：
+
+```powershell
+& $py tools/export_stg_workbook.py . --stage stage01 --out outputs/stg_workbooks/stage01_stg.xlsx
+```
+
+工作簿包含：
+
+- `meta`：8 字节文件头、76 字节步长、记录数、尾部余数字节。
+- `raw_records`：每条 76 字节记录的 `raw_hex` 与 `w00..w37`，是回写保底数据。
+- `hierarchy_records` / `force_city_summary`：当前恢复出的势力、城池、武将、士兵顺序层级。
+- `city_state`：当前可编辑的城池状态候选字段，包括人口、金、粮、开发、商业、治安、坐标、太守候选等。
+- `troop_candidates`：士兵记录候选表，目前只读。
+
+从工作簿回写 `.stg`：
+
+```powershell
+& $py tools/import_stg_workbook.py outputs/stg_workbooks/stage01_stg.xlsx . --out derived/sidecar_analysis/stg_workbooks/stage01_from_workbook.stg --compare-with 三国霸业\stage01.stg
+```
+
+只按 `raw_records.raw_hex` 重建，不应用 `city_state`：
+
+```powershell
+& $py tools/import_stg_workbook.py outputs/stg_workbooks/stage01_stg.xlsx . --out derived/sidecar_analysis/stg_workbooks/stage01_from_workbook_raw_only.stg --compare-with 三国霸业\stage01.stg --no-city-state
+```
+
+当前验证：未修改的 `stage01_stg.xlsx` 在默认模式和 `--no-city-state` 模式下都能回写出与原 `stage01.stg` 字节完全一致的文件；修改第一个城池人口 `1200 -> 1201` 时只产生 1 个字节差异。
+
 ### `.stg` Phase 7 对照导出
 
 导出单个关卡的 `.stg` 原始记录链：

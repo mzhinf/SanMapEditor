@@ -408,6 +408,169 @@ dest_y = tile_screen_y + 20 - yAnchor
 3. 后续武将/士兵记录挂到当前城池块。
 4. 若后续找到直接 owner 字段，再用它校正层级模型。
 
+### 5.9 `.stg` 字节级构成与转换脚本契约（已确认）
+
+本节按“只看文档也能重写转换脚本”的粒度记录 `.stg` 的当前可逆结构。以下结论已经用 `stage01.stg -> Excel -> stage01.stg` 字节级 round-trip 验证。
+
+#### 5.9.1 文件整体布局
+
+`.stg` 当前按固定头、固定步长记录链、尾部余数字节读取：
+
+```text
+file = header[8]
+     + records[record_count] * 76 bytes
+     + tail[tail_bytes]
+
+payload_size = file_size - 8
+record_count = payload_size // 76
+tail_bytes = payload_size % 76
+record_i_offset = 8 + i * 76
+```
+
+`stage01.stg` 实测值：
+
+| 项目 | 值 | 写回要求 |
+| --- | --- | --- |
+| `file_size` | `190208` | 导入后大小必须一致，除非用户明确编辑字段 |
+| `header_hex` | `010000004c000000` | 原样保留 |
+| `header_u16_words` | `[1, 0, 76, 0]` | 可作为调试显示，不用于重新推导 |
+| `stride` | `76` | 当前导入器只支持该步长 |
+| `record_count` | `2502` | `raw_records` 必须覆盖 `0..2501` |
+| `tail_bytes` | `48` | 原样保留 |
+
+#### 5.9.2 单条记录结构
+
+每条记录固定 76 字节，可稳定展开为 38 个 little-endian `u16`：
+
+```text
+record = raw[76]
+word[j] = u16_le(record[j*2 : j*2+2]), 0 <= j < 38
+```
+
+当前不要按 family 重新打包记录。正确写回策略是：
+
+1. 读取 `raw_hex` 作为 76 字节原始记录。
+2. 对已确认字段，在这 76 字节 buffer 上覆盖对应 `u16`。
+3. 未确认字节、文本、填充记录、跨记录连续字段全部原样保留。
+
+#### 5.9.3 `raw_records` 工作表契约
+
+`raw_records` 是 `.stg` 回写的保底数据源。最少必须包含：
+
+| 列名 | 类型 | 用途 |
+| --- | --- | --- |
+| `record_index` | int | 记录序号，必须连续覆盖 `0..record_count-1` |
+| `file_offset` | int | 调试用，理论值为 `8 + record_index * 76` |
+| `family_guess` | text | 启发式分类，仅辅助阅读，不参与重建 |
+| `texts_joined` | text | 当前能解出的 CP950 文本，仅辅助阅读 |
+| `raw_hex` | hex string | 76 字节记录的权威来源，导入时必须长度为 152 个十六进制字符 |
+| `w00..w37` | int | `raw_hex` 的 u16 展开，辅助检查；导入不依赖这些列重建 |
+
+导入算法：
+
+```text
+records = array[record_count]
+for each row in raw_records:
+    i = int(row.record_index)
+    records[i] = bytes.fromhex(row.raw_hex)
+    assert len(records[i]) == 76
+assert every i in 0..record_count-1 exists
+rebuilt = bytes.fromhex(meta.header_hex) + b''.join(records) + bytes.fromhex(meta.tail_hex)
+```
+
+#### 5.9.4 `meta` 工作表契约
+
+`meta` 是键值表，至少需要：
+
+| key | 用途 |
+| --- | --- |
+| `stage` | 关卡名，例如 `stage01` |
+| `source_path` | 原始文件路径，仅用于审计 |
+| `file_size` | 原文件大小，仅用于审计 |
+| `header_size` | 当前固定为 `8` |
+| `stride` | 当前固定为 `76` |
+| `record_count` | 完整记录数 |
+| `tail_bytes` | 尾部余数字节数 |
+| `header_hex` | 8 字节文件头，必须原样写回 |
+| `tail_hex` | 尾部余数字节，必须原样写回 |
+
+#### 5.9.5 已确认可编辑的 `city_state` 连续字段
+
+`city_state` 不是单条记录内字段，而是从城池块起始记录开始，把若干 76 字节记录连续展开为 u16 流后定位。定位方式：
+
+```text
+stream = words(source_record_index) + words(source_record_index+1) + ...
+if stream contains 92:
+    city_id_stream_index = index_of_first_92 + 12
+else:
+    city_id_stream_index = first index where:
+        stream[index] == expected_city_id
+        1 <= stream[index + 4] <= 5
+        500 <= stream[index + 6] <= 5000
+```
+
+字段偏移以 `city_id_stream_index` 为基准，单位是 `u16`：
+
+| Excel 列 | 相对偏移 | 当前含义 | 写回级别 |
+| --- | ---: | --- | --- |
+| `candidate_city_id` | `+0` | 城市 id | 已确认，可编辑但通常不建议改 |
+| `candidate_house_type_or_zero` | `+2` | 房子属性/保留零值候选 | 待验证，默认保留 |
+| `candidate_city_size` | `+4` | 城市规模 | 已确认 |
+| `candidate_population` | `+6` | 当前人口 | 高置信推断 |
+| `candidate_gold` | `+8` | 当前金 | 高置信推断 |
+| `candidate_grain` | `+10` | 当前粮 | 高置信推断 |
+| `candidate_reserved_after_grain` | `+12` | 保留/待命士兵候选 | 待验证 |
+| `candidate_dev` | `+14` | 当前开发 | 高置信推断 |
+| `candidate_commerce` | `+16` | 当前商业 | 高置信推断 |
+| `candidate_security` | `+18` | 当前治安 | 高置信推断 |
+| `candidate_dev_max` | `+20` | 开发上限 | 高置信推断 |
+| `candidate_commerce_max` | `+22` | 商业上限 | 高置信推断 |
+| `candidate_security_max` | `+24` | 治安上限 | 高置信推断 |
+| `candidate_map_x` | `+26` | 地图 X | 已确认 |
+| `candidate_map_y` | `+28` | 地图 Y | 已确认 |
+| `candidate_prefect_general_id_candidate` | `+30` | 太守/城主武将 id 候选 | 高置信推断 |
+
+写回公式：
+
+```text
+stream_index = city_id_stream_index + relative_offset
+absolute_record_index = source_record_index + stream_index // 38
+word_index = stream_index % 38
+byte_offset_in_record = word_index * 2
+records[absolute_record_index][byte_offset_in_record : byte_offset_in_record+2]
+    = u16_le(new_value)
+```
+
+注意：这个公式允许字段跨 76 字节记录边界。旧的“只在单条 `city_92_family` 内 wrap”做法已经废弃。
+
+#### 5.9.6 当前脚本与验证结果
+
+当前互转脚本：
+
+- `tools/export_stg_workbook.py`：导出 `meta`、`raw_records`、层级表、`city_state`、`troop_candidates`。
+- `tools/import_stg_workbook.py`：从 workbook 回写 `.stg`，默认应用 `city_state` 覆盖；可用 `--no-city-state` 只做 raw round-trip。
+
+验证命令与结果：
+
+```powershell
+& $py tools/export_stg_workbook.py . --stage stage01 --out outputs/stg_workbooks/stage01_stg.xlsx
+& $py tools/import_stg_workbook.py outputs/stg_workbooks/stage01_stg.xlsx . --out derived/sidecar_analysis/stg_workbooks/stage01_from_workbook.stg --compare-with 三国霸业/stage01.stg
+```
+
+未修改工作簿时：
+
+| 模式 | 结果 |
+| --- | --- |
+| 默认应用 `city_state` | 与原 `stage01.stg` 字节完全一致，sha256 `4857f3cddcae71bb807379d27175d6a23c97410013e27f3fdf1e215099c281e0` |
+| `--no-city-state` | 与原 `stage01.stg` 字节完全一致，同 sha256 |
+| 烟测：第一个城池人口 `1200 -> 1201` | 仅 1 个字节变化，偏移 `0x1A4`，符合 little-endian u16 覆盖预期 |
+
+#### 5.9.7 暂不回写的内容
+
+- `troop_candidates` 当前只用于阅读，不进入自动写回字段定义。
+- `hierarchy_records`、`force_city_summary` 用于解释势力/城池/武将/士兵顺序层级，不是重建 `.stg` 的唯一来源。
+- `family_guess`、`text_layout`、`ascii_tokens` 都是导出脚本的分析产物，不应作为二进制格式的硬编码事实。
+
 ## 6. `.evt`：事件/脚本表
 
 当前把 `.evt` 理解为：

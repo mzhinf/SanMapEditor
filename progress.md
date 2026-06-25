@@ -95,3 +95,15 @@
 3. `.evt` 仍未完成字段命名，暂时不能做完整语义编辑器。
 4. `.s/.x` 的写回流程尚未确认，不应贸然生成覆盖。
 5. `acwz` 的完整 footprint / z-order 仍有尾差。
+
+## 2026-06-25 `.stg` Excel 互转收口
+
+- 新增 `.stg` Excel 互转脚本：
+  - `tools/export_stg_workbook.py`：导出 `meta/raw_records/hierarchy_records/force_city_summary/city_state/troop_candidates`。
+  - `tools/import_stg_workbook.py`：从 workbook 回写 `.stg`，默认应用 `city_state`，也支持 `--no-city-state` raw-only 重建。
+- 补充 `docs/FORMAT_NOTES.zh.md` 的 `.stg` 字节级构成与转换脚本契约，写明 header、record、tail、sheet、回写公式和验证结果。
+- 更新 `README.md` 的 `.stg` 互转使用指南。
+- 验证结果：
+  - 默认模式：`stage01_stg.xlsx -> stage01_from_workbook.stg` 与原 `stage01.stg` 字节完全一致。
+  - `--no-city-state`：同样字节完全一致。
+  - 编辑烟测：第一个城池人口 `1200 -> 1201` 后仅 1 个字节变化，偏移 `0x1A4`。
