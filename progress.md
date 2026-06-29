@@ -107,3 +107,10 @@
   - 默认模式：`stage01_stg.xlsx -> stage01_from_workbook.stg` 与原 `stage01.stg` 字节完全一致。
   - `--no-city-state`：同样字节完全一致。
   - 编辑烟测：第一个城池人口 `1200 -> 1201` 后仅 1 个字节变化，偏移 `0x1A4`。
+
+## 2026-06-29 `.stg` Excel 互转测试
+
+- 新增 `tools/test_stg_workbook_roundtrip.py`，用 `unittest` 覆盖 `.stg -> Excel -> .stg` 的核心回归路径。
+- 测试点包括：工作簿必要 sheet 与 meta、默认导入字节一致、raw-only 字节一致、编辑 `city_state.candidate_population` 后只改预期 u16 字段。
+- 修正 `tools/stage_ini_excel_codec.py`：读取/写入 workbook 后显式关闭 openpyxl 句柄，避免 Windows 上测试清理或后续批处理遇到文件锁。
+- 验证命令：`& $py -m unittest tools.test_stg_workbook_roundtrip`，结果 `Ran 4 tests ... OK`。

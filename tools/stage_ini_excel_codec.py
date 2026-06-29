@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import re
@@ -50,23 +50,27 @@ def trim_matrix(values: list[list[object]]) -> list[list[object]]:
 
 def read_workbook_tables(path: Path) -> dict[str, object]:
     workbook = load_workbook(path, data_only=False)
-    sheets: dict[str, dict[str, object]] = {}
-    for worksheet in workbook.worksheets:
-        raw_rows: list[list[object]] = []
-        for row in worksheet.iter_rows(values_only=True):
-            raw_rows.append(list(row))
-        values = trim_matrix(raw_rows)
-        if not values:
-            continue
-        headers = [normalize_excel_value(value) for value in values[0]]
-        rows: list[list[object]] = []
-        for row in values[1:]:
-            padded = list(row)
-            while len(padded) < len(headers):
-                padded.append("")
-            rows.append([normalize_excel_value(value) for value in padded[: len(headers)]])
-        sheets[worksheet.title] = {"headers": headers, "rows": rows}
-    return {"source_xlsx": str(path.resolve()), "sheets": sheets}
+    try:
+        sheets: dict[str, dict[str, object]] = {}
+        for worksheet in workbook.worksheets:
+            raw_rows: list[list[object]] = []
+            for row in worksheet.iter_rows(values_only=True):
+                raw_rows.append(list(row))
+            values = trim_matrix(raw_rows)
+            if not values:
+                continue
+            headers = [normalize_excel_value(value) for value in values[0]]
+            rows: list[list[object]] = []
+            for row in values[1:]:
+                padded = list(row)
+                while len(padded) < len(headers):
+                    padded.append("")
+                rows.append([normalize_excel_value(value) for value in padded[: len(headers)]])
+            sheets[worksheet.title] = {"headers": headers, "rows": rows}
+        return {"source_xlsx": str(path.resolve()), "sheets": sheets}
+    finally:
+        # openpyxl 在 Windows 上会持有 xlsx 句柄；显式关闭，避免测试清理和批处理回写失败。
+        workbook.close()
 
 
 def autosize_columns(worksheet) -> None:
@@ -112,7 +116,11 @@ def write_workbook(path: Path, sheet_payloads: list[dict[str, object]]) -> None:
             worksheet.append(row)
         style_worksheet(worksheet, headers)
     path.parent.mkdir(parents=True, exist_ok=True)
-    workbook.save(path)
+    try:
+        workbook.save(path)
+    finally:
+        # 保存后立即释放 Windows 文件句柄，方便测试和批处理脚本继续移动/删除工作簿。
+        workbook.close()
 
 
 def dump_tables_json(path: Path, payload: dict[str, object]) -> None:

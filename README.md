@@ -213,6 +213,22 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 
 用途：继续检查 `224 / 96 / 92` 锚点归一化后的字段候选值。
 
+
+## 测试
+
+运行 `.stg` 与 Excel 互转回归测试：
+
+```powershell
+& $py -m unittest tools.test_stg_workbook_roundtrip
+```
+
+该测试会临时导出 `stage01.stg` 工作簿，并验证：
+
+- 导出的工作簿包含 `meta/raw_records/city_state/troop_candidates` 等必要 sheet。
+- 默认导入模式能回写出与原 `.stg` 字节完全一致的文件。
+- `--no-city-state` 对应的 raw-only 路径能字节级 round-trip。
+- 修改 `city_state` 中的城池人口后，只覆盖预期的 u16 字段。
+
 ## 文档维护约定
 
 从现在开始，本项目按固定规则维护文档，不再“代码先走、文档补不补看情况”：
