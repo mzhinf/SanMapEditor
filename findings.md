@@ -94,6 +94,21 @@ screen_y = row * 10
 - `stage01.stg -> outputs/stg_workbooks/stage01_stg.xlsx -> derived/sidecar_analysis/stg_workbooks/stage01_from_workbook.stg` 已验证字节完全一致，sha256 为 `4857f3cddcae71bb807379d27175d6a23c97410013e27f3fdf1e215099c281e0`。
 - 修改第一个城池人口 `1200 -> 1201` 的烟测只产生 1 个字节差异，证明 `city_state` 覆盖路径能精准落点。
 
+### 9. 编辑器卡顿主因与当前缓解
+
+当前地图编辑器的卡顿主要来自 3 条热点路径：
+
+- `refreshAfterRecordEdit()` 过去每次只改 1 个 cell，也会调用 `rebuildEditedImage()` 把整张地图三层全部重绘一遍；在大图上这会变成数万到十余万次 `drawImage`。
+- `refreshSide()` 过去每次选中、方向键移动、点击时，都会重新遍历整张 `meta.records` 计算 `acwy/acwz` 的非空数与唯一 id 数。
+- 拖动画布、滚轮缩放、小地图跳转直接在高频事件里 `draw()`，没有 `requestAnimationFrame` 合帧，容易在大图上堆积连续重绘。
+
+当前缓解方案：
+
+- 为 `acwy/acwz` 统计建立缓存，只在字段真正变化时增量更新。
+- 将编辑后的重绘从“全图重建”改为“按脏区域恢复底图 + 重绘局部邻域”。
+- 将拖动、滚轮、重置视图、键盘移动选中格等改为 `scheduleDraw()`，用 `requestAnimationFrame` 合并连续绘制请求。
+- 修正 `paint` 模式点击时的重复刷新：避免 `applyPaint()` 完成后又额外 `refreshSide()/draw()` 一次。
+
 ## 当前高置信推断
 
 ### `.m` 附加字节

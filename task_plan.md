@@ -87,6 +87,7 @@ Phase 7：sidecar 深化逆向与小地图写回准备
 ## 最近完成的里程碑
 
 - `.stg` 已支持 Excel 字节级互转：`stage01.stg -> stage01_stg.xlsx -> stage01.stg` 在未修改时 sha256 完全一致，且 `city_state` 字段烟测可产生有限字节变化。
+- 编辑器已完成一轮性能收口：单格编辑改为局部重绘，拖动/缩放改为 requestAnimationFrame 合帧，侧栏层统计改为缓存。
 
 - 地图渲染已与 `stage11.png` 基本对齐
 - 编辑器已支持本地 `.m` 编辑与 patch 写回复制件

@@ -114,3 +114,11 @@
 - 测试点包括：工作簿必要 sheet 与 meta、默认导入字节一致、raw-only 字节一致、编辑 `city_state.candidate_population` 后只改预期 u16 字段。
 - 修正 `tools/stage_ini_excel_codec.py`：读取/写入 workbook 后显式关闭 openpyxl 句柄，避免 Windows 上测试清理或后续批处理遇到文件锁。
 - 验证命令：`& $py -m unittest tools.test_stg_workbook_roundtrip`，结果 `Ran 4 tests ... OK`。
+
+## 2026-06-30 编辑器性能优化
+
+- 检查 `tools/editor_app.html` 后确认卡顿主因：单格编辑触发全图三层重绘、侧栏统计每次全表扫描、拖动/缩放直接在高频事件中重绘。
+- 编辑器模板新增 `requestAnimationFrame` 合帧绘制、layer stats 缓存、按脏区域局部重绘。
+- `paint` 模式点击不再在 `applyPaint()` 之后重复执行一次 `refreshSide()/draw()`。
+- 已将模板同步复制到现有 `derived/editor/*/editor.html`，当前打开的 `stage11/editor.html` 刷新后即可使用新逻辑。
+- 验证：抽取脚本块后用 `node --check` 通过语法检查。

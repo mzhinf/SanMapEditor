@@ -113,6 +113,7 @@ const state = {
   resources: null,
   resourceByIndex: {},
   drawImages: {},
+  layerStats: {},
   image: null,
   renderCanvas: null,
   renderCtx: null,
@@ -122,6 +123,8 @@ const state = {
   transform: { x: 24, y: 24, scale: 0.8 },
   dragging: false,
   dragStart: null,
+  drawQueued: false,
+  redrawConfig: { maxLeft: 20, maxRight: 40, maxUp: 20, maxDown: 20, colRadius: 2, rowRadius: 2 },
   patches: new Map(),
   originalRecords: null,
   undoStack: [],
@@ -159,7 +162,7 @@ function moveSelected(dx, dy) {
   state.selected = next;
   refreshSide();
   refreshPatches();
-  draw();
+  scheduleDraw();
 }
 function startDrag(ev) {
   canvas.setPointerCapture(ev.pointerId);
@@ -176,6 +179,14 @@ function resizeCanvas() {
   canvas.width = Math.max(1, Math.floor(rect.width * dpr)); canvas.height = Math.max(1, Math.floor(rect.height * dpr)); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const mrect = mini.getBoundingClientRect(); mini.width = Math.max(1, Math.floor(mrect.width * dpr)); mini.height = Math.max(1, Math.floor(mrect.height * dpr)); miniCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw(); drawMinimap();
+}
+function scheduleDraw() {
+  if (state.drawQueued) return;
+  state.drawQueued = true;
+  window.requestAnimationFrame(() => {
+    state.drawQueued = false;
+    draw();
+  });
 }
 function diamondPath(col, row) { const p = cellToWorld(col, row); ctx.beginPath(); ctx.moveTo(p.x + 20, p.y); ctx.lineTo(p.x + 40, p.y + 10); ctx.lineTo(p.x + 20, p.y + 20); ctx.lineTo(p.x, p.y + 10); ctx.closePath(); }
 function draw() {
@@ -200,14 +211,38 @@ function drawMinimap() {
 }
 function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = v; node.append(a, b); } }
 function layerStats(layer) {
-  const fi = fieldIndex(layer);
-  let nonEmpty = 0;
-  const unique = new Set();
-  for (const rec of state.meta.records) {
-    const value = rec[fi];
-    if (value !== -1) { nonEmpty++; unique.add(value); }
+  const stats = state.layerStats[layer];
+  if (!stats) return '-';
+  return `${stats.nonEmpty} cells / ${stats.counts.size} ids`;
+}
+function rebuildLayerStats() {
+  state.layerStats = {};
+  for (const layer of state.meta.editableLayers) {
+    const fi = fieldIndex(layer);
+    const counts = new Map();
+    let nonEmpty = 0;
+    for (const rec of state.meta.records) {
+      const value = rec[fi];
+      if (value === -1) continue;
+      nonEmpty++;
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+    state.layerStats[layer] = { nonEmpty, counts };
   }
-  return `${nonEmpty} cells / ${unique.size} ids`;
+}
+function updateLayerStats(field, before, after) {
+  const stats = state.layerStats[field];
+  if (!stats || before === after) return;
+  if (before !== -1) {
+    const next = (stats.counts.get(before) || 0) - 1;
+    stats.nonEmpty--;
+    if (next > 0) stats.counts.set(before, next);
+    else stats.counts.delete(before);
+  }
+  if (after !== -1) {
+    stats.nonEmpty++;
+    stats.counts.set(after, (stats.counts.get(after) || 0) + 1);
+  }
 }
 function nearbyValues(cell, layer, radius = 3, limit = 5) {
   const fi = fieldIndex(layer);
@@ -223,6 +258,39 @@ function nearbyValues(cell, layer, radius = 3, limit = 5) {
   }
   hits.sort((a, b) => a.dist - b.dist || a.row - b.row || a.col - b.col);
   return hits.slice(0, limit).map(h => `${h.value} @ ${h.col},${h.row}`).join(' | ') || '-';
+}
+function safeAnchor(value) {
+  return Number.isFinite(value) && value >= 0 && value <= 512 ? value : 0;
+}
+function recomputeRedrawConfig() {
+  let maxLeft = 20;
+  let maxRight = 40;
+  let maxUp = 20;
+  let maxDown = 20;
+  for (const layer of state.meta.editableLayers) {
+    for (const entry of state.resources.layers[layer]?.entries || []) {
+      const draw = entry.draw;
+      if (!draw) continue;
+      const sw = draw[2] || 0;
+      const sh = draw[3] || 0;
+      if (layer === 'acwz') {
+        const xa = safeAnchor(entry.xAnchor);
+        const ya = safeAnchor(entry.yAnchor);
+        maxLeft = Math.max(maxLeft, Math.max(0, xa - 20));
+        maxRight = Math.max(maxRight, Math.max(40, 20 - xa + sw));
+        maxUp = Math.max(maxUp, Math.max(0, ya - 20));
+        maxDown = Math.max(maxDown, Math.max(20, 20 - ya + sh));
+      } else {
+        maxRight = Math.max(maxRight, 40);
+        maxDown = Math.max(maxDown, 20);
+      }
+    }
+  }
+  state.redrawConfig = {
+    maxLeft, maxRight, maxUp, maxDown,
+    colRadius: Math.ceil((maxLeft + maxRight) / 40) + 2,
+    rowRadius: Math.ceil((maxUp + maxDown) / 10) + 2,
+  };
 }
 function refreshSide() {
   const m = state.meta; setPairs(els.stageInfo, [['Stage', m.stage], ['Cells', `${m.width} x ${m.height}`], ['Layout', m.layout], ['Palette', m.palette], ['acwy', layerStats('acwy')], ['acwz', layerStats('acwz')]]);
@@ -307,7 +375,7 @@ function drawResource(layer, value, col, row, targetCtx) {
   }
   targetCtx.drawImage(atlas, sx, sy, sw, sh, dx, dy, sw, sh);
 }
-function rebuildEditedImage() {
+function rebuildEditedImage(cells = null) {
   if (!state.resources || !state.meta) return;
   const size = canvasSizeForMeta();
   if (!state.renderCanvas || state.renderCanvas.width !== size.width || state.renderCanvas.height !== size.height) {
@@ -317,23 +385,69 @@ function rebuildEditedImage() {
     state.renderCtx = state.renderCanvas.getContext('2d');
   }
   const rctx = state.renderCtx;
-  rctx.clearRect(0, 0, state.renderCanvas.width, state.renderCanvas.height);
   rctx.imageSmoothingEnabled = false;
-  for (let row = 0; row < state.meta.height; row++) {
-    for (let col = 0; col < state.meta.width; col++) {
-      drawResource('acwx', state.meta.records[row * state.meta.width + col][fieldIndex('acwx')], col, row, rctx);
+  if (!cells || !cells.length) {
+    rctx.clearRect(0, 0, state.renderCanvas.width, state.renderCanvas.height);
+    for (let row = 0; row < state.meta.height; row++) {
+      for (let col = 0; col < state.meta.width; col++) {
+        drawResource('acwx', state.meta.records[row * state.meta.width + col][fieldIndex('acwx')], col, row, rctx);
+      }
+    }
+    for (let row = 0; row < state.meta.height; row++) {
+      for (let col = 0; col < state.meta.width; col++) {
+        drawResource('acwy', state.meta.records[row * state.meta.width + col][fieldIndex('acwy')], col, row, rctx);
+      }
+    }
+    for (let row = 0; row < state.meta.height; row++) {
+      for (let col = 0; col < state.meta.width; col++) {
+        drawResource('acwz', state.meta.records[row * state.meta.width + col][fieldIndex('acwz')], col, row, rctx);
+      }
+    }
+    return;
+  }
+  const { maxLeft, maxRight, maxUp, maxDown, colRadius, rowRadius } = state.redrawConfig;
+  let dirtyLeft = state.renderCanvas.width;
+  let dirtyTop = state.renderCanvas.height;
+  let dirtyRight = 0;
+  let dirtyBottom = 0;
+  let minCol = state.meta.width;
+  let maxCol = 0;
+  let minRow = state.meta.height;
+  let maxRow = 0;
+  for (const cell of cells) {
+    const p = cellToWorld(cell.col, cell.row);
+    dirtyLeft = Math.min(dirtyLeft, p.x - maxLeft);
+    dirtyTop = Math.min(dirtyTop, p.y - maxUp);
+    dirtyRight = Math.max(dirtyRight, p.x + maxRight);
+    dirtyBottom = Math.max(dirtyBottom, p.y + maxDown);
+    minCol = Math.min(minCol, cell.col - colRadius);
+    maxCol = Math.max(maxCol, cell.col + colRadius);
+    minRow = Math.min(minRow, cell.row - rowRadius);
+    maxRow = Math.max(maxRow, cell.row + rowRadius);
+  }
+  const sx = Math.max(0, Math.floor(dirtyLeft));
+  const sy = Math.max(0, Math.floor(dirtyTop));
+  const sw = Math.max(1, Math.ceil(Math.min(state.renderCanvas.width, dirtyRight) - sx));
+  const sh = Math.max(1, Math.ceil(Math.min(state.renderCanvas.height, dirtyBottom) - sy));
+  minCol = Math.max(0, minCol);
+  minRow = Math.max(0, minRow);
+  maxCol = Math.min(state.meta.width - 1, maxCol);
+  maxRow = Math.min(state.meta.height - 1, maxRow);
+  rctx.clearRect(sx, sy, sw, sh);
+  rctx.drawImage(state.image, sx, sy, sw, sh, sx, sy, sw, sh);
+  rctx.save();
+  rctx.beginPath();
+  rctx.rect(sx, sy, sw, sh);
+  rctx.clip();
+  for (const layer of ['acwx', 'acwy', 'acwz']) {
+    const fi = fieldIndex(layer);
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        drawResource(layer, state.meta.records[row * state.meta.width + col][fi], col, row, rctx);
+      }
     }
   }
-  for (let row = 0; row < state.meta.height; row++) {
-    for (let col = 0; col < state.meta.width; col++) {
-      drawResource('acwy', state.meta.records[row * state.meta.width + col][fieldIndex('acwy')], col, row, rctx);
-    }
-  }
-  for (let row = 0; row < state.meta.height; row++) {
-    for (let col = 0; col < state.meta.width; col++) {
-      drawResource('acwz', state.meta.records[row * state.meta.width + col][fieldIndex('acwz')], col, row, rctx);
-    }
-  }
+  rctx.restore();
 }
 function syncPatchFor(cell, field) {
   const fi = fieldIndex(field);
@@ -344,12 +458,12 @@ function syncPatchFor(cell, field) {
   if (before === after) state.patches.delete(key);
   else state.patches.set(key, { x: cell.col, y: cell.row, field, before, after, minimapDirty: true });
 }
-function refreshAfterRecordEdit(cell = null) {
+function refreshAfterRecordEdit(cell = null, editedCells = null) {
   if (cell) state.selected = cell;
-  rebuildEditedImage();
+  rebuildEditedImage(editedCells);
   refreshSide();
   refreshPatches();
-  draw();
+  scheduleDraw();
 }
 function applyChangeSet(changes) {
   const applied = [];
@@ -362,13 +476,15 @@ function applyChangeSet(changes) {
     const after = change.after;
     if (before === after) continue;
     rec[fi] = after;
+    updateLayerStats(change.field, before, after);
     syncPatchFor(cell, change.field);
     applied.push({ x: change.x, y: change.y, field: change.field, before, after });
   }
   if (!applied.length) return false;
   state.undoStack.push(applied);
   const last = applied[applied.length - 1];
-  refreshAfterRecordEdit({ col: last.x, row: last.y });
+  const editedCells = [...new Map(applied.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell);
+  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells);
   return true;
 }
 function undoLastEdit() {
@@ -377,11 +493,15 @@ function undoLastEdit() {
   for (const change of [...changes].reverse()) {
     const cell = { col: change.x, row: change.y };
     const fi = fieldIndex(change.field);
-    recordAt(cell)[fi] = change.before;
+    const rec = recordAt(cell);
+    const after = rec[fi];
+    rec[fi] = change.before;
+    updateLayerStats(change.field, after, change.before);
     syncPatchFor(cell, change.field);
   }
   const last = changes[changes.length - 1];
-  refreshAfterRecordEdit({ col: last.x, row: last.y });
+  const editedCells = [...new Map(changes.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell);
+  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells);
 }
 function resetSelectedLayerChange() {
   if (!state.selected) return;
@@ -408,6 +528,8 @@ function resetEditState(meta) {
   state.transform = { x: 24, y: 24, scale: 0.8 };
   els.title.textContent = meta.stage;
   for (const layer of meta.editableLayers) { state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null; }
+  rebuildLayerStats();
+  recomputeRedrawConfig();
   rebuildEditedImage();
   refreshSide();
   refreshPatches();
@@ -481,25 +603,28 @@ canvas.addEventListener('pointerdown', ev => {
   const cell = worldToCell(world.x, world.y);
   if (!cell) return;
   state.selected = cell;
-  if (els.tool.value === 'paint') applyPaint(cell);
+  if (els.tool.value === 'paint') {
+    applyPaint(cell);
+    return;
+  }
   refreshSide();
-  draw();
+  scheduleDraw();
 });
 canvas.addEventListener('pointermove', ev => {
   if (!state.dragging || !state.dragStart || ev.pointerId !== state.dragStart.pointerId) return;
   state.transform.x = state.dragStart.tx + ev.clientX - state.dragStart.x;
   state.transform.y = state.dragStart.ty + ev.clientY - state.dragStart.y;
-  draw();
+  scheduleDraw();
 });
 canvas.addEventListener('pointerup', ev => { stopDrag(ev); });
 canvas.addEventListener('pointercancel', ev => { stopDrag(ev); });
 canvas.addEventListener('lostpointercapture', ev => { stopDrag(ev); });
-canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; draw(); }, { passive: false });
-mini.addEventListener('pointerdown', ev => { const image = displayImage(); if (!image) return; const source = state.minimap || image; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / source.width, rect.height / source.height); const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * image.width; const y = (ev.clientY - rect.top - oy) / h * image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; draw(); });
+canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; scheduleDraw(); }, { passive: false });
+mini.addEventListener('pointerdown', ev => { const image = displayImage(); if (!image) return; const source = state.minimap || image; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / source.width, rect.height / source.height); const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * image.width; const y = (ev.clientY - rect.top - oy) / h * image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; scheduleDraw(); });
 els.openMFile.addEventListener('click', () => { els.loadMFile.click(); });
 els.loadMFile.addEventListener('change', () => { loadLocalMFile(els.loadMFile.files?.[0]); els.loadMFile.value = ''; });
 els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
-document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; draw(); });
+document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; scheduleDraw(); });
 els.undoEdit.addEventListener('click', undoLastEdit);
 els.resetCell.addEventListener('click', resetSelectedLayerChange);
 els.resetAll.addEventListener('click', resetAllChanges);
