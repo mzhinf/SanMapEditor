@@ -1,103 +1,110 @@
-# Task Plan: 三国霸业地图编辑器逆向
+﻿# Task Plan: 涓夊浗闇镐笟鍦板浘缂栬緫鍣ㄩ€嗗悜
 
-## 目标
+## 鐩爣
 
-解析《三国霸业》的地图与关卡数据格式，完成：
+瑙ｆ瀽銆婁笁鍥介湼涓氥€嬬殑鍦板浘涓庡叧鍗℃暟鎹牸寮忥紝瀹屾垚锛?
 
-1. 地图真实渲染
-2. 地图编辑器原型
-3. `stage.ini` 与 Excel 的可回写链路
-4. 继续补齐 `.stg/.evt/.s/.x` 的语义与写回能力
+1. 鍦板浘鐪熷疄娓叉煋
+2. 鍦板浘缂栬緫鍣ㄥ師鍨?
+3. `stage.ini` 涓?Excel 鐨勫彲鍥炲啓閾捐矾
+4. 缁х画琛ラ綈 `.stg/.evt/.s/.x` 鐨勮涔変笌鍐欏洖鑳藉姏
 
-## 当前阶段
+## 褰撳墠闃舵
 
-Phase 7：sidecar 深化逆向与小地图写回准备
+Phase 7锛歴idecar 娣卞寲閫嗗悜涓庡皬鍦板浘鍐欏洖鍑嗗
 
-## 阶段状态
+## 闃舵鐘舵€?
 
-### Phase 1：资源盘点与地图主表识别
-- [x] 识别 `stageNN.*`、`kingdom.cel/.atr`、DAT 容器、`Emperor.exe`
-- [x] 确认 `.m` 为固定 16 字节 cell 记录表
-- [x] 建立初版格式笔记
+### Phase 1锛氳祫婧愮洏鐐逛笌鍦板浘涓昏〃璇嗗埆
+- [x] 璇嗗埆 `stageNN.*`銆乣kingdom.cel/.atr`銆丏AT 瀹瑰櫒銆乣Emperor.exe`
+- [x] 纭 `.m` 涓哄浐瀹?16 瀛楄妭 cell 璁板綍琛?
+- [x] 寤虹珛鍒濈増鏍煎紡绗旇
 
-### Phase 2：地图渲染恢复
-- [x] 从 `kingdom.cel/.atr` 恢复 `acwx/acwy/acwz`
-- [x] 从 `Emperor.exe` 确认 stagger world-to-screen 变换
-- [x] 生成与真实游戏画面接近的地图渲染图
+### Phase 2锛氬湴鍥炬覆鏌撴仮澶?
+- [x] 浠?`kingdom.cel/.atr` 鎭㈠ `acwx/acwy/acwz`
+- [x] 浠?`Emperor.exe` 纭 stagger world-to-screen 鍙樻崲
+- [x] 鐢熸垚涓庣湡瀹炴父鎴忕敾闈㈡帴杩戠殑鍦板浘娓叉煋鍥?
 
-### Phase 3：编辑器原型
-- [x] 浏览地图
+### Phase 3锛氱紪杈戝櫒鍘熷瀷
+- [x] 娴忚鍦板浘
 - [x] Inspect / Paint
-- [x] 本地 `.m` 加载
-- [x] 右键拖动视角
-- [x] 方向键移动选中 cell
-- [x] `Ctrl+Z`、`Reset cell`、`Reset all`
-- [x] 导出 JSON patch
-- [x] 安全写回复制后的 `.m`
+- [x] 鏈湴 `.m` 鍔犺浇
+- [x] 鍙抽敭鎷栧姩瑙嗚
+- [x] 鏂瑰悜閿Щ鍔ㄩ€変腑 cell
+- [x] `Ctrl+Z`銆乣Reset cell`銆乣Reset all`
+- [x] 瀵煎嚭 JSON patch
+- [x] 瀹夊叏鍐欏洖澶嶅埗鍚庣殑 `.m`
 
-### Phase 4：`stage.ini` 结构化导出与回写
-- [x] 导出 `stage.ini` JSON
-- [x] 回写字节级一致的 `stage.ini`
-- [x] 导出分析版 Excel
-- [x] 导出纯转换版 Excel
-- [x] 从纯转换版 Excel 回写字节级一致的 `stage.ini`
+### Phase 4锛歚stage.ini` 缁撴瀯鍖栧鍑轰笌鍥炲啓
+- [x] 瀵煎嚭 `stage.ini` JSON
+- [x] 鍥炲啓瀛楄妭绾т竴鑷寸殑 `stage.ini`
+- [x] 瀵煎嚭鍒嗘瀽鐗?Excel
+- [x] 瀵煎嚭绾浆鎹㈢増 Excel
+- [x] 浠庣函杞崲鐗?Excel 鍥炲啓瀛楄妭绾т竴鑷寸殑 `stage.ini`
 
-### Phase 5：`uft8-game-txt` 与 `stage.ini` 映射
-- [x] 建立 `general/castle/magic/soldier/history` 链接关系
-- [x] 确认 `general/castle/magic/soldier` 的稳定 dword 步长
-- [x] 区分分析版与转换版工作簿
-- [x] 补上 trailer row 分类
+### Phase 5锛歚uft8-game-txt` 涓?`stage.ini` 鏄犲皠
+- [x] 寤虹珛 `general/castle/magic/soldier/history` 閾炬帴鍏崇郴
+- [x] 纭 `general/castle/magic/soldier` 鐨勭ǔ瀹?dword 姝ラ暱
+- [x] 鍖哄垎鍒嗘瀽鐗堜笌杞崲鐗堝伐浣滅翱
+- [x] 琛ヤ笂 trailer row 鍒嗙被
 
-### Phase 6：文档收口与流程固化
-- [x] 重写 `README.md`，移除乱码与失效说明
-- [x] 重写 `docs/FORMAT_NOTES.zh.md`，保留有效结论并单列 `stage.ini`
-- [x] 建立明确的文档维护约定
-- [x] 同步更新 `task_plan.md` / `findings.md` / `progress.md`
+### Phase 6锛氭枃妗ｆ敹鍙ｄ笌娴佺▼鍥哄寲
+- [x] 閲嶅啓 `README.md`锛岀Щ闄や贡鐮佷笌澶辨晥璇存槑
+- [x] 閲嶅啓 `docs/FORMAT_NOTES.zh.md`锛屼繚鐣欐湁鏁堢粨璁哄苟鍗曞垪 `stage.ini`
+- [x] 寤虹珛鏄庣‘鐨勬枃妗ｇ淮鎶ょ害瀹?
+- [x] 鍚屾鏇存柊 `task_plan.md` / `findings.md` / `progress.md`
 
-### Phase 7：下一步逆向重点
-- [x] 确认 `stage01.stg city_92_family.n12 -> city_id`，并可通过 `castle.txt / stage.ini` 反查坐标
-- [x] 确认 `stage01.stg city_92_family.n16 -> city_size`
-- [x] 导出 `.stg` 原始记录链，确认不能跳过无文本记录
-- [x] 按顺序恢复 `stage01.stg` 的势力/城池/武将/士兵层级
-- [x] 导出 `.stg` 城池状态与士兵记录候选表
-- [x] 确认城池块内人口、金、粮、开发、商业、治安、上限、坐标、太守候选字段
-- [x] 确认 `.stg` 字节级回写规则，并完成 Excel round-trip 脚本
-- [ ] 命名士兵记录中的数量、等级、兵种 id 字段
-- [ ] 确认 `.evt` 的对象/坐标/目标引用方式
-- [ ] 继续从 `Emperor.exe` 确认 `.s/.x` 的真实生成与读取路径
+### Phase 7锛氫笅涓€姝ラ€嗗悜閲嶇偣
+- [x] 纭 `stage01.stg city_92_family.n12 -> city_id`锛屽苟鍙€氳繃 `castle.txt / stage.ini` 鍙嶆煡鍧愭爣
+- [x] 纭 `stage01.stg city_92_family.n16 -> city_size`
+- [x] 瀵煎嚭 `.stg` 鍘熷璁板綍閾撅紝纭涓嶈兘璺宠繃鏃犳枃鏈褰?
+- [x] 鎸夐『搴忔仮澶?`stage01.stg` 鐨勫娍鍔?鍩庢睜/姝﹀皢/澹叺灞傜骇
+- [x] 瀵煎嚭 `.stg` 鍩庢睜鐘舵€佷笌澹叺璁板綍鍊欓€夎〃
+- [x] 纭鍩庢睜鍧楀唴浜哄彛銆侀噾銆佺伯銆佸紑鍙戙€佸晢涓氥€佹不瀹夈€佷笂闄愩€佸潗鏍囥€佸お瀹堝€欓€夊瓧娈?
+- [x] 纭 `.stg` 瀛楄妭绾у洖鍐欒鍒欙紝骞跺畬鎴?Excel round-trip 鑴氭湰
+- [ ] 鍛藉悕澹叺璁板綍涓殑鏁伴噺銆佺瓑绾с€佸叺绉?id 瀛楁
+- [ ] 纭 `.evt` 鐨勫璞?鍧愭爣/鐩爣寮曠敤鏂瑰紡
+- [ ] 缁х画浠?`Emperor.exe` 纭 `.s/.x` 鐨勭湡瀹炵敓鎴愪笌璇诲彇璺緞
 
-## 最高优先级问题
+## 鏈€楂樹紭鍏堢骇闂
 
-1. `.stg` 城池状态字段能否安全写回，以及是否需要同步其他续记录
-2. 士兵记录中的数量、等级、兵种 id 字段如何命名
-3. `.evt` 怎样引用地图对象与全局 id
-4. `.s/.x` 是否必须与 `.m` 联动回写
-5. `.m.byte08/09/10/11` 的最终语义
-6. `acwz` 的完整 footprint / z-order
+1. `.stg` 鍩庢睜鐘舵€佸瓧娈佃兘鍚﹀畨鍏ㄥ啓鍥烇紝浠ュ強鏄惁闇€瑕佸悓姝ュ叾浠栫画璁板綍
+2. 澹叺璁板綍涓殑鏁伴噺銆佺瓑绾с€佸叺绉?id 瀛楁濡備綍鍛藉悕
+3. `.evt` 鎬庢牱寮曠敤鍦板浘瀵硅薄涓庡叏灞€ id
+4. `.s/.x` 鏄惁蹇呴』涓?`.m` 鑱斿姩鍥炲啓
+5. `.m.byte08/09/10/11` 鐨勬渶缁堣涔?
+6. `acwz` 鐨勫畬鏁?footprint / z-order
 
-## 当前决策
+## 褰撳墠鍐崇瓥
 
-| 决策 | 原因 |
+| 鍐崇瓥 | 鍘熷洜 |
 | --- | --- |
-| 地图编辑仍以 `.m` 16 字节完整记录为主 | 未解字段不能丢，否则无法安全回写 |
-| `stage.ini` 通过 `raw_hex` 保底回写 | 可最大限度保留未知字节 |
-| Phase 7 以 `.stg` 原始顺序层级作为 owner 主线 | `stage01` 已验证势力/城池/武将/士兵块结构，旧 `slot` 线索已降级 |
-| 文档必须与代码同轮更新 | 当前项目已经证明，不写文档会快速积累错误与乱码 |
+| 鍦板浘缂栬緫浠嶄互 `.m` 16 瀛楄妭瀹屾暣璁板綍涓轰富 | 鏈В瀛楁涓嶈兘涓紝鍚﹀垯鏃犳硶瀹夊叏鍥炲啓 |
+| `stage.ini` 閫氳繃 `raw_hex` 淇濆簳鍥炲啓 | 鍙渶澶ч檺搴︿繚鐣欐湭鐭ュ瓧鑺?|
+| Phase 7 浠?`.stg` 鍘熷椤哄簭灞傜骇浣滀负 owner 涓荤嚎 | `stage01` 宸查獙璇佸娍鍔?鍩庢睜/姝﹀皢/澹叺鍧楃粨鏋勶紝鏃?`slot` 绾跨储宸查檷绾?|
+| 鏂囨。蹇呴』涓庝唬鐮佸悓杞洿鏂?| 褰撳墠椤圭洰宸茬粡璇佹槑锛屼笉鍐欐枃妗ｄ細蹇€熺Н绱敊璇笌涔辩爜 |
 
-## 最近完成的里程碑
+## 鏈€杩戝畬鎴愮殑閲岀▼纰?
 
-- `.stg` 已支持 Excel 字节级互转：`stage01.stg -> stage01_stg.xlsx -> stage01.stg` 在未修改时 sha256 完全一致，且 `city_state` 字段烟测可产生有限字节变化。
-- 编辑器已完成一轮性能收口：单格编辑改为局部重绘，拖动/缩放改为 requestAnimationFrame 合帧，侧栏层统计改为缓存。
+- `.stg` 宸叉敮鎸?Excel 瀛楄妭绾т簰杞細`stage01.stg -> stage01_stg.xlsx -> stage01.stg` 鍦ㄦ湭淇敼鏃?sha256 瀹屽叏涓€鑷达紝涓?`city_state` 瀛楁鐑熸祴鍙骇鐢熸湁闄愬瓧鑺傚彉鍖栥€?
+- 缂栬緫鍣ㄥ凡瀹屾垚涓€杞€ц兘鏀跺彛锛氬崟鏍肩紪杈戞敼涓哄眬閮ㄩ噸缁橈紝鎷栧姩/缂╂斁鏀逛负 requestAnimationFrame 鍚堝抚锛屼晶鏍忓眰缁熻鏀逛负缂撳瓨銆?
 
-- 地图渲染已与 `stage11.png` 基本对齐
-- 编辑器已支持本地 `.m` 编辑与 patch 写回复制件
-- `stage.ini` 已支持 Python 版 Excel 导出、导入与字节级回写
-- 文档体系已统一清理为 UTF-8 中文基线，并新增强制维护约定
-- `stage01.stg` 已导出原始记录链与层级表，确认可恢复势力/城池/武将/士兵结构
+- 鍦板浘娓叉煋宸蹭笌 `stage11.png` 鍩烘湰瀵归綈
+- 缂栬緫鍣ㄥ凡鏀寔鏈湴 `.m` 缂栬緫涓?patch 鍐欏洖澶嶅埗浠?
+- `stage.ini` 宸叉敮鎸?Python 鐗?Excel 瀵煎嚭銆佸鍏ヤ笌瀛楄妭绾у洖鍐?
+- 鏂囨。浣撶郴宸茬粺涓€娓呯悊涓?UTF-8 涓枃鍩虹嚎锛屽苟鏂板寮哄埗缁存姢绾﹀畾
+- `stage01.stg` 宸插鍑哄師濮嬭褰曢摼涓庡眰绾ц〃锛岀‘璁ゅ彲鎭㈠鍔垮姏/鍩庢睜/姝﹀皢/澹叺缁撴瀯
 
-## 下一步建议执行顺序
+## 涓嬩竴姝ュ缓璁墽琛岄『搴?
 
-1. 先继续拆 `troop_candidates.csv` 中的士兵数量、等级、兵种 id 字段
-2. 基于 `.stg` Excel 互转继续命名士兵数量、等级、兵种 id 字段
-3. 然后做 `.evt` 的坐标/对象引用定位
-4. 最后补 `.s/.x` 的缓存/小地图写回链路
+1. 鍏堢户缁媶 `troop_candidates.csv` 涓殑澹叺鏁伴噺銆佺瓑绾с€佸叺绉?id 瀛楁
+2. 鍩轰簬 `.stg` Excel 浜掕浆缁х画鍛藉悕澹叺鏁伴噺銆佺瓑绾с€佸叺绉?id 瀛楁
+3. 鐒跺悗鍋?`.evt` 鐨勫潗鏍?瀵硅薄寮曠敤瀹氫綅
+4. 鏈€鍚庤ˉ `.s/.x` 鐨勭紦瀛?灏忓湴鍥惧啓鍥為摼璺?
+
+## 2026-06-30 Phase 7 补充
+
+- [x] 确认士兵记录中的兵种 id 编码簇：`t22 = soldier_id`，`t12 = soldier_id + 200`，`t14 = soldier_id + 97`
+- [ ] 继续确认士兵记录中的数量、等级字段，当前重点候选仍是 `t24 / t26 / t32`
+- [ ] 继续拆 `.evt` 的对象 / 坐标 / 目标引用方式
+- [ ] 继续从 `Emperor.exe` 确认 `.s/.x` 的真实生成与读取路径

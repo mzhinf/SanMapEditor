@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -82,7 +82,7 @@ def row_values(row: dict[str, object], headers: list[str]) -> list[object]:
 
 
 def dict_rows_to_sheet(name: str, rows: list[dict[str, object]], preferred_headers: list[str] | None = None) -> dict[str, object]:
-    # Excel 表头保持稳定，未知新增列追加在后面，避免导入脚本依赖的列漂移。
+    # Excel 表头保持稳定，新增字段统一追加到后面，避免导入脚本依赖的列顺序漂移。
     headers = list(preferred_headers or [])
     seen = set(headers)
     for row in rows:
@@ -135,13 +135,13 @@ def build_workbook_sheets(root: Path, stage: str) -> list[dict[str, object]]:
     hierarchy = build_hierarchy(root, stage)
     raw_records = list(raw_payload["records"])
     city_rows = build_city_rows(root, raw_records, hierarchy)
-    troop_rows = build_troop_rows(raw_records, hierarchy)
+    troop_rows = build_troop_rows(root, raw_records, hierarchy)
     header = dict(raw_payload["header"])
 
     notes = [
-        ["用途", "本工作簿用于 stageNN.stg 与 Excel 的字节级互转，并附带当前已确认的城池状态字段编辑表。"],
+        ["用途", "本工作簿用于 stageNN.stg 与 Excel 的字节级互转，并附带当前已确认的城池状态与士兵候选表。"],
         ["回写基准", "导入脚本优先使用 raw_records.raw_hex 重建每条 76 字节记录；未知字节不重算。"],
-        ["可编辑表", "city_state 中 candidate_* 字段可回写到连续 u16 流；troop_candidates 当前只读。"],
+        ["可编辑表", "city_state 中的 candidate_* 字段可回写到连续 u16 流；troop_candidates 当前只读。"],
         ["安全原则", "未确认字段不要删除；raw_records、meta、tail_hex 是 round-trip 所需的保底数据。"],
     ]
     meta_rows = [
@@ -164,7 +164,16 @@ def build_workbook_sheets(root: Path, stage: str) -> list[dict[str, object]]:
         dict_rows_to_sheet("hierarchy_records", list(hierarchy["tables"]["record_chain"])),
         {
             "name": "force_city_summary",
-            "headers": ["force_index", "force_name", "city_index", "city_name", "general_count", "troop_count", "attached_record_count", "role_counts"],
+            "headers": [
+                "force_index",
+                "force_name",
+                "city_index",
+                "city_name",
+                "general_count",
+                "troop_count",
+                "attached_record_count",
+                "role_counts",
+            ],
             "rows": hierarchy_summary_rows(hierarchy),
         },
         dict_rows_to_sheet("city_state", city_rows, CITY_STATE_HEADERS),

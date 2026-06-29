@@ -1,124 +1,135 @@
-# Progress Log
+﻿# Progress Log
 
 ## 2026-06-23
 
-- 盘点游戏目录，确认 `stageNN.*`、`kingdom.cel/.atr`、DAT 容器与 `Emperor.exe` 为核心对象。
-- 确认 `.m` 文件头为 `width + height + Hello1.0`，cell 记录固定 16 字节。
-- 完成 `kingdom.cel/.atr` 的第一轮图层拆解。
-- 恢复基于 `acwx/acwy/acwz` 的真实地图渲染。
-- 从 `Emperor.exe` 收口 `stage11` 所需的 world-to-screen 变换。
-- 建立浏览器地图编辑器原型，支持 Inspect / Paint / 本地 `.m` 加载 / Undo / Reset / patch 导出。
+- 鐩樼偣娓告垙鐩綍锛岀‘璁?`stageNN.*`銆乣kingdom.cel/.atr`銆丏AT 瀹瑰櫒涓?`Emperor.exe` 涓烘牳蹇冨璞°€?
+- 纭 `.m` 鏂囦欢澶翠负 `width + height + Hello1.0`锛宑ell 璁板綍鍥哄畾 16 瀛楄妭銆?
+- 瀹屾垚 `kingdom.cel/.atr` 鐨勭涓€杞浘灞傛媶瑙ｃ€?
+- 鎭㈠鍩轰簬 `acwx/acwy/acwz` 鐨勭湡瀹炲湴鍥炬覆鏌撱€?
+- 浠?`Emperor.exe` 鏀跺彛 `stage11` 鎵€闇€鐨?world-to-screen 鍙樻崲銆?
+- 寤虹珛娴忚鍣ㄥ湴鍥剧紪杈戝櫒鍘熷瀷锛屾敮鎸?Inspect / Paint / 鏈湴 `.m` 鍔犺浇 / Undo / Reset / patch 瀵煎嚭銆?
 
 ## 2026-06-24
 
-- 补齐编辑器资源面板、即时重绘、右键拖动地图、方向键移动选中格。
-- 完成安全 patch -> `.m` 复制写回脚本。
-- 建立 `.stg/.evt/.spr/.dor/.s/.x` 的第一轮 sidecar 分析脚本与工作簿导出。
-- 修复 `docs/FORMAT_NOTES.zh.md` 中的中文编码污染一次，但后续又发现其余文档仍有残留污染。
-- 确认 `stage.ini` 可导出 JSON / Excel，并可从 JSON 回写字节级一致文件。
+- 琛ラ綈缂栬緫鍣ㄨ祫婧愰潰鏉裤€佸嵆鏃堕噸缁樸€佸彸閿嫋鍔ㄥ湴鍥俱€佹柟鍚戦敭绉诲姩閫変腑鏍笺€?
+- 瀹屾垚瀹夊叏 patch -> `.m` 澶嶅埗鍐欏洖鑴氭湰銆?
+- 寤虹珛 `.stg/.evt/.spr/.dor/.s/.x` 鐨勭涓€杞?sidecar 鍒嗘瀽鑴氭湰涓庡伐浣滅翱瀵煎嚭銆?
+- 淇 `docs/FORMAT_NOTES.zh.md` 涓殑涓枃缂栫爜姹℃煋涓€娆★紝浣嗗悗缁張鍙戠幇鍏朵綑鏂囨。浠嶆湁娈嬬暀姹℃煋銆?
+- 纭 `stage.ini` 鍙鍑?JSON / Excel锛屽苟鍙粠 JSON 鍥炲啓瀛楄妭绾т竴鑷存枃浠躲€?
 
 ## 2026-06-25
 
-- 重做 `uft8-game-txt` 与 `stage.ini` 的关联方式，改为基于原始 dword 流，而不是先信任 `family_guess`。
-- 确认当前稳定映射：
-  - `general.txt`：步长 `57 dwords`
-  - `castle.txt`：步长 `25 dwords`
-  - `magic.txt`：步长 `19 dwords`
-  - `soldier.txt`：步长 `20 dwords`
-- 区分分析版工作簿与纯转换版工作簿。
-- 新增纯 Python 的 Excel 导出、导入、回写链路：
+- 閲嶅仛 `uft8-game-txt` 涓?`stage.ini` 鐨勫叧鑱旀柟寮忥紝鏀逛负鍩轰簬鍘熷 dword 娴侊紝鑰屼笉鏄厛淇′换 `family_guess`銆?
+- 纭褰撳墠绋冲畾鏄犲皠锛?
+  - `general.txt`锛氭闀?`57 dwords`
+  - `castle.txt`锛氭闀?`25 dwords`
+  - `magic.txt`锛氭闀?`19 dwords`
+  - `soldier.txt`锛氭闀?`20 dwords`
+- 鍖哄垎鍒嗘瀽鐗堝伐浣滅翱涓庣函杞崲鐗堝伐浣滅翱銆?
+- 鏂板绾?Python 鐨?Excel 瀵煎嚭銆佸鍏ャ€佸洖鍐欓摼璺細
   - `tools/export_stage_ini_txt_workbook.py`
   - `tools/import_stage_ini_txt_workbook.py`
   - `tools/build_stage_ini_from_txt_workbook.py`
-- 修复 Python 导出 `xlsx` 时的非法 XML 控制字符问题。
-- 验证结果：
-  - `stage_ini_linked_tables.xlsx` 可由 Python 正常导出
-  - `stage_ini_conversion_tables.xlsx` 可由 Python 正常导出
-  - 未修改的 `stage_ini_conversion_tables.xlsx` 可回写为与原始 `stage.ini` 完全一致的新文件
+- 淇 Python 瀵煎嚭 `xlsx` 鏃剁殑闈炴硶 XML 鎺у埗瀛楃闂銆?
+- 楠岃瘉缁撴灉锛?
+  - `stage_ini_linked_tables.xlsx` 鍙敱 Python 姝ｅ父瀵煎嚭
+  - `stage_ini_conversion_tables.xlsx` 鍙敱 Python 姝ｅ父瀵煎嚭
+  - 鏈慨鏀圭殑 `stage_ini_conversion_tables.xlsx` 鍙洖鍐欎负涓庡師濮?`stage.ini` 瀹屽叏涓€鑷寸殑鏂版枃浠?
   - `sha256 = 29584de26770323a09849d180331d936e9c112f55936d76b08f4f6f6a63663b8`
-- 新增并修正 `.stg` 导出链路：
-  - `tools/export_stg_phase7_links.py`：保留旧版 `224 / 96 / 92` 字段归一化对照。
-  - `tools/export_stg_raw_chain.py`：直接按原始 76 字节 stride 导出完整记录链，不再跳过无文本记录。
-  - `tools/export_stg_hierarchy.py`：按原始顺序恢复势力/城池/武将/士兵层级。
-- 导出 `stage01` 新产物：
+- 鏂板骞朵慨姝?`.stg` 瀵煎嚭閾捐矾锛?
+  - `tools/export_stg_phase7_links.py`锛氫繚鐣欐棫鐗?`224 / 96 / 92` 瀛楁褰掍竴鍖栧鐓с€?
+  - `tools/export_stg_raw_chain.py`锛氱洿鎺ユ寜鍘熷 76 瀛楄妭 stride 瀵煎嚭瀹屾暣璁板綍閾撅紝涓嶅啀璺宠繃鏃犳枃鏈褰曘€?
+  - `tools/export_stg_hierarchy.py`锛氭寜鍘熷椤哄簭鎭㈠鍔垮姏/鍩庢睜/姝﹀皢/澹叺灞傜骇銆?
+- 瀵煎嚭 `stage01` 鏂颁骇鐗╋細
   - `derived/sidecar_analysis/raw_chain/stage01/stg_raw_chain.json`
   - `derived/sidecar_analysis/raw_chain/stage01/stg_raw_chain.csv`
   - `derived/sidecar_analysis/hierarchy/stage01/stg_hierarchy.json`
   - `derived/sidecar_analysis/hierarchy/stage01/stg_hierarchy_records.csv`
   - `derived/sidecar_analysis/hierarchy/stage01/stg_force_city_summary.csv`
-- `stage01.stg` 当前验证结果：
-  - 文件为 8 字节头、2502 条完整 76 字节记录、48 字节尾部。
-  - 层级导出得到 10 个势力/特殊块、38 个城池块、86 条武将记录、42 条士兵记录。
-  - 可读结构例子：`劉備 -> 平原`、`曹操 -> 陳留`、`孫堅 -> 長沙`、`劉表 -> 襄陽/江夏/江陵`、`中立國 -> 襄平/北平/薊/...`。
-  - `city_92_family` 仍有 20 条记录全部对上 `castle.txt` 的 `city_id / city_size`。
-  - `context_prev_slot / context_next_slot / context_owner_slot_consensus` 已降级为旧版排查线索，不再当作 owner 结论。
-- 新增 `tools/export_stg_city_troop_analysis.py`，导出城池状态字段与士兵记录候选表：
+- `stage01.stg` 褰撳墠楠岃瘉缁撴灉锛?
+  - 鏂囦欢涓?8 瀛楄妭澶淬€?502 鏉″畬鏁?76 瀛楄妭璁板綍銆?8 瀛楄妭灏鹃儴銆?
+  - 灞傜骇瀵煎嚭寰楀埌 10 涓娍鍔?鐗规畩鍧椼€?8 涓煄姹犲潡銆?6 鏉℃灏嗚褰曘€?2 鏉″＋鍏佃褰曘€?
+  - 鍙缁撴瀯渚嬪瓙锛歚鍔夊倷 -> 骞冲師`銆乣鏇规搷 -> 闄崇暀`銆乣瀛爡 -> 闀锋矙`銆乣鍔夎〃 -> 瑗勯櫧/姹熷/姹熼櫟`銆乣涓珛鍦?-> 瑗勫钩/鍖楀钩/钖?...`銆?
+  - `city_92_family` 浠嶆湁 20 鏉¤褰曞叏閮ㄥ涓?`castle.txt` 鐨?`city_id / city_size`銆?
+  - `context_prev_slot / context_next_slot / context_owner_slot_consensus` 宸查檷绾т负鏃х増鎺掓煡绾跨储锛屼笉鍐嶅綋浣?owner 缁撹銆?
+- 鏂板 `tools/export_stg_city_troop_analysis.py`锛屽鍑哄煄姹犵姸鎬佸瓧娈典笌澹叺璁板綍鍊欓€夎〃锛?
   - `derived/sidecar_analysis/city_troop/stage01/stg_city_troop_candidates.json`
   - `derived/sidecar_analysis/city_troop/stage01/city_state_candidates.csv`
   - `derived/sidecar_analysis/city_troop/stage01/troop_candidates.csv`
-- `stage01.stg` 城池状态字段验证结果：
-  - `city_id / city_size / map_x / map_y` 全部 38/38 对齐 `castle.txt`。
-  - `city_id+6/+8/+10` 高置信对应当前人口/金/粮。
-  - `city_id+14/+16/+18` 高置信对应开发/商业/治安。
-  - `city_id+20/+22/+24` 高置信对应三项上限。
-  - `city_id+30` 是太守/城主武将 id 候选，23 条能映射 `History.txt`，其中 22 条在本城武将列表内。
-  - 42 条士兵记录已挂回城池，但数量/等级字段仍未最终命名。
+- `stage01.stg` 鍩庢睜鐘舵€佸瓧娈甸獙璇佺粨鏋滐細
+  - `city_id / city_size / map_x / map_y` 鍏ㄩ儴 38/38 瀵归綈 `castle.txt`銆?
+  - `city_id+6/+8/+10` 楂樼疆淇″搴斿綋鍓嶄汉鍙?閲?绮€?
+  - `city_id+14/+16/+18` 楂樼疆淇″搴斿紑鍙?鍟嗕笟/娌诲畨銆?
+  - `city_id+20/+22/+24` 楂樼疆淇″搴斾笁椤逛笂闄愩€?
+  - `city_id+30` 鏄お瀹?鍩庝富姝﹀皢 id 鍊欓€夛紝23 鏉¤兘鏄犲皠 `History.txt`锛屽叾涓?22 鏉″湪鏈煄姝﹀皢鍒楄〃鍐呫€?
+  - 42 鏉″＋鍏佃褰曞凡鎸傚洖鍩庢睜锛屼絾鏁伴噺/绛夌骇瀛楁浠嶆湭鏈€缁堝懡鍚嶃€?
 
-## 本次文档收口（已完成）
+## 鏈鏂囨。鏀跺彛锛堝凡瀹屾垚锛?
 
-- `README.md` 已重写为干净 UTF-8 中文版本。
-- `docs/FORMAT_NOTES.zh.md` 已重写，并单列 `stage.ini` 二进制构成。
-- 新增 `docs/DOC_WORKFLOW.zh.md`，把文档更新责任和提交前检查表写死。
-- `task_plan.md`、`findings.md`、`progress.md` 已同步为新的有效基线。
-- 本轮继续把 `.stg Phase 7` 的新结论同步写回文档，避免只停留在聊天上下文。
-- 验证：Python 按 UTF-8 读取上述文档成功，确认乱码来自控制台代码页而非文件内容。
+- `README.md` 宸查噸鍐欎负骞插噣 UTF-8 涓枃鐗堟湰銆?
+- `docs/FORMAT_NOTES.zh.md` 宸查噸鍐欙紝骞跺崟鍒?`stage.ini` 浜岃繘鍒舵瀯鎴愩€?
+- 鏂板 `docs/DOC_WORKFLOW.zh.md`锛屾妸鏂囨。鏇存柊璐ｄ换鍜屾彁浜ゅ墠妫€鏌ヨ〃鍐欐銆?
+- `task_plan.md`銆乣findings.md`銆乣progress.md` 宸插悓姝ヤ负鏂扮殑鏈夋晥鍩虹嚎銆?
+- 鏈疆缁х画鎶?`.stg Phase 7` 鐨勬柊缁撹鍚屾鍐欏洖鏂囨。锛岄伩鍏嶅彧鍋滅暀鍦ㄨ亰澶╀笂涓嬫枃銆?
+- 楠岃瘉锛歅ython 鎸?UTF-8 璇诲彇涓婅堪鏂囨。鎴愬姛锛岀‘璁や贡鐮佹潵鑷帶鍒跺彴浠ｇ爜椤佃€岄潪鏂囦欢鍐呭銆?
 
-## 验证记录
+## 楠岃瘉璁板綍
 
-| 项目 | 结果 |
+| 椤圭洰 | 缁撴灉 |
 | --- | --- |
-| `stage.ini` JSON -> binary 回写 | 字节级一致 |
-| `stage_ini_conversion_tables.xlsx -> stage.ini` 回写 | 字节级一致 |
-| 编辑器本地 `.m` 加载 | 通过 |
-| 编辑器 patch 写回复制件 | 通过 |
-| 核心文档 UTF-8 读取 | 通过 |
-| `stage01.stg city_id -> castle.txt` 对齐 | 20/20 通过 |
-| `stage01.stg city_size -> castle.txt` 对齐 | 20/20 通过 |
-| `stage01.stg` 原始记录链导出 | 2502 条记录 + 48 字节尾部，通过 |
-| `stage01.stg` 层级导出 | 10 个势力/特殊块、38 个城池块，通过 |
-| `stage01.stg` 城池状态字段 | `city_id/city_size/x/y` 38/38 对齐，通过 |
+| `stage.ini` JSON -> binary 鍥炲啓 | 瀛楄妭绾т竴鑷?|
+| `stage_ini_conversion_tables.xlsx -> stage.ini` 鍥炲啓 | 瀛楄妭绾т竴鑷?|
+| 缂栬緫鍣ㄦ湰鍦?`.m` 鍔犺浇 | 閫氳繃 |
+| 缂栬緫鍣?patch 鍐欏洖澶嶅埗浠?| 閫氳繃 |
+| 鏍稿績鏂囨。 UTF-8 璇诲彇 | 閫氳繃 |
+| `stage01.stg city_id -> castle.txt` 瀵归綈 | 20/20 閫氳繃 |
+| `stage01.stg city_size -> castle.txt` 瀵归綈 | 20/20 閫氳繃 |
+| `stage01.stg` 鍘熷璁板綍閾惧鍑?| 2502 鏉¤褰?+ 48 瀛楄妭灏鹃儴锛岄€氳繃 |
+| `stage01.stg` 灞傜骇瀵煎嚭 | 10 涓娍鍔?鐗规畩鍧椼€?8 涓煄姹犲潡锛岄€氳繃 |
+| `stage01.stg` 鍩庢睜鐘舵€佸瓧娈?| `city_id/city_size/x/y` 38/38 瀵归綈锛岄€氳繃 |
 
-## 当前风险
+## 褰撳墠椋庨櫓
 
-1. `.stg` 直接 owner 字段仍未锁定，当前优先按顺序层级解释所属关系。
-2. 士兵记录中的数量、等级、兵种 id 字段仍需继续命名。
-3. `.evt` 仍未完成字段命名，暂时不能做完整语义编辑器。
-4. `.s/.x` 的写回流程尚未确认，不应贸然生成覆盖。
-5. `acwz` 的完整 footprint / z-order 仍有尾差。
+1. `.stg` 鐩存帴 owner 瀛楁浠嶆湭閿佸畾锛屽綋鍓嶄紭鍏堟寜椤哄簭灞傜骇瑙ｉ噴鎵€灞炲叧绯汇€?
+2. 澹叺璁板綍涓殑鏁伴噺銆佺瓑绾с€佸叺绉?id 瀛楁浠嶉渶缁х画鍛藉悕銆?
+3. `.evt` 浠嶆湭瀹屾垚瀛楁鍛藉悕锛屾殏鏃朵笉鑳藉仛瀹屾暣璇箟缂栬緫鍣ㄣ€?
+4. `.s/.x` 鐨勫啓鍥炴祦绋嬪皻鏈‘璁わ紝涓嶅簲璐哥劧鐢熸垚瑕嗙洊銆?
+5. `acwz` 鐨勫畬鏁?footprint / z-order 浠嶆湁灏惧樊銆?
 
-## 2026-06-25 `.stg` Excel 互转收口
+## 2026-06-25 `.stg` Excel 浜掕浆鏀跺彛
 
-- 新增 `.stg` Excel 互转脚本：
-  - `tools/export_stg_workbook.py`：导出 `meta/raw_records/hierarchy_records/force_city_summary/city_state/troop_candidates`。
-  - `tools/import_stg_workbook.py`：从 workbook 回写 `.stg`，默认应用 `city_state`，也支持 `--no-city-state` raw-only 重建。
-- 补充 `docs/FORMAT_NOTES.zh.md` 的 `.stg` 字节级构成与转换脚本契约，写明 header、record、tail、sheet、回写公式和验证结果。
-- 更新 `README.md` 的 `.stg` 互转使用指南。
-- 验证结果：
-  - 默认模式：`stage01_stg.xlsx -> stage01_from_workbook.stg` 与原 `stage01.stg` 字节完全一致。
-  - `--no-city-state`：同样字节完全一致。
-  - 编辑烟测：第一个城池人口 `1200 -> 1201` 后仅 1 个字节变化，偏移 `0x1A4`。
+- 鏂板 `.stg` Excel 浜掕浆鑴氭湰锛?
+  - `tools/export_stg_workbook.py`锛氬鍑?`meta/raw_records/hierarchy_records/force_city_summary/city_state/troop_candidates`銆?
+  - `tools/import_stg_workbook.py`锛氫粠 workbook 鍥炲啓 `.stg`锛岄粯璁ゅ簲鐢?`city_state`锛屼篃鏀寔 `--no-city-state` raw-only 閲嶅缓銆?
+- 琛ュ厖 `docs/FORMAT_NOTES.zh.md` 鐨?`.stg` 瀛楄妭绾ф瀯鎴愪笌杞崲鑴氭湰濂戠害锛屽啓鏄?header銆乺ecord銆乼ail銆乻heet銆佸洖鍐欏叕寮忓拰楠岃瘉缁撴灉銆?
+- 鏇存柊 `README.md` 鐨?`.stg` 浜掕浆浣跨敤鎸囧崡銆?
+- 楠岃瘉缁撴灉锛?
+  - 榛樿妯″紡锛歚stage01_stg.xlsx -> stage01_from_workbook.stg` 涓庡師 `stage01.stg` 瀛楄妭瀹屽叏涓€鑷淬€?
+  - `--no-city-state`锛氬悓鏍峰瓧鑺傚畬鍏ㄤ竴鑷淬€?
+  - 缂栬緫鐑熸祴锛氱涓€涓煄姹犱汉鍙?`1200 -> 1201` 鍚庝粎 1 涓瓧鑺傚彉鍖栵紝鍋忕Щ `0x1A4`銆?
 
-## 2026-06-29 `.stg` Excel 互转测试
+## 2026-06-29 `.stg` Excel 浜掕浆娴嬭瘯
 
-- 新增 `tools/test_stg_workbook_roundtrip.py`，用 `unittest` 覆盖 `.stg -> Excel -> .stg` 的核心回归路径。
-- 测试点包括：工作簿必要 sheet 与 meta、默认导入字节一致、raw-only 字节一致、编辑 `city_state.candidate_population` 后只改预期 u16 字段。
-- 修正 `tools/stage_ini_excel_codec.py`：读取/写入 workbook 后显式关闭 openpyxl 句柄，避免 Windows 上测试清理或后续批处理遇到文件锁。
-- 验证命令：`& $py -m unittest tools.test_stg_workbook_roundtrip`，结果 `Ran 4 tests ... OK`。
+- 鏂板 `tools/test_stg_workbook_roundtrip.py`锛岀敤 `unittest` 瑕嗙洊 `.stg -> Excel -> .stg` 鐨勬牳蹇冨洖褰掕矾寰勩€?
+- 娴嬭瘯鐐瑰寘鎷細宸ヤ綔绨垮繀瑕?sheet 涓?meta銆侀粯璁ゅ鍏ュ瓧鑺備竴鑷淬€乺aw-only 瀛楄妭涓€鑷淬€佺紪杈?`city_state.candidate_population` 鍚庡彧鏀归鏈?u16 瀛楁銆?
+- 淇 `tools/stage_ini_excel_codec.py`锛氳鍙?鍐欏叆 workbook 鍚庢樉寮忓叧闂?openpyxl 鍙ユ焺锛岄伩鍏?Windows 涓婃祴璇曟竻鐞嗘垨鍚庣画鎵瑰鐞嗛亣鍒版枃浠堕攣銆?
+- 楠岃瘉鍛戒护锛歚& $py -m unittest tools.test_stg_workbook_roundtrip`锛岀粨鏋?`Ran 4 tests ... OK`銆?
 
-## 2026-06-30 编辑器性能优化
+## 2026-06-30 缂栬緫鍣ㄦ€ц兘浼樺寲
 
-- 检查 `tools/editor_app.html` 后确认卡顿主因：单格编辑触发全图三层重绘、侧栏统计每次全表扫描、拖动/缩放直接在高频事件中重绘。
-- 编辑器模板新增 `requestAnimationFrame` 合帧绘制、layer stats 缓存、按脏区域局部重绘。
-- `paint` 模式点击不再在 `applyPaint()` 之后重复执行一次 `refreshSide()/draw()`。
-- 已将模板同步复制到现有 `derived/editor/*/editor.html`，当前打开的 `stage11/editor.html` 刷新后即可使用新逻辑。
-- 验证：抽取脚本块后用 `node --check` 通过语法检查。
+- 妫€鏌?`tools/editor_app.html` 鍚庣‘璁ゅ崱椤夸富鍥狅細鍗曟牸缂栬緫瑙﹀彂鍏ㄥ浘涓夊眰閲嶇粯銆佷晶鏍忕粺璁℃瘡娆″叏琛ㄦ壂鎻忋€佹嫋鍔?缂╂斁鐩存帴鍦ㄩ珮棰戜簨浠朵腑閲嶇粯銆?
+- 缂栬緫鍣ㄦā鏉挎柊澧?`requestAnimationFrame` 鍚堝抚缁樺埗銆乴ayer stats 缂撳瓨銆佹寜鑴忓尯鍩熷眬閮ㄩ噸缁樸€?
+- `paint` 妯″紡鐐瑰嚮涓嶅啀鍦?`applyPaint()` 涔嬪悗閲嶅鎵ц涓€娆?`refreshSide()/draw()`銆?
+- 宸插皢妯℃澘鍚屾澶嶅埗鍒扮幇鏈?`derived/editor/*/editor.html`锛屽綋鍓嶆墦寮€鐨?`stage11/editor.html` 鍒锋柊鍚庡嵆鍙娇鐢ㄦ柊閫昏緫銆?
+- 楠岃瘉锛氭娊鍙栬剼鏈潡鍚庣敤 `node --check` 閫氳繃璇硶妫€鏌ャ€?
+
+## 2026-06-30 `.stg` 士兵记录锚点与兵种 id
+
+- 修正 `tools/export_stg_city_troop_analysis.py`：不再把“第一个 224”当作唯一真锚点，而是在多 `224` 命中时结合兵种文本与 `soldier.txt` 评分选择最佳旋转。
+- 新增 `troop_text_normalized`、`expected_soldier_id_from_text`、`candidate_soldier_id_t22`、`candidate_soldier_code_plus200_t12`、`candidate_soldier_code_plus97_t14` 等字段，把兵种 id 编码簇单独导出。
+- 确认 `.stg` 士兵简称应映射到 `soldier.txt` 的小兵种原型；已锁定 `t22 = soldier_id`、`t12 = soldier_id + 200`、`t14 = soldier_id + 97`。
+- 重写 `tools/export_stg_workbook.py` 中受旧乱码污染的说明文本，并同步适配 `build_troop_rows(root, ...)` 新签名。
+- 新增 `tools/test_stg_troop_analysis.py`，覆盖多 `224` 锚点选择和 `stage01` 士兵 id 编码簇导出。
+- 验证：
+  - `python.exe -m unittest tools.test_stg_troop_analysis` -> `Ran 2 tests ... OK`
+  - `python.exe -m unittest tools.test_stg_workbook_roundtrip` -> `Ran 4 tests ... OK`
