@@ -1,4 +1,4 @@
-﻿# 三国霸业地图恢复与编辑器工具
+# 三国霸业地图恢复与编辑器工具
 
 本仓库用于逆向《三国霸业》PC 版的地图、资源容器与关卡语义文件，并在此基础上构建可回写的地图编辑器。
 
@@ -79,7 +79,21 @@
 - [stage11 编辑器](http://127.0.0.1:8787/stage11/editor.html)
 - [编辑器索引](http://127.0.0.1:8787/index.html)
 
-### `.evt` 与 `.s/.x` 研究脚本
+### 编辑器 patch 写回
+
+按 patch 写回复制后的 `.m`，并同步生成同名 `.s/.x`：
+
+```powershell
+& $py tools/apply_editor_patch.py derived/editor/stage11/stage11_patch.json . --out derived/edited/stage11.m
+```
+
+如果只想写回 `.m`，不生成 sidecar：
+
+```powershell
+& $py tools/apply_editor_patch.py derived/editor/stage11/stage11_patch.json . --out derived/edited/stage11.m --no-minimap-sidecars
+```
+
+### `.evt` / `.dor` / `.s/.x` 研究脚本
 
 导出 `.evt` 与文本资源关联：
 
@@ -93,6 +107,17 @@
 & $py tools/analyze_minimap_sidecars.py .
 ```
 
+分析 `.dor` 与 `.m` 的候选坐标关系并导出覆盖图：
+
+```powershell
+& $py tools/analyze_dor_relationship.py . --stage stage20 --top-pairs 3
+```
+
+? `.m` ?? cell ??? `byte08-15` ???????????? value group ????????? `byte09` / `byte11` ????????
+
+```powershell
+& $py tools/analyze_m_byte_fields.py . --stage stage01
+```
 
 按当前稳定规则，从 `.m` 重建 `.s/.x`：
 
@@ -109,6 +134,7 @@
 主要产物：
 
 - `derived/sidecar_analysis/evt_resource_linkage.json`
+- `derived/dor_relationship/<stage>/dor_relationship.json`
 - `derived/minimap_sidecars/<stage>/sidecar_build_report.json`
 - `derived/sidecar_analysis/minimap_sidecar_analysis.json`
 
@@ -116,7 +142,9 @@
 
 - 38 个 `.evt` 都能对上对应 `TalkNN.txt`，其中 `stage17.txt` 是可读脚本原型，`stage01.txt` 是二进制 blob。
 - `.evt` 中目前最稳定的 ASCII 命令 token 是 `talk`、`VIEW`、`MAP`、`MAPALL`、`MOVE`、`TIME`、`TIMEOVER`。
+- `.dor` 文件头携带 `Door    Data` 魔数，现有可视化脚本已经能把候选字段与 `.m` 地图坐标叠加到同一张图上，便于继续从 `Emperor.exe` 收口语义。
 - `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `final_palette` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
+- `tools/apply_editor_patch.py` 现在会在写回 `.m` 后默认同步生成同名 `.s/.x`，补齐编辑器 patch 到 sidecar 的闭环。
 - 在 33 个关卡里，`.x` 的有效区始终比 `.s` 更接近 `.m` 派生结果，平均匹配率分别为 `0.620744 / 0.47098`；保留尾区后，生成结果的尾区匹配率恒为 `1.0`。
 ### stage.ini 结构化导出与回写
 
@@ -235,6 +263,12 @@
 & $py -m unittest tests.test_minimap_sidecar_builder
 ```
 
+运行编辑器 patch -> `.m/.s/.x` 闭环测试：
+
+```powershell
+& $py -m unittest tests.test_apply_editor_patch_minimap
+```
+
 ## 文档维护要求
 
 本项目把文档视为交付物的一部分。每次修改都要同步维护：
@@ -253,5 +287,5 @@
 
 1. 继续逆向 `stageNN.stg`，把城池块、武将块和士兵块的字段边界拆得更干净。
 2. 继续逆向 `stageNN.evt`，确认事件记录如何引用地图坐标、对象和全局 id。
-3. 继续从 `Emperor.exe` 核实 `.s/.x` 的真实生成与读写路径，并把现有保守写回脚本接入编辑器闭环。
+3. 继续从 `Emperor.exe` 核实 `.dor` 与 `.s/.x` 的真实读取/生成路径，并解释为什么 `.x` 比 `.s` 更接近真实派生结果。
 4. 低优先级补充 `Tiled/TMX` 交换格式，作为外部工具互操作层。

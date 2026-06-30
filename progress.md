@@ -1,4 +1,4 @@
-﻿# Progress Log
+# 进度日志
 
 ## 2026-06-23
 
@@ -42,16 +42,16 @@
 - 回滚 `b4a9f70` 在文档中引入的新增说明，避免把尚未收口的 `.stg` 士兵块结论写成稳定事实。
 - 重新整理 `README.md`、`docs/FORMAT_NOTES.zh.md`、`findings.md`、`progress.md`、`task_plan.md`、`docs/DOC_WORKFLOW.zh.md`，统一为有效 UTF-8 中文文档。
 - 把 Python 项目调整为标准 `src/` 布局：主源码迁入 `src/san_tools/`，测试迁入 `tests/`，`tools/` 改为兼容包装层。
-- 扩展 `pyproject.toml` 为 `src` 包发现配置，并让 `python -m tools`、`san-tools`、旧 `tools/*.py` 三种入口同时可用。
-- 补入 `export_stage_ini_txt_tables.py` 到正式源码结构，并新增 `convert-game-texts` 统一命令。
-- 验证结果：`python -m tools list`、`python tools/export_stage_ini_txt_tables.py --help`、`python -m unittest tests.test_stg_troop_analysis`、`python -m unittest tests.test_stg_workbook_roundtrip` 全部通过。
-- 新增 `scenario_text_codec.py`，用于区分可读脚本、编号文本池与伪装成 `.txt` 的二进制 blob。
-- 新增 `analyze_evt_resources.py`，全量导出 `.evt` 与 `TalkNN.txt / stageNN.txt` 的关联统计到 `derived/sidecar_analysis/evt_resource_linkage.json`。
-- 新增 `analyze_minimap_sidecars.py`，全量导出 `.s/.x` 与 `.m final_palette` 的统计关系到 `derived/sidecar_analysis/minimap_sidecar_analysis.json`。
-- 确认 38 个 `.evt` 都能对上对应 `TalkNN.txt`，其中 `stage17.txt` 为可读脚本原型，`stage01.txt` 为二进制 blob。
-- 确认 `.s/.x` 底部存在高一致度公共尾区，且两者都不是 `.m final_palette` 的直接 160x160 缩放结果。
-- 验证结果补充：`python -m unittest discover -s tests` 通过，新分析命令可全量跑通。
-- 新增 `minimap_sidecar.py` 与 `build_minimap_sidecars.py`，把“上 128 行由 `.m final_palette` 派生、下 32 行保留原始尾区”的保守写回规则落成脚本。
-- 更新 `analyze_minimap_sidecars.py`，把统计口径改为“有效区匹配率 + 尾区保留后全图匹配率”。
-- 全量 33 个关卡验证通过：`.x` 的有效区平均匹配率为 `0.620744`，`.s` 为 `0.47098`，生成结果的尾区匹配率恒为 `1.0`。
-- 验证结果补充：`python -m unittest tests.test_minimap_sidecar_builder`、`python -m unittest discover -s tests`、`python tools/build_minimap_sidecars.py . --all --no-preview`、`python tools/analyze_minimap_sidecars.py .` 全部通过。
+- 扩展 `apply_editor_patch.py`，让编辑器 patch 在写回 `.m` 后默认同步生成同名 `.s/.x`，补齐 sidecar 写回闭环。
+- 重构 `build_minimap_sidecars.py`，抽出 `write_stage_sidecar_outputs()`，让批处理与编辑器写回复用同一套 sidecar 生成逻辑。
+- 新增 `tests/test_apply_editor_patch_minimap.py`，覆盖 patch -> `.m/.s/.x` 闭环，以及跳过 sidecar 的分支。
+- 新增 `analyze_dor_relationship.py` 与命令行入口，结合 `Emperor.exe` 字符串线索和 `.m` 渲染结果输出 `.dor` 候选字段覆盖图。
+- 验证结果补充：bundled Python 下的 `python -m unittest tests.test_apply_editor_patch_minimap` 与 `python tools/analyze_dor_relationship.py . --stage stage20 --top-pairs 3` 均已通过。
+## 2026-07-01
+
+- 新增 `src/san_tools/analysis/analyze_dor_byte_fields.py` 与 `tools/analyze_dor_byte_fields.py`，用于 `.dor` 记录自身的原始 byte 覆盖图分析。
+- 为统一入口补充 `analyze-dor-relationship`、`analyze-dor-byte-fields` 与 `analyze-m-byte-fields` 命令注册。
+- ?? `src/san_tools/analysis/analyze_m_byte_fields.py` ? `tools/analyze_m_byte_fields.py`?? `.m` ?? cell ??? `byte08-15` ???????????? value group ?????? `derived/m_byte_fields/<stage>/m_byte_fields.json`?
+- 复核 `.m` 口径后确认：`byte08=218` 与 `byte10=239` 都只在 `stage01` 出现；`byte09=1` 广泛分布于 33 个 `.m`；`byte11` 的同值会聚成连续编号、每组 36 cell 的菱形 footprint。
+- 调整 `analyze_m_byte_fields.py`：`byte08-15` 不再只围绕 `byte08=218 / byte10=239` 一类猜想单独绘图，而是为每个字段额外输出“所有非零 value group 分色叠加”的底图覆盖图与总览拼图。
+- ?? `analyze_m_byte_fields.py` ???? `byte08=218` ? `byte10=239` ????????????????????????????????
