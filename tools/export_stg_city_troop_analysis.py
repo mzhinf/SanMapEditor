@@ -50,6 +50,8 @@ TROOP_TEXT_ALIASES = {
     "投石车": "小投石車",
 }
 
+TROOP_BLOCK_RECORDS = 4
+
 
 def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -193,7 +195,7 @@ def choose_troop_rotation(
     hits = [index for index, value in enumerate(words) if value == 224]
     if hits:
         scored: list[tuple[int, int, list[int]]] = []
-        # 有些记录里不止一个 224；这里按兵种文本和已知编码簇选择最像“真锚点”的那个。
+        # 有些记录里不止一个 224；这里按兵种文本和已知编码簇选择最像真锚点的那个。
         for anchor in hits:
             rotated = rotate_words(words, anchor, anchor_index=0)
             scored.append((score_troop_rotation(rotated, expected_soldier_id), anchor, rotated))
@@ -207,6 +209,33 @@ def choose_troop_rotation(
         return words[:], None, "no_224_found", 0
     rotated, anchor = normalized
     return rotated, anchor, "fallback_first_224", score_troop_rotation(rotated, expected_soldier_id)
+
+
+def load_troop_block_words(raw_by_index: dict[int, dict[str, object]], start_record_index: int) -> list[int]:
+    output: list[int] = []
+    for record_index in range(start_record_index, start_record_index + TROOP_BLOCK_RECORDS):
+        record = raw_by_index.get(record_index)
+        if record is None:
+            break
+        output.extend(raw_words(record))
+    return output
+
+
+def normalize_troop_block(
+    raw_by_index: dict[int, dict[str, object]],
+    start_record_index: int,
+) -> tuple[list[int], int | None, str]:
+    first_record = raw_by_index.get(start_record_index)
+    if first_record is None:
+        return [], None, "missing_start_record"
+    first_words = raw_words(first_record)
+    hits = [index for index, value in enumerate(first_words) if value == 224]
+    if not hits:
+        return load_troop_block_words(raw_by_index, start_record_index), None, "no_224_in_first_record"
+    anchor = hits[0]
+    block_words = load_troop_block_words(raw_by_index, start_record_index)
+    normalized = block_words[anchor:] + block_words[:anchor]
+    return normalized, anchor, "first_record_first_224"
 
 
 def build_city_rows(root: Path, raw_records: list[dict[str, object]], hierarchy: dict[str, object]) -> list[dict[str, object]]:
@@ -267,10 +296,23 @@ def build_troop_rows(root: Path, raw_records: list[dict[str, object]], hierarchy
                 troop_text = str(troop.get("texts_joined", ""))
                 normalized_text = normalize_troop_text(troop_text)
                 expected_soldier_id = soldier_by_name.get(normalized_text, {}).get("soldier_id")
+
                 rotated, anchor, anchor_method, anchor_score = choose_troop_rotation(words, troop_text, soldier_by_name)
+                block_words, block_anchor, block_method = normalize_troop_block(raw_by_index, record_index)
+
                 candidate_soldier_code_plus200_t12 = rotated[12] if len(rotated) > 12 else None
                 candidate_soldier_code_plus97_t14 = rotated[14] if len(rotated) > 14 else None
                 candidate_soldier_id_t22 = rotated[22] if len(rotated) > 22 else None
+
+                block_candidate_soldier_code_plus200_w12 = block_words[12] if len(block_words) > 12 else None
+                block_candidate_soldier_code_plus97_w14 = block_words[14] if len(block_words) > 14 else None
+                block_candidate_soldier_id_w22 = block_words[22] if len(block_words) > 22 else None
+                block_candidate_enabled_flag_w24 = block_words[24] if len(block_words) > 24 else None
+                block_candidate_value50_w26 = block_words[26] if len(block_words) > 26 else None
+                block_candidate_value50_w32 = block_words[32] if len(block_words) > 32 else None
+                block_candidate_enabled_flag_w88 = block_words[88] if len(block_words) > 88 else None
+                block_candidate_value50_w104 = block_words[104] if len(block_words) > 104 else None
+
                 row: dict[str, object] = {
                     "force_index": force["force_index"],
                     "force_name": force["force_name"],
@@ -294,6 +336,17 @@ def build_troop_rows(root: Path, raw_records: list[dict[str, object]], hierarchy
                     "candidate_param_t26": rotated[26] if len(rotated) > 26 else None,
                     "candidate_param_t32": rotated[32] if len(rotated) > 32 else None,
                     "candidate_force_or_block_t36": rotated[36] if len(rotated) > 36 else None,
+                    "troop_block_record_count": len(block_words) // 38,
+                    "troop_block_anchor_224_first_record_raw_index": block_anchor,
+                    "troop_block_normalization_method": block_method,
+                    "block_candidate_soldier_code_plus200_w12": block_candidate_soldier_code_plus200_w12,
+                    "block_candidate_soldier_code_plus97_w14": block_candidate_soldier_code_plus97_w14,
+                    "block_candidate_soldier_id_w22": block_candidate_soldier_id_w22,
+                    "block_candidate_enabled_flag_w24": block_candidate_enabled_flag_w24,
+                    "block_candidate_value50_w26": block_candidate_value50_w26,
+                    "block_candidate_value50_w32": block_candidate_value50_w32,
+                    "block_candidate_enabled_flag_w88": block_candidate_enabled_flag_w88,
+                    "block_candidate_value50_w104": block_candidate_value50_w104,
                 }
                 row["candidate_soldier_id_matches_text"] = (
                     expected_soldier_id is not None and candidate_soldier_id_t22 == expected_soldier_id
@@ -303,8 +356,29 @@ def build_troop_rows(root: Path, raw_records: list[dict[str, object]], hierarchy
                     and candidate_soldier_code_plus200_t12 == expected_soldier_id + 200
                     and candidate_soldier_code_plus97_t14 == expected_soldier_id + 97
                 )
+                row["block_candidate_soldier_id_matches_text"] = (
+                    expected_soldier_id is not None and block_candidate_soldier_id_w22 == expected_soldier_id
+                )
+                row["block_candidate_code_cluster_consistent"] = (
+                    expected_soldier_id is not None
+                    and block_candidate_soldier_code_plus200_w12 == expected_soldier_id + 200
+                    and block_candidate_soldier_code_plus97_w14 == expected_soldier_id + 97
+                )
+                row["block_candidate_template_consistent"] = (
+                    expected_soldier_id is not None
+                    and block_candidate_soldier_id_w22 == expected_soldier_id
+                    and block_candidate_soldier_code_plus200_w12 == expected_soldier_id + 200
+                    and block_candidate_soldier_code_plus97_w14 == expected_soldier_id + 97
+                    and block_candidate_enabled_flag_w24 in {0, 1}
+                    and block_candidate_value50_w26 == 50
+                    and block_candidate_value50_w32 == 50
+                )
+                row["troop_block_preview_w00_47"] = " ".join(str(value) for value in block_words[:48]) if block_words else ""
+
                 for index, value in enumerate(rotated):
                     row[f"t{index:02d}"] = value
+                for index, value in enumerate(block_words[:76]):
+                    row[f"b{index:02d}"] = value
                 rows.append(row)
     return rows
 
@@ -333,7 +407,8 @@ def main() -> int:
         "notes": [
             "city_state_candidates 以 city_id 位置为基准展开字段；有 92 锚时使用 anchor+12，没有 92 锚时按 city_id/size/population 组合定位。",
             "troop_candidates 现在会结合 soldier.txt 与兵种文本，在多个 224 命中里选择最像真实锚点的旋转结果。",
-            "兵种 id 相关字段已经拆出 t12(+200)、t14(+97)、t22(原始 soldier_id) 三个编码簇；数量/等级字段仍需继续确认。",
+            "士兵槽位还应按 4 条记录的 troop block 观察；当前已能稳定导出 block 归一化后的兵种 id 编码簇。",
+            "兵种 id 相关字段已经拆出单记录 t12(+200)、t14(+97)、t22(原始 soldier_id) 与 block 视角 w12/w14/w22；数量/等级字段仍需继续确认。",
         ],
         "summary": {
             "city_rows": len(city_rows),
@@ -348,6 +423,18 @@ def main() -> int:
             "troop_rows_id_match_t22": sum(1 for row in troop_rows if row.get("candidate_soldier_id_matches_text")),
             "troop_rows_code_cluster_consistent": sum(
                 1 for row in troop_rows if row.get("candidate_soldier_code_cluster_consistent")
+            ),
+            "troop_block_rows_with_first_record_224": sum(
+                1 for row in troop_rows if row.get("troop_block_normalization_method") == "first_record_first_224"
+            ),
+            "troop_block_rows_id_match_w22": sum(
+                1 for row in troop_rows if row.get("block_candidate_soldier_id_matches_text")
+            ),
+            "troop_block_rows_code_cluster_consistent": sum(
+                1 for row in troop_rows if row.get("block_candidate_code_cluster_consistent")
+            ),
+            "troop_block_rows_template_consistent": sum(
+                1 for row in troop_rows if row.get("block_candidate_template_consistent")
             ),
         },
         "tables": {
@@ -366,4 +453,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

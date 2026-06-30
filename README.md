@@ -257,3 +257,11 @@ $py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\
 - `troop_candidates` 新增 `troop_text_normalized`、`expected_soldier_id_from_text`、`candidate_soldier_id_t22`、`candidate_soldier_code_plus200_t12`、`candidate_soldier_code_plus97_t14`。
 - 当前已确认：`t22` 对应 `soldier.txt` 的小兵种 id，且 `t12 = t22 + 200`、`t14 = t22 + 97`。
 - 新增测试：`& $py -m unittest tools.test_stg_troop_analysis`
+
+### 2026-06-30：troop block 归一化补充
+
+- `.stg` 里的士兵槽位不应只看单条 76 字节记录；当前样本显示，单个 troop slot 更像“1 条 troop_entry + 3 条后续 binary/zero 记录”的 4-record block。
+- `tools/export_stg_city_troop_analysis.py` 已新增 block 视角字段：`troop_block_normalization_method`、`block_candidate_soldier_id_w22`、`block_candidate_soldier_code_plus200_w12`、`block_candidate_soldier_code_plus97_w14`、`block_candidate_enabled_flag_w24`、`block_candidate_value50_w26`、`block_candidate_value50_w32` 等。
+- `stage01` 里 42 条 troop 记录中，有 40 条能通过“第一条记录中的第一个 224”稳定归一化为同一 block 模板；该视角明显比单记录视角更稳。
+- 当前最稳的 block 模板结论：`w12 = soldier_id + 200`、`w14 = soldier_id + 97`、`w22 = soldier_id`，并常见 `w24 in {0,1}`、`w26 = 50`、`w32 = 50`。
+- 新增测试仍通过：`& $py -m unittest tools.test_stg_troop_analysis` 与 `& $py -m unittest tools.test_stg_workbook_roundtrip`

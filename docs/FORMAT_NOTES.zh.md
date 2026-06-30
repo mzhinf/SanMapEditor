@@ -626,3 +626,18 @@ records[absolute_record_index][byte_offset_in_record : byte_offset_in_record+2]
 6. `acwz` 鐨勫畬鏁?footprint 涓?z-order
 
 
+
+### 5.7 再补充（2026-06-30：4-record troop block）
+
+- 继续追踪 `stage01` 与全量 `stage*.stg` 后，当前更合理的结构解释是：一个士兵槽位通常不是单条 76 字节记录，而是 `1 条 troop_entry + 3 条后续 binary/zero 记录` 组成的 4-record block。
+- 对 block 的第一条记录，若其中存在 `224`，则以“第一条记录中的第一个 `224`”为起点，把整个 4-record block 展开并对齐，能得到高度稳定的模板。
+- 当前全量样本统计：808 条 troop 记录里，753 条 block 能按该方法稳定对齐；`stage01` 42 条里有 40 条满足。
+- 对齐后的当前稳定偏移：
+  - `w12 = soldier_id + 200`
+  - `w14 = soldier_id + 97`
+  - `w22 = soldier_id`
+  - `w24` 多为 `0/1`，更像启用或占用标志候选
+  - `w26 = 50`
+  - `w32 = 50`
+- `w24 / w26 / w32` 虽然已经有稳定模板，但它们更像槽位状态常量，还不足以直接命名为“数量”或“等级”。数量/等级仍需继续在 block 视角下逆向。
+- 当前导出脚本已把 block 视角字段写入 `troop_candidates.csv/json`，后续应优先在这些 `block_candidate_*` 列上继续研究，而不是只盯单记录 `t24/t26/t32`。

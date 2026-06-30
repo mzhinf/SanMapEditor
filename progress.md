@@ -133,3 +133,11 @@
 - 验证：
   - `python.exe -m unittest tools.test_stg_troop_analysis` -> `Ran 2 tests ... OK`
   - `python.exe -m unittest tools.test_stg_workbook_roundtrip` -> `Ran 4 tests ... OK`
+
+## 2026-06-30 `.stg` 士兵 4-record block
+
+- 继续追踪 `t24 / t26 / t32` 后，确认 troop 研究视角应升级为 4-record block，而不是只看单条 76 字节记录。
+- `tools/export_stg_city_troop_analysis.py` 新增 `normalize_troop_block()` 与 block 候选字段导出，把 `block_candidate_soldier_id_w22`、`block_candidate_soldier_code_plus200_w12`、`block_candidate_soldier_code_plus97_w14`、`block_candidate_enabled_flag_w24`、`block_candidate_value50_w26`、`block_candidate_value50_w32` 等列写入 `troop_candidates`。
+- 当前确认：`stage01` 有 40/42 条 troop block 能稳定按“第一条记录中的第一个 224”对齐，并命中同一模板；全量样本为 753/808。
+- 新增测试覆盖：`normalize_troop_block()` 的 stage01 样例，以及 block 视角在 `stage01` 上比单记录视角更稳定。
+- 回归验证：`python.exe -m unittest tools.test_stg_troop_analysis` -> `Ran 4 tests ... OK`；`python.exe -m unittest tools.test_stg_workbook_roundtrip` -> `Ran 4 tests ... OK`
