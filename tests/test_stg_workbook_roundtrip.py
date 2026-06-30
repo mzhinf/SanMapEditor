@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import sys
 import unittest
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 from openpyxl import load_workbook
 
-from tools.export_stg_city_troop_analysis import CITY_FIELD_OFFSETS
-from tools.export_stg_workbook import build_workbook_sheets
-from tools.import_stg_workbook import apply_city_state_sheet, load_meta, load_record_buffers, rebuild_blob
-from tools.stage_ini_excel_codec import read_workbook_tables, write_workbook
+from san_tools.pipelines.export_stg_city_troop_analysis import CITY_FIELD_OFFSETS
+from san_tools.pipelines.export_stg_workbook import build_workbook_sheets
+from san_tools.pipelines.import_stg_workbook import apply_city_state_sheet, load_meta, load_record_buffers, rebuild_blob
+from san_tools.codecs.stage_ini_excel_codec import read_workbook_tables, write_workbook
 
 
 class StgWorkbookRoundTripTest(unittest.TestCase):

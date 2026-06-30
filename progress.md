@@ -41,5 +41,7 @@
 
 - 回滚 `b4a9f70` 在文档中引入的新增说明，避免把尚未收口的 `.stg` 士兵块结论写成稳定事实。
 - 重新整理 `README.md`、`docs/FORMAT_NOTES.zh.md`、`findings.md`、`progress.md`、`task_plan.md`、`docs/DOC_WORKFLOW.zh.md`，统一为有效 UTF-8 中文文档。
-- 为 `tools/` 增加 `pyproject.toml`、包入口与统一命令注册表，开始按现代 Python 项目结构维护脚本。
-- 修复 `tools/import_stg_workbook.py`、`tools/stage_ini_excel_codec.py`、`tools/encode_convert.py`、测试脚本中的中文编码污染，并去掉已知 BOM 文件头。
+- 把 Python 项目调整为标准 `src/` 布局：主源码迁入 `src/san_tools/`，测试迁入 `tests/`，`tools/` 改为兼容包装层。
+- 扩展 `pyproject.toml` 为 `src` 包发现配置，并让 `python -m tools`、`san-tools`、旧 `tools/*.py` 三种入口同时可用。
+- 补入 `export_stage_ini_txt_tables.py` 到正式源码结构，并新增 `convert-game-texts` 统一命令。
+- 验证结果：`python -m tools list`、`python tools/export_stage_ini_txt_tables.py --help`、`python -m unittest tests.test_stg_troop_analysis`、`python -m unittest tests.test_stg_workbook_roundtrip` 全部通过。

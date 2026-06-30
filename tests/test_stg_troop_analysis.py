@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import sys
 import unittest
 from pathlib import Path
 
-from tools.analyze_stage_sidecars import find_game_dir
-from tools.export_stg_city_troop_analysis import (
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+from san_tools.analysis.analyze_stage_sidecars import find_game_dir
+from san_tools.pipelines.export_stg_city_troop_analysis import (
     build_troop_rows,
     choose_troop_rotation,
     normalize_troop_block,
     raw_words,
 )
-from tools.export_stg_hierarchy import build_hierarchy
-from tools.export_stg_raw_chain import build_rows as build_raw_chain
+from san_tools.pipelines.export_stg_hierarchy import build_hierarchy
+from san_tools.pipelines.export_stg_raw_chain import build_rows as build_raw_chain
 
 
 class StgTroopAnalysisTest(unittest.TestCase):

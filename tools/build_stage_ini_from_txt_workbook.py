@@ -1,75 +1,12 @@
 from __future__ import annotations
 
-import argparse
-import hashlib
-import json
-import sys
-from pathlib import Path
+try:
+    from ._legacy_wrapper import load_module
+except ImportError:
+    from _legacy_wrapper import load_module
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+_module = load_module("san_tools.pipelines.build_stage_ini_from_txt_workbook")
+globals().update({name: getattr(_module, name) for name in dir(_module) if not name.startswith("__")})
 
-import tools.stage_ini_codec as stage_ini_codec
-import tools.stage_ini_txt_linkage as linkage
-from tools.stage_ini_excel_codec import read_workbook_tables
-
-
-
-def sha256_bytes(blob: bytes) -> str:
-    return hashlib.sha256(blob).hexdigest()
-
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Build a new stage.ini from the linked Excel workbook.")
-    parser.add_argument("workbook", help="Path to the exported workbook xlsx")
-    parser.add_argument("root", nargs="?", default=".", help="Workspace root that contains stage.ini")
-    parser.add_argument("--out", default="derived/stage_ini_txt_analysis/stage_ini_from_workbook.ini", help="Output stage.ini path")
-    parser.add_argument("--compare-with", default="", help="Optional binary to compare with after rebuild")
-    parser.add_argument("--dump-import-json", default="derived/stage_ini_txt_analysis/_tmp_workbook_import.json", help="Optional JSON dump of imported workbook")
-    args = parser.parse_args()
-
-    root = Path(args.root).resolve()
-    workbook_path = Path(args.workbook).resolve()
-    out_path = Path(args.out)
-    if not out_path.is_absolute():
-        out_path = (root / out_path).resolve()
-
-    workbook_payload = read_workbook_tables(workbook_path)
-    if args.dump_import_json:
-        import_json_path = Path(args.dump_import_json)
-        if not import_json_path.is_absolute():
-            import_json_path = (root / import_json_path).resolve()
-        import_json_path.parent.mkdir(parents=True, exist_ok=True)
-        import_json_path.write_text(json.dumps(workbook_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(json.dumps({"json": str(import_json_path), "sheetCount": len(workbook_payload["sheets"])}, ensure_ascii=False, indent=2))
-
-    stage_payload = linkage.apply_workbook_tables_to_stage_ini(root, workbook_payload["sheets"])
-    rebuilt = stage_ini_codec.rebuild_stage_ini(stage_payload)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(rebuilt)
-
-    compare_info = None
-    if args.compare_with:
-        compare_path = Path(args.compare_with)
-        if not compare_path.is_absolute():
-            compare_path = (root / compare_path).resolve()
-        original = compare_path.read_bytes()
-        compare_info = {
-            "compare_with": str(compare_path),
-            "byte_identical": rebuilt == original,
-            "rebuilt_sha256": sha256_bytes(rebuilt),
-            "compare_sha256": sha256_bytes(original),
-        }
-
-    print(json.dumps({
-        "out": str(out_path),
-        "size": len(rebuilt),
-        "compare": compare_info,
-    }, ensure_ascii=False, indent=2))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__" and hasattr(_module, "main"):
+    raise SystemExit(_module.main())

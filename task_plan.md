@@ -51,8 +51,11 @@ Phase 7：sidecar 深化逆向与小地图写回准备
 ### Phase 6：文档与工程化收口
 - [x] 清理核心文档的编码污染
 - [x] 回滚 `b4a9f70` 在文档里提前写死的新增说明
-- [x] 为 `tools/` 增加 `pyproject.toml`
+- [x] 为项目增加 `pyproject.toml`
+- [x] 将主源码迁入 `src/san_tools/`
+- [x] 将自动化测试迁入独立 `tests/` 目录
 - [x] 提供 `python -m tools` / `san-tools` 统一入口
+- [x] 保留 `tools/*.py` 兼容包装层
 - [x] 修复关键 Python 脚本与测试文件中的中文编码问题
 
 ## 当前待办

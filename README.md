@@ -28,7 +28,9 @@
 
 ## 目录说明
 
-- `tools/`：Python 脚本与可复用模块。
+- `src/san_tools/`：正式维护的 Python 源码包。
+- `tests/`：独立测试目录。
+- `tools/`：兼容旧调用方式的包装层，方便继续直接运行 `tools/*.py`。
 - `docs/`：格式笔记与文档维护约定。
 - `derived/`：中间分析结果、编辑器 bundle、图片导出。
 - `outputs/`：工作簿与外部可读导出结果。
@@ -36,32 +38,13 @@
 
 ## Python 项目结构
 
-`tools/` 现在按一个可安装的 Python 项目维护：
+`san-map-tools` 现在按标准 `src/` 布局维护：
 
-- 根目录新增 `pyproject.toml`
-- `tools/` 明确为包
-- 提供统一入口 `python -m tools` 或安装后的 `san-tools`
-- 保留原有脚本直跑方式，避免打断现有工作流
-
-列出可用命令：
-
-```powershell
-$py = 'C:\Users\mzhinf\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
-& $py -m tools list
-```
-
-通过统一入口执行脚本：
-
-```powershell
-& $py -m tools run render-map -- . --stage stage11 --layout stagger --layers xyz --crop 93 57 1642 1684 --scale 2
-```
-
-如果做 editable install，也可以直接使用：
-
-```powershell
-pip install -e .
-san-tools list
-```
+- 根目录使用 `pyproject.toml` 管理打包配置
+- 主要源码位于 `src/san_tools/`
+- 测试集中在 `tests/`
+- `tools/` 保留为兼容包装层，避免打断现有脚本入口
+- 提供统一入口 `python -m tools` 与安装后的 `san-tools`
 
 ## 常用脚本
 
@@ -198,13 +181,13 @@ san-tools list
 运行 `.stg` 工作簿回归测试：
 
 ```powershell
-& $py -m unittest tools.test_stg_workbook_roundtrip
+& $py -m unittest tests.test_stg_workbook_roundtrip
 ```
 
 运行 `.stg` 士兵候选分析测试：
 
 ```powershell
-& $py -m unittest tools.test_stg_troop_analysis
+& $py -m unittest tests.test_stg_troop_analysis
 ```
 
 ## 文档维护要求

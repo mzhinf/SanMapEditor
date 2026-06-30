@@ -1,32 +1,12 @@
 from __future__ import annotations
 
-import argparse
-import json
-import sys
-from pathlib import Path
+try:
+    from ._legacy_wrapper import load_module
+except ImportError:
+    from _legacy_wrapper import load_module
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+_module = load_module("san_tools.pipelines.import_stage_ini_txt_workbook")
+globals().update({name: getattr(_module, name) for name in dir(_module) if not name.startswith("__")})
 
-from tools.stage_ini_excel_codec import read_workbook_tables
-
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Import stage.ini Excel workbook to JSON using Python.")
-    parser.add_argument("--input", default="outputs/stage_ini_txt_analysis/stage_ini_conversion_tables.xlsx")
-    parser.add_argument("--out", default="derived/stage_ini_txt_analysis/stage_ini_txt_workbook_import.json")
-    args = parser.parse_args()
-
-    input_path = Path(args.input).resolve()
-    out_path = Path(args.out).resolve()
-    payload = read_workbook_tables(input_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({"json": str(out_path), "sheetCount": len(payload["sheets"])}, ensure_ascii=False, indent=2))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__" and hasattr(_module, "main"):
+    raise SystemExit(_module.main())
