@@ -19,14 +19,14 @@ class StgWorkbookRoundTripTest(unittest.TestCase):
         cls.root = Path(__file__).resolve().parents[1]
         cls.stage_path = cls.root / "三国霸业" / "stage01.stg"
         if not cls.stage_path.exists():
-            raise unittest.SkipTest("缺少 三国霸业/stage01.stg，跳过 .stg 工作簿互转测试")
+            raise unittest.SkipTest("缺少 三国霸业/stage01.stg，跳过 .stg 工作簿互转测试。")
 
         cls.temp_dir = cls.root / "derived" / "test_tmp"
         cls.temp_dir.mkdir(parents=True, exist_ok=True)
         cls.workbook_path = cls.temp_dir / "stage01_stg_test.xlsx"
         cls.created_paths = [cls.workbook_path, cls.temp_dir / "stage01_stg_population_edit.xlsx"]
 
-        # 导出工作簿是较慢步骤，整组测试只执行一次，后续测试共享同一个输入。
+        # 导出工作簿较慢，整组测试只执行一次，后续用同一份输入反复验证。
         sheets = build_workbook_sheets(cls.root, "stage01")
         write_workbook(cls.workbook_path, sheets)
         cls.original_blob = cls.stage_path.read_bytes()
@@ -39,11 +39,12 @@ class StgWorkbookRoundTripTest(unittest.TestCase):
             try:
                 path.unlink()
             except PermissionError:
-                # Windows 偶尔会延迟释放 xlsx 文件句柄；清理失败不代表互转逻辑失败。
+                # Windows 偶尔会延迟释放 xlsx 句柄；清理失败不代表互转逻辑失败。
                 pass
 
     def load_workbook_payload(self, path: Path | None = None) -> tuple[dict[str, object], dict[int, bytearray]]:
-        """读取测试工作簿，并返回导入器实际使用的 meta 与记录 buffer。"""
+        """读取测试工作簿，并返回导入器实际使用的 meta 与记录缓冲区。"""
+
         workbook_payload = read_workbook_tables(path or self.workbook_path)
         sheets = workbook_payload["sheets"]
         meta = load_meta(sheets)
@@ -77,7 +78,6 @@ class StgWorkbookRoundTripTest(unittest.TestCase):
     def test_raw_only_import_round_trips_original_bytes(self) -> None:
         workbook_payload, buffers = self.load_workbook_payload()
         rebuilt = rebuild_blob(load_meta(workbook_payload["sheets"]), buffers)
-
         self.assertEqual(self.original_blob, rebuilt)
 
     def test_city_state_edit_patches_expected_u16_only(self) -> None:

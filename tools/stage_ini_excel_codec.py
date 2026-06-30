@@ -49,6 +49,8 @@ def trim_matrix(values: list[list[object]]) -> list[list[object]]:
 
 
 def read_workbook_tables(path: Path) -> dict[str, object]:
+    """读取工作簿并裁掉尾部空行空列，返回稳定的表结构。"""
+
     workbook = load_workbook(path, data_only=False)
     try:
         sheets: dict[str, dict[str, object]] = {}
@@ -69,7 +71,7 @@ def read_workbook_tables(path: Path) -> dict[str, object]:
             sheets[worksheet.title] = {"headers": headers, "rows": rows}
         return {"source_xlsx": str(path.resolve()), "sheets": sheets}
     finally:
-        # openpyxl 在 Windows 上会持有 xlsx 句柄；显式关闭，避免测试清理和批处理回写失败。
+        # openpyxl 在 Windows 上会持有 xlsx 句柄；显式关闭，避免测试清理或后续批处理回写失败。
         workbook.close()
 
 
@@ -104,6 +106,8 @@ def style_worksheet(worksheet, headers: list[object]) -> None:
 
 
 def write_workbook(path: Path, sheet_payloads: list[dict[str, object]]) -> None:
+    """把内部表结构写成 xlsx，并统一处理样式与非法控制字符。"""
+
     workbook = Workbook()
     default_sheet = workbook.active
     workbook.remove(default_sheet)
@@ -119,11 +123,10 @@ def write_workbook(path: Path, sheet_payloads: list[dict[str, object]]) -> None:
     try:
         workbook.save(path)
     finally:
-        # 保存后立即释放 Windows 文件句柄，方便测试和批处理脚本继续移动/删除工作簿。
+        # 保存后立刻释放句柄，方便测试与后续脚本继续移动或删除工作簿。
         workbook.close()
 
 
 def dump_tables_json(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-

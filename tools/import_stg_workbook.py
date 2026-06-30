@@ -146,15 +146,15 @@ def main() -> int:
 
     root = args.root.resolve()
     workbook_path = args.workbook.resolve()
-    out_path = args.out
-    if not out_path.is_absolute():
-        out_path = (root / out_path).resolve()
+    out_path = args.out if args.out.is_absolute() else (root / args.out).resolve()
+
     payload = read_workbook_tables(workbook_path)
     sheets = payload["sheets"]
     meta = load_meta(sheets)
     stride = int(parse_int(meta["stride"]) or 0)
     if stride != STG_STRIDE:
         raise ValueError(f"当前导入器只支持 76 字节 .stg 记录，工作簿 stride={stride}")
+
     record_count = int(parse_int(meta["record_count"]) or 0)
     record_buffers = load_record_buffers(sheets, record_count)
     patch_report = {"patched_fields": 0, "patched_records": 0, "note": "已跳过 city_state"}
@@ -167,9 +167,7 @@ def main() -> int:
 
     compare = None
     if args.compare_with:
-        compare_path = args.compare_with
-        if not compare_path.is_absolute():
-            compare_path = (root / compare_path).resolve()
+        compare_path = args.compare_with if args.compare_with.is_absolute() else (root / args.compare_with).resolve()
         original = compare_path.read_bytes()
         compare = {
             "compare_with": str(compare_path),
