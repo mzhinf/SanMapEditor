@@ -1,4 +1,4 @@
-# 三国霸业地图恢复与编辑器工具
+﻿# 三国霸业地图恢复与编辑器工具
 
 本仓库用于逆向《三国霸业》PC 版的地图、资源容器与关卡语义文件，并在此基础上构建可回写的地图编辑器。
 
@@ -19,7 +19,7 @@
 - `Emperor.exe` 已足够支撑当前稳定渲染：地图采用 staggered isometric 网格，最终渲染结果不是纯菱形大图。
 - `stage.ini` 不是文本 ini，而是全局二进制母表，已具备 JSON / Excel / 二进制互转链路。
 - `stage01.stg` 已能按原始记录顺序导出成层级表、城池状态表和工作簿，并支持安全回写。
-- `.evt/.spr/.dor/.s/.x` 已有首轮 sidecar 分析脚本，但仍有未定字段。
+- `.evt/.spr/.dor/.s/.x` 已有第二轮 sidecar 研究与保守写回脚本，能输出 `.evt` 文本资源关联、`.s/.x` 缩略缓存统计，以及从 `.m` 重建 `.s/.x` 的有效区。
 
 更详细的格式说明见：
 
@@ -79,7 +79,46 @@
 - [stage11 编辑器](http://127.0.0.1:8787/stage11/editor.html)
 - [编辑器索引](http://127.0.0.1:8787/index.html)
 
-### `stage.ini` 结构化导出与回写
+### `.evt` 与 `.s/.x` 研究脚本
+
+导出 `.evt` 与文本资源关联：
+
+```powershell
+& $py tools/analyze_evt_resources.py .
+```
+
+导出 `.s/.x` 缩略缓存统计：
+
+```powershell
+& $py tools/analyze_minimap_sidecars.py .
+```
+
+
+按当前稳定规则，从 `.m` 重建 `.s/.x`：
+
+```powershell
+& $py tools/build_minimap_sidecars.py . --stage stage11
+```
+
+批量处理全部可用关卡：
+
+```powershell
+& $py tools/build_minimap_sidecars.py . --all --no-preview
+```
+
+主要产物：
+
+- `derived/sidecar_analysis/evt_resource_linkage.json`
+- `derived/minimap_sidecars/<stage>/sidecar_build_report.json`
+- `derived/sidecar_analysis/minimap_sidecar_analysis.json`
+
+当前摘要：
+
+- 38 个 `.evt` 都能对上对应 `TalkNN.txt`，其中 `stage17.txt` 是可读脚本原型，`stage01.txt` 是二进制 blob。
+- `.evt` 中目前最稳定的 ASCII 命令 token 是 `talk`、`VIEW`、`MAP`、`MAPALL`、`MOVE`、`TIME`、`TIMEOVER`。
+- `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `final_palette` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
+- 在 33 个关卡里，`.x` 的有效区始终比 `.s` 更接近 `.m` 派生结果，平均匹配率分别为 `0.620744 / 0.47098`；保留尾区后，生成结果的尾区匹配率恒为 `1.0`。
+### stage.ini 结构化导出与回写
 
 导出 `stage.ini` JSON：
 
@@ -190,6 +229,12 @@
 & $py -m unittest tests.test_stg_troop_analysis
 ```
 
+运行 `.m -> .s/.x` 小地图转换测试：
+
+```powershell
+& $py -m unittest tests.test_minimap_sidecar_builder
+```
+
 ## 文档维护要求
 
 本项目把文档视为交付物的一部分。每次修改都要同步维护：
@@ -208,5 +253,5 @@
 
 1. 继续逆向 `stageNN.stg`，把城池块、武将块和士兵块的字段边界拆得更干净。
 2. 继续逆向 `stageNN.evt`，确认事件记录如何引用地图坐标、对象和全局 id。
-3. 继续从 `Emperor.exe` 核实 `.s/.x` 的生成与读写路径，把小地图缓存写回补齐到编辑器链路。
+3. 继续从 `Emperor.exe` 核实 `.s/.x` 的真实生成与读写路径，并把现有保守写回脚本接入编辑器闭环。
 4. 低优先级补充 `Tiled/TMX` 交换格式，作为外部工具互操作层。
