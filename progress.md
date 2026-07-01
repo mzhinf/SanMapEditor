@@ -59,3 +59,8 @@
 - 新增 `derived/dor_relationship/stage01/dor_m_overlap.json`，把 `stage01.dor` 候选坐标对与 `.m byte08/09/10/11` 做重合度对比；当前结果不支持 `.dor` 直接记录码头/水陆交界切换点，反而更接近门、入口、通行限制或触发范围相关 sidecar。
 - 重写 `analyze_dor_relationship.py`，把 `Emperor.exe` 的扩展名引用簇、`Door    Data` 头校验位点与 `.dor` 候选坐标报告合并输出，并补上超大底图的 `Image.MAX_IMAGE_PIXELS = None` 保护。
 - 重新从 `Emperor.exe` 核实 `.dor` 与 `.m`：确认 `.spr/.dor/.evt` 与 `.m/.s/.x` 分属不同代码簇，且 `Door    Data` 在 `0x3e6d9 / 0x3ea3b` 做 12 字节头校验；这进一步支持 `.dor` 是关卡 sidecar，而不是 `.m` 某个字节字段的直接外置表。
+- 统一 `.m` 编辑字段口径：编辑器与导出 bundle 现在使用 `flags`、`byte08..byte15` 命名，并把 `reserved0/1/2/3` 明确标记为保留字段。
+- 重做 `tools/editor_app.html`：侧边栏改为 `Minimap -> Cell -> Record -> Resources -> Stage`，`Record` 区允许直接编辑所有非 `reserved` 数值字段，并新增“一键导出 .m/.s/.x”。
+- 扩展 `export_editor_bundle.py`：导出的 `stage.json` 现在包含字段元数据与 `.s/.x` 尾区参考，页面内导出会沿用“上 128 行派生、下 32 行保留”的 sidecar 规则。
+- 修正 `apply_editor_patch.py`、`build_minimap_sidecars.py` 与 `pyproject.toml`：兼容 `flags/byte13` 与旧字段别名，补回 `Pillow` 依赖声明，并清理脚本内的乱码注释/帮助文本。
+- 验证补充：`H:\Workstation\sgby\.venv\Scripts\python.exe -m unittest tests.test_apply_editor_patch_minimap` 已通过；同时完成 `tools/editor_app.html` 的 Node 语法检查，以及 `tools/export_editor_bundle.py . --stage stage11 --out derived/editor_smoke` 的导出烟测。

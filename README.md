@@ -68,6 +68,13 @@
 & $py tools/export_editor_bundle.py . --all
 ```
 
+导出的编辑页现在支持：
+
+- `.m` 记录字段按 `flags / byte08..byte15` 统一口径展示，其中 `reserved0/1/2/3` 只读。
+- 侧边栏顺序固定为 `Minimap -> Cell -> Record -> Resources -> Stage`。
+- `Record` 区可直接编辑所有非 `reserved` 数值字段。
+- 通过工具栏的“导出 .m/.s/.x”按钮可直接一键导出当前修改结果。
+
 启动本地静态服务：
 
 ```powershell
@@ -143,8 +150,8 @@
 - 38 个 `.evt` 都能对上对应 `TalkNN.txt`，其中 `stage17.txt` 是可读脚本原型，`stage01.txt` 是二进制 blob。
 - `.evt` 中目前最稳定的 ASCII 命令 token 是 `talk`、`VIEW`、`MAP`、`MAPALL`、`MOVE`、`TIME`、`TIMEOVER`。
 - `.dor` 文件头携带 `Door    Data` 魔数；重新从 `Emperor.exe` 复核后，`.spr/.dor/.evt` 明确落在同一 sidecar 装配簇里，而 `.m/.s/.x` 在另一组加载链上，当前更支持“.dor 是关卡 sidecar”而不是“.m 某个字节字段的直出表”。
-- `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `final_palette` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
-- `tools/apply_editor_patch.py` 现在会在写回 `.m` 后默认同步生成同名 `.s/.x`，补齐编辑器 patch 到 sidecar 的闭环。
+- `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `byte13 / minimap_color` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
+- `tools/apply_editor_patch.py` 现在会在写回 `.m` 后默认同步生成同名 `.s/.x`；编辑器导出的 bundle 也会内嵌 sidecar 尾区参考，支持页面内一键导出 `.m/.s/.x`。
 - 在 33 个关卡里，`.x` 的有效区始终比 `.s` 更接近 `.m` 派生结果，平均匹配率分别为 `0.620744 / 0.47098`；保留尾区后，生成结果的尾区匹配率恒为 `1.0`。
 ### stage.ini 结构化导出与回写
 

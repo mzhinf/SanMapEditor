@@ -238,10 +238,11 @@ screen_y = row * 10
 
 - 两者大小都固定为 `160 * 160 = 25600` 字节。
 - 已新增 `tools/analyze_minimap_sidecars.py`，会把全量统计写入 `derived/sidecar_analysis/minimap_sidecar_analysis.json`。
-- 已新增 `tools/build_minimap_sidecars.py`，按当前最稳的规则把 `.m` 转回 `.s/.x`：上 `128` 行由 `.m` 的 `final_palette` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
+- 已新增 `tools/build_minimap_sidecars.py`，按当前最稳的规则把 `.m` 转回 `.s/.x`：上 `128` 行由 `.m` 的 `byte13 / minimap_color` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
 - 已更新 `tools/apply_editor_patch.py`，编辑器 patch 写回 `.m` 后会默认同步生成同名 `.s/.x`，闭环沿用同一套“上 128 行派生、下 32 行保留”的保守规则。
+- 已更新 `tools/export_editor_bundle.py` 与编辑页模板：导出的 `stage.json` 会携带 `.s/.x` 尾区参考，编辑页侧边栏固定为 `Minimap -> Cell -> Record -> Resources -> Stage`，并支持直接一键导出 `.m/.s/.x`。
 - 在 33 个带 `.m/.s/.x` 的关卡里，`.s` 与 `.x` 平均仍有 `0.80094` 的逐字节相同率，说明二者高度相关。
-- 若只比较有效区，上 `128` 行中，`.m final_palette -> 160x128` 与 `.s/.x` 的平均匹配率分别为 `0.47098 / 0.620744`；`.x` 明显更接近 `.m` 派生结果。
+- 若只比较有效区，上 `128` 行中，`.m byte13/minimap_color -> 160x128` 与 `.s/.x` 的平均匹配率分别为 `0.47098 / 0.620744`；`.x` 明显更接近 `.m` 派生结果。
 - 若采用“上 128 行派生 + 下 32 行保留”的保守写回策略，生成结果与原始 `.s/.x` 的平均全图匹配率分别为 `0.576784 / 0.696596`，且尾区匹配率恒为 `1.0`。
 - 跨关卡统计里，第 `128..141` 行和 `150..159` 行都出现了 `>= 0.95` 的静态一致度，`159` 行达到 `1.0`，说明底部存在明显公共尾区或缓存区。
 - 当前可以把 `.s/.x` 视为“顶部有效缩略图 + 底部公共尾区/缓存区”的组合；但它们是否还叠加了 `Emperor.exe` 内的额外调色、标记或压缩流程，仍需继续确认。

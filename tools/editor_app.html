@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>San Map Editor</title>
+<title>San 地图编辑器</title>
 <style>
 :root {
   color-scheme: light;
@@ -14,10 +14,11 @@
   --panel: #fbfaf7;
   --accent: #0f766e;
   --mark: #f59e0b;
+  --soft: #ece7dc;
 }
 * { box-sizing: border-box; }
 body { margin: 0; height: 100vh; overflow: hidden; font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg); }
-#app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: 42px minmax(0, 1fr); height: 100vh; }
+#app { display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: 42px minmax(0, 1fr); height: 100vh; }
 .toolbar { grid-column: 1 / 3; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .toolbar .title { font-weight: 650; margin-right: 10px; white-space: nowrap; }
 .toolbar label, .field label { font-size: 12px; color: var(--muted); }
@@ -25,6 +26,8 @@ select, input, button { height: 28px; border: 1px solid var(--line); border-radi
 select, input { padding: 0 8px; }
 button { padding: 0 10px; cursor: pointer; }
 button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.secondary { background: #fff; color: var(--accent); border-color: var(--accent); }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
 .status { margin-left: auto; color: var(--muted); font-size: 12px; }
 #viewport { position: relative; min-width: 0; min-height: 0; background: #1d1b18; }
 canvas { width: 100%; height: 100%; display: block; }
@@ -32,13 +35,12 @@ canvas { width: 100%; height: 100%; display: block; }
 .section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
 .section:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
 .section-title { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: 0; margin-bottom: 8px; }
-.kv { display: grid; grid-template-columns: 92px 1fr; gap: 6px 10px; font-size: 13px; }
+.kv { display: grid; grid-template-columns: 100px 1fr; gap: 6px 10px; font-size: 13px; }
 .kv .k { color: var(--muted); }
-.record-grid { display: grid; grid-template-columns: 1fr 92px; gap: 6px 8px; align-items: center; font-size: 13px; }
-.record-grid span:nth-child(odd) { color: var(--muted); }
-.field { display: grid; grid-template-columns: 82px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
-.patch-list { font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; color: #343434; }
-.resource-controls { display: grid; grid-template-columns: 1fr 116px 76px; gap: 8px; margin-bottom: 8px; }
+.field { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+.field:last-child { margin-bottom: 0; }
+.patch-list { font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; color: #343434; min-height: 32px; }
+.resource-controls { display: grid; grid-template-columns: 1fr 116px 72px; gap: 8px; margin-bottom: 8px; }
 .resource-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; max-height: 260px; overflow: auto; padding-right: 2px; }
 .resource-item { height: 76px; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: 1fr 16px; align-items: center; justify-items: center; }
 .resource-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15,118,110,.18); }
@@ -46,8 +48,19 @@ canvas { width: 100%; height: 100%; display: block; }
 .resource-label { font-size: 11px; color: var(--muted); line-height: 14px; }
 .minimap-wrap { position: relative; border: 1px solid var(--line); background: #111; }
 #minimap { height: 150px; }
+.record-list { display: grid; gap: 8px; }
+.record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.record-row.dirty { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(15,118,110,.12); }
+.record-copy { min-width: 0; }
+.record-name { font-size: 13px; font-weight: 600; }
+.record-name span { color: var(--muted); font-weight: 400; }
+.record-note { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.record-actions { display: flex; align-items: center; gap: 6px; }
+.record-actions input { width: 104px; }
+.record-readonly { min-width: 104px; text-align: right; font-family: Consolas, monospace; color: var(--muted); }
+.placeholder { color: var(--muted); font-size: 13px; padding: 8px 2px; }
 @media (max-width: 980px) {
-  #app { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) 340px; }
+  #app { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) 360px; }
   .toolbar { grid-column: 1; flex-wrap: wrap; height: auto; }
   .side { border-left: 0; border-top: 1px solid var(--line); }
 }
@@ -56,38 +69,30 @@ canvas { width: 100%; height: 100%; display: block; }
 <body>
 <div id="app">
   <div class="toolbar">
-    <div class="title" id="stageTitle">stage</div>
-    <label>Stage</label>
-    <select id="stagePicker"><option value="">current</option></select>
-    <label>Tool</label>
-    <select id="tool" title="Inspect selects a cell. Paint writes the current resource. Right-drag moves the map."><option value="inspect">Inspect</option><option value="paint">Paint</option></select>
-    <label>Layer</label>
+    <div class="title" id="stageTitle">关卡</div>
+    <label>关卡</label>
+    <select id="stagePicker"><option value="">当前</option></select>
+    <label>工具</label>
+    <select id="tool" title="查看用于选中格子，绘制会写入当前资源。右键拖动平移地图。"><option value="inspect">查看</option><option value="paint">绘制</option></select>
+    <label>图层</label>
     <select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option></select>
-    <label>Value</label>
+    <label>值</label>
     <input id="brush" type="number" value="0" step="1">
     <input id="loadMFile" type="file" accept=".m" hidden>
-    <button id="openMFile">Open .m</button>
-    <button id="resetView">Reset view</button>
-    <button id="undoEdit">Undo</button>
-    <button id="resetCell">Reset cell</button>
-    <button id="resetAll">Reset all</button>
-    <button id="exportPatch" class="primary">Export patch</button>
-    <span class="status" id="status">Loading</span>
+    <button id="openMFile">打开 .m</button>
+    <button id="resetView">重置视图</button>
+    <button id="undoEdit">撤销</button>
+    <button id="resetCell">重置当前图层</button>
+    <button id="resetAll">重置全部</button>
+    <button id="exportFiles" class="primary">导出 .m/.s/.x</button>
+    <button id="exportPatch" class="secondary">导出 patch</button>
+    <span class="status" id="status">正在加载</span>
   </div>
   <div id="viewport"><canvas id="canvas"></canvas></div>
   <aside class="side">
     <div class="section">
-      <div class="section-title">Stage</div>
-      <div class="kv" id="stageInfo"></div>
-    </div>
-    <div class="section">
       <div class="section-title">Minimap</div>
       <div class="minimap-wrap"><canvas id="minimap"></canvas></div>
-    </div>
-    <div class="section">
-      <div class="section-title">Resources</div>
-      <div class="resource-controls"><input id="resourceFilter" placeholder="index"><select id="resourceSort"><option value="index">按编号</option><option value="used">按使用</option></select><button id="clearFilter">清除</button></div>
-      <div class="resource-list" id="resourceList"></div>
     </div>
     <div class="section">
       <div class="section-title">Cell</div>
@@ -95,10 +100,21 @@ canvas { width: 100%; height: 100%; display: block; }
     </div>
     <div class="section">
       <div class="section-title">Record</div>
-      <div class="record-grid" id="recordGrid"></div>
+      <div class="record-list" id="recordList"></div>
     </div>
     <div class="section">
-      <div class="field"><label>Patch count</label><input id="patchCount" value="0" readonly></div>
+      <div class="section-title">Resources</div>
+      <div class="resource-controls">
+        <input id="resourceFilter" placeholder="按编号过滤">
+        <select id="resourceSort"><option value="index">按编号</option><option value="used">按使用数</option></select>
+        <button id="clearFilter">清除</button>
+      </div>
+      <div class="resource-list" id="resourceList"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Stage</div>
+      <div class="kv" id="stageInfo"></div>
+      <div class="field" style="margin-top: 10px;"><label>修改数量</label><input id="patchCount" value="0" readonly></div>
       <div class="patch-list" id="patchList"></div>
     </div>
   </aside>
@@ -108,6 +124,22 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const mini = document.getElementById('minimap');
 const miniCtx = mini.getContext('2d');
+const LEGACY_FIELD_ALIASES = { word06: 'flags', final_palette: 'byte13' };
+const DEFAULT_FIELD_META = [
+  { name: 'acwx', alias: 'terrain_base', label: '底层地表', editable: true, reserved: false },
+  { name: 'acwy', alias: 'terrain_overlay', label: '叠加地表', editable: true, reserved: false },
+  { name: 'acwz', alias: 'object_overlay', label: '物件层', editable: true, reserved: false },
+  { name: 'flags', alias: 'reserved0', label: '保留字段 0', editable: false, reserved: true },
+  { name: 'byte08', alias: 'land_water_hint', label: '水陆切换提示', editable: true, reserved: false },
+  { name: 'byte09', alias: 'blocked', label: '阻挡标记', editable: true, reserved: false },
+  { name: 'byte10', alias: 'site_trigger', label: '据点触发', editable: true, reserved: false },
+  { name: 'byte11', alias: 'site_area', label: '据点区域', editable: true, reserved: false },
+  { name: 'byte12', alias: 'reserved1', label: '保留字段 1', editable: false, reserved: true },
+  { name: 'byte13', alias: 'minimap_color', label: '小地图颜色', editable: true, reserved: false, sidecarSource: true },
+  { name: 'byte14', alias: 'reserved2', label: '保留字段 2', editable: false, reserved: true },
+  { name: 'byte15', alias: 'reserved3', label: '保留字段 3', editable: false, reserved: true },
+];
+const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
 const state = {
   meta: null,
   resources: null,
@@ -128,20 +160,23 @@ const state = {
   patches: new Map(),
   originalRecords: null,
   undoStack: [],
+  fieldMetaByName: new Map(),
 };
 const els = {
   status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
-  cellInfo: document.getElementById('cellInfo'), recordGrid: document.getElementById('recordGrid'), tool: document.getElementById('tool'),
+  cellInfo: document.getElementById('cellInfo'), recordList: document.getElementById('recordList'), tool: document.getElementById('tool'),
   layer: document.getElementById('layer'), brush: document.getElementById('brush'), patchCount: document.getElementById('patchCount'),
   patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceFilter: document.getElementById('resourceFilter'),
   resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
+  exportFiles: document.getElementById('exportFiles'),
 };
-function fieldIndex(name) { return state.meta.fields.indexOf(name); }
+function canonicalFieldName(name) { return LEGACY_FIELD_ALIASES[name] || name; }
+function fieldIndex(name) { return state.meta.fields.indexOf(canonicalFieldName(name)); }
 function recordIndex(cell) { return cell.row * state.meta.width + cell.col; }
 function recordAt(cell) { return state.meta.records[recordIndex(cell)]; }
 function cellKey(cell) { return `${cell.col},${cell.row}`; }
-function patchKey(cell, field) { return `${cellKey(cell)}:${field}`; }
+function patchKey(cell, field) { return `${cellKey(cell)}:${canonicalFieldName(field)}`; }
 function cellToWorld(col, row) { const [ox, oy] = state.meta.origin; return { x: ox + col * 40 + (row & 1 ? 20 : 0), y: oy + row * 10 }; }
 function displayImage() { return state.renderCanvas || state.image; }
 function canvasSizeForMeta(meta = state.meta) { return { width: meta.width * 40 + 20 + 128, height: meta.height * 10 + 20 + 128 }; }
@@ -154,6 +189,55 @@ function worldToCell(x, y) {
 }
 function clientToWorld(ev) { const rect = canvas.getBoundingClientRect(); return { x: (ev.clientX - rect.left - state.transform.x) / state.transform.scale, y: (ev.clientY - rect.top - state.transform.y) / state.transform.scale }; }
 function isEditableTarget(target) { return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable); }
+function defaultFieldMetaByName() { return new Map(DEFAULT_FIELD_META.map(entry => [entry.name, entry])); }
+function normalizeSidecars(sidecars) {
+  const gridSize = Number.isInteger(sidecars?.gridSize) ? sidecars.gridSize : 160;
+  const activeRows = Number.isInteger(sidecars?.activeRows) ? sidecars.activeRows : 128;
+  const tails = {};
+  for (const suffix of ['s', 'x']) {
+    const entry = sidecars?.tails?.[suffix];
+    if (entry && typeof entry.tailBase64 === 'string' && entry.tailBase64) tails[suffix] = { ...entry };
+  }
+  return {
+    available: sidecars?.available === true && Object.keys(tails).length === 2,
+    gridSize,
+    activeRows,
+    tailRows: Number.isInteger(sidecars?.tailRows) ? sidecars.tailRows : Math.max(0, gridSize - activeRows),
+    referenceStem: typeof sidecars?.referenceStem === 'string' ? sidecars.referenceStem : '',
+    tails,
+    reason: typeof sidecars?.reason === 'string' ? sidecars.reason : '',
+  };
+}
+function normalizeMeta(meta) {
+  const defaultMeta = defaultFieldMetaByName();
+  const fields = (Array.isArray(meta.fields) && meta.fields.length ? meta.fields : EXPORT_FIELD_ORDER).map(canonicalFieldName);
+  const rawFieldMeta = Array.isArray(meta.fieldMeta) ? meta.fieldMeta : [];
+  const rawMetaByName = new Map(rawFieldMeta.map(entry => [canonicalFieldName(entry?.name || ''), entry]));
+  const fieldMeta = fields.map(name => {
+    const base = defaultMeta.get(name) || { name, alias: name, label: name, editable: true, reserved: false };
+    const raw = rawMetaByName.get(name) || {};
+    return {
+      name,
+      alias: typeof raw.alias === 'string' ? raw.alias : base.alias,
+      label: typeof raw.label === 'string' ? raw.label : base.label,
+      editable: raw.editable ?? base.editable,
+      reserved: raw.reserved ?? base.reserved,
+      sidecarSource: raw.sidecarSource ?? !!base.sidecarSource,
+    };
+  });
+  const editableLayers = (Array.isArray(meta.editableLayers) && meta.editableLayers.length ? meta.editableLayers : ['acwx', 'acwy', 'acwz']).map(canonicalFieldName);
+  const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name)).map(canonicalFieldName);
+  return { ...meta, fields, fieldMeta, editableLayers, editableRecordFields, sidecars: normalizeSidecars(meta.sidecars) };
+}
+function getFieldMeta(name) {
+  return state.fieldMetaByName.get(canonicalFieldName(name)) || DEFAULT_FIELD_META.find(entry => entry.name === canonicalFieldName(name)) || { name, alias: name, label: name, editable: true, reserved: false };
+}
+function recordFieldBounds(name) {
+  const field = canonicalFieldName(name);
+  if (field === 'acwx' || field === 'acwy' || field === 'acwz' || field === 'flags') return { min: -32768, max: 32767 };
+  return { min: 0, max: 255 };
+}
+function formatFieldName(meta) { return meta.alias ? `${meta.name} · ${meta.alias}` : meta.name; }
 function moveSelected(dx, dy) {
   if (!state.meta) return;
   const next = state.selected ? { col: state.selected.col + dx, row: state.selected.row + dy } : { col: 0, row: 0 };
@@ -209,11 +293,11 @@ function drawMinimap() {
   const view = { x: -state.transform.x / state.transform.scale, y: -state.transform.y / state.transform.scale, w: mainRect.width / state.transform.scale, h: mainRect.height / state.transform.scale };
   miniCtx.strokeStyle = '#f59e0b'; miniCtx.lineWidth = 2; miniCtx.strokeRect(ox + view.x / image.width * w, oy + view.y / image.height * h, view.w / image.width * w, view.h / image.height * h);
 }
-function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = v; node.append(a, b); } }
+function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = String(v); node.append(a, b); } }
 function layerStats(layer) {
   const stats = state.layerStats[layer];
   if (!stats) return '-';
-  return `${stats.nonEmpty} cells / ${stats.counts.size} ids`;
+  return `${stats.nonEmpty} 格 / ${stats.counts.size} 个编号`;
 }
 function rebuildLayerStats() {
   state.layerStats = {};
@@ -231,7 +315,7 @@ function rebuildLayerStats() {
   }
 }
 function updateLayerStats(field, before, after) {
-  const stats = state.layerStats[field];
+  const stats = state.layerStats[canonicalFieldName(field)];
   if (!stats || before === after) return;
   if (before !== -1) {
     const next = (stats.counts.get(before) || 0) - 1;
@@ -257,11 +341,9 @@ function nearbyValues(cell, layer, radius = 3, limit = 5) {
     }
   }
   hits.sort((a, b) => a.dist - b.dist || a.row - b.row || a.col - b.col);
-  return hits.slice(0, limit).map(h => `${h.value} @ ${h.col},${h.row}`).join(' | ') || '-';
+  return hits.slice(0, limit).map(hit => `${hit.value} @ ${hit.col},${hit.row}`).join(' | ') || '-';
 }
-function safeAnchor(value) {
-  return Number.isFinite(value) && value >= 0 && value <= 512 ? value : 0;
-}
+function safeAnchor(value) { return Number.isFinite(value) && value >= 0 && value <= 512 ? value : 0; }
 function recomputeRedrawConfig() {
   let maxLeft = 20;
   let maxRight = 40;
@@ -292,25 +374,92 @@ function recomputeRedrawConfig() {
     rowRadius: Math.ceil((maxUp + maxDown) / 10) + 2,
   };
 }
+function renderRecordEditor() {
+  if (!state.selected) {
+    els.recordList.innerHTML = '<div class="placeholder">先在地图上选中一个格子，再编辑 Record 字段。</div>';
+    return;
+  }
+  const rec = recordAt(state.selected);
+  els.recordList.textContent = '';
+  for (const meta of state.meta.fieldMeta) {
+    const fi = fieldIndex(meta.name);
+    if (fi < 0) continue;
+    const row = document.createElement('div');
+    row.className = 'record-row' + (state.patches.has(patchKey(state.selected, meta.name)) ? ' dirty' : '');
+    const copy = document.createElement('div');
+    copy.className = 'record-copy';
+    const name = document.createElement('div');
+    name.className = 'record-name';
+    name.textContent = formatFieldName(meta);
+    const note = document.createElement('div');
+    note.className = 'record-note';
+    note.textContent = meta.label;
+    copy.append(name, note);
+    row.append(copy);
+    if (meta.editable && !meta.reserved) {
+      const actions = document.createElement('div');
+      actions.className = 'record-actions';
+      const input = document.createElement('input');
+      const bounds = recordFieldBounds(meta.name);
+      input.type = 'number';
+      input.step = '1';
+      input.min = String(bounds.min);
+      input.max = String(bounds.max);
+      input.value = String(rec[fi]);
+      input.addEventListener('change', () => applyRecordFieldChange(meta.name, input.value));
+      input.addEventListener('keydown', ev => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        applyRecordFieldChange(meta.name, input.value);
+      });
+      const reset = document.createElement('button');
+      reset.textContent = '恢复';
+      reset.addEventListener('click', () => resetRecordField(meta.name));
+      actions.append(input, reset);
+      row.append(actions);
+    } else {
+      const value = document.createElement('div');
+      value.className = 'record-readonly';
+      value.textContent = String(rec[fi]);
+      row.append(value);
+    }
+    els.recordList.append(row);
+  }
+}
 function refreshSide() {
-  const m = state.meta; setPairs(els.stageInfo, [['Stage', m.stage], ['Cells', `${m.width} x ${m.height}`], ['Layout', m.layout], ['Palette', m.palette], ['acwy', layerStats('acwy')], ['acwz', layerStats('acwz')]]);
-  if (!state.selected) { setPairs(els.cellInfo, [['Cell', '-'], ['Index', '-']]); els.recordGrid.innerHTML = ''; return; }
-  const cell = state.selected; const idx = cell.row * m.width + cell.col; const rec = recordAt(cell); setPairs(els.cellInfo, [['Cell', `${cell.col}, ${cell.row}`], ['Index', idx], ['Near acwy', nearbyValues(cell, 'acwy')], ['Near acwz', nearbyValues(cell, 'acwz')]]);
-  els.recordGrid.innerHTML = ''; m.fields.forEach((name, i) => { const k = document.createElement('span'); k.textContent = name; const v = document.createElement('span'); v.textContent = rec[i]; els.recordGrid.append(k, v); });
-  els.brush.value = rec[fieldIndex(els.layer.value)] ?? 0;
+  const sidecarText = state.meta.sidecars.available ? '保留原始尾区' : '尾区改为 0 填充';
+  const sidecarReason = state.meta.sidecars.available ? `${state.meta.sidecars.gridSize}x${state.meta.sidecars.gridSize}` : (state.meta.sidecars.reason || '缺少参考 sidecar');
+  setPairs(els.stageInfo, [
+    ['关卡', state.meta.stage],
+    ['格子数', `${state.meta.width} x ${state.meta.height}`],
+    ['布局', state.meta.layout],
+    ['调色板', state.meta.palette],
+    ['acwy', layerStats('acwy')],
+    ['acwz', layerStats('acwz')],
+    ['.s/.x 导出', sidecarText],
+    ['尾区策略', sidecarReason],
+  ]);
+  if (!state.selected) {
+    setPairs(els.cellInfo, [['格子', '-'], ['索引', '-']]);
+    renderRecordEditor();
+    return;
+  }
+  const cell = state.selected; const idx = cell.row * state.meta.width + cell.col;
+  setPairs(els.cellInfo, [['格子', `${cell.col}, ${cell.row}`], ['索引', idx], ['附近 acwy', nearbyValues(cell, 'acwy')], ['附近 acwz', nearbyValues(cell, 'acwz')]]);
+  renderRecordEditor();
+  const brushField = canonicalFieldName(els.layer.value);
+  const brushIndex = fieldIndex(brushField);
+  els.brush.value = brushIndex >= 0 ? (recordAt(cell)[brushIndex] ?? 0) : 0;
 }
-function hasSelectedLayerPatch() {
-  return !!state.selected && state.patches.has(patchKey(state.selected, els.layer.value));
-}
+function hasSelectedLayerPatch() { return !!state.selected && state.patches.has(patchKey(state.selected, els.layer.value)); }
 function refreshPatches() {
-  els.patchCount.value = state.patches.size;
-  els.patchList.textContent = [...state.patches.values()].slice(-12).map(p => `${p.x},${p.y} ${p.field}: ${p.before} -> ${p.after}`).join('\n');
-  els.status.textContent = state.patches.size ? `Dirty (${state.patches.size})` : 'Ready';
+  els.patchCount.value = String(state.patches.size);
+  els.patchList.textContent = [...state.patches.values()].slice(-12).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`).join('\n');
+  els.status.textContent = state.patches.size ? `已修改（${state.patches.size}）` : '就绪';
   els.undoEdit.disabled = !state.undoStack.length;
   els.resetCell.disabled = !hasSelectedLayerPatch();
   els.resetAll.disabled = !state.patches.size;
 }
-
 function renderResourceList() {
   if (!state.resources) return;
   const layer = els.layer.value;
@@ -318,7 +467,7 @@ function renderResourceList() {
   const filter = els.resourceFilter.value.trim();
   const selected = state.selectedResource[layer];
   const entries = info.entries
-    .filter(e => !filter || String(e.index).includes(filter))
+    .filter(entry => !filter || String(entry.index).includes(filter))
     .sort((a, b) => els.resourceSort.value === 'used' ? ((b.used || 0) - (a.used || 0) || a.index - b.index) : (a.index - b.index))
     .slice(0, 240);
   els.resourceList.textContent = '';
@@ -330,7 +479,7 @@ function renderResourceList() {
       const entry = entries[cursor];
       const button = document.createElement('button');
       button.className = 'resource-item' + (selected === entry.index ? ' selected' : '');
-      button.title = `${layer} ${entry.index}${entry.used ? `, used ${entry.used}` : ''}`;
+      button.title = `${layer} ${entry.index}${entry.used ? `，使用 ${entry.used}` : ''}`;
       const thumb = document.createElement('div');
       thumb.className = 'resource-thumb';
       thumb.style.width = `${info.tileSize}px`;
@@ -388,21 +537,9 @@ function rebuildEditedImage(cells = null) {
   rctx.imageSmoothingEnabled = false;
   if (!cells || !cells.length) {
     rctx.clearRect(0, 0, state.renderCanvas.width, state.renderCanvas.height);
-    for (let row = 0; row < state.meta.height; row++) {
-      for (let col = 0; col < state.meta.width; col++) {
-        drawResource('acwx', state.meta.records[row * state.meta.width + col][fieldIndex('acwx')], col, row, rctx);
-      }
-    }
-    for (let row = 0; row < state.meta.height; row++) {
-      for (let col = 0; col < state.meta.width; col++) {
-        drawResource('acwy', state.meta.records[row * state.meta.width + col][fieldIndex('acwy')], col, row, rctx);
-      }
-    }
-    for (let row = 0; row < state.meta.height; row++) {
-      for (let col = 0; col < state.meta.width; col++) {
-        drawResource('acwz', state.meta.records[row * state.meta.width + col][fieldIndex('acwz')], col, row, rctx);
-      }
-    }
+    for (let row = 0; row < state.meta.height; row++) for (let col = 0; col < state.meta.width; col++) drawResource('acwx', state.meta.records[row * state.meta.width + col][fieldIndex('acwx')], col, row, rctx);
+    for (let row = 0; row < state.meta.height; row++) for (let col = 0; col < state.meta.width; col++) drawResource('acwy', state.meta.records[row * state.meta.width + col][fieldIndex('acwy')], col, row, rctx);
+    for (let row = 0; row < state.meta.height; row++) for (let col = 0; col < state.meta.width; col++) drawResource('acwz', state.meta.records[row * state.meta.width + col][fieldIndex('acwz')], col, row, rctx);
     return;
   }
   const { maxLeft, maxRight, maxUp, maxDown, colRadius, rowRadius } = state.redrawConfig;
@@ -450,17 +587,18 @@ function rebuildEditedImage(cells = null) {
   rctx.restore();
 }
 function syncPatchFor(cell, field) {
-  const fi = fieldIndex(field);
+  const normalized = canonicalFieldName(field);
+  const fi = fieldIndex(normalized);
   const idx = recordIndex(cell);
   const before = state.originalRecords[idx][fi];
   const after = state.meta.records[idx][fi];
-  const key = patchKey(cell, field);
+  const key = patchKey(cell, normalized);
   if (before === after) state.patches.delete(key);
-  else state.patches.set(key, { x: cell.col, y: cell.row, field, before, after, minimapDirty: true });
+  else state.patches.set(key, { x: cell.col, y: cell.row, field: normalized, before, after, minimapDirty: true });
 }
 function refreshAfterRecordEdit(cell = null, editedCells = null) {
   if (cell) state.selected = cell;
-  rebuildEditedImage(editedCells);
+  if (editedCells && editedCells.length) rebuildEditedImage(editedCells);
   refreshSide();
   refreshPatches();
   scheduleDraw();
@@ -469,21 +607,23 @@ function applyChangeSet(changes) {
   const applied = [];
   for (const change of changes) {
     const cell = { col: change.x, row: change.y };
-    const fi = fieldIndex(change.field);
+    const normalizedField = canonicalFieldName(change.field);
+    const fi = fieldIndex(normalizedField);
     if (fi < 0) continue;
     const rec = recordAt(cell);
     const before = rec[fi];
     const after = change.after;
     if (before === after) continue;
     rec[fi] = after;
-    updateLayerStats(change.field, before, after);
-    syncPatchFor(cell, change.field);
-    applied.push({ x: change.x, y: change.y, field: change.field, before, after });
+    updateLayerStats(normalizedField, before, after);
+    syncPatchFor(cell, normalizedField);
+    applied.push({ x: change.x, y: change.y, field: normalizedField, before, after });
   }
   if (!applied.length) return false;
   state.undoStack.push(applied);
   const last = applied[applied.length - 1];
-  const editedCells = [...new Map(applied.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell);
+  const needsVisualRefresh = applied.some(change => state.meta.editableLayers.includes(change.field));
+  const editedCells = needsVisualRefresh ? [...new Map(applied.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell) : null;
   refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells);
   return true;
 }
@@ -500,34 +640,60 @@ function undoLastEdit() {
     syncPatchFor(cell, change.field);
   }
   const last = changes[changes.length - 1];
-  const editedCells = [...new Map(changes.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell);
+  const needsVisualRefresh = changes.some(change => state.meta.editableLayers.includes(change.field));
+  const editedCells = needsVisualRefresh ? [...new Map(changes.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell) : null;
   refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells);
 }
 function resetSelectedLayerChange() {
   if (!state.selected) return;
-  const field = els.layer.value;
+  const field = canonicalFieldName(els.layer.value);
   const fi = fieldIndex(field);
   if (fi < 0) return;
   const original = state.originalRecords[recordIndex(state.selected)][fi];
   applyChangeSet([{ x: state.selected.col, y: state.selected.row, field, after: original }]);
 }
 function resetAllChanges() {
-  const changes = [...state.patches.values()].map(p => ({ x: p.x, y: p.y, field: p.field, after: p.before }));
+  const changes = [...state.patches.values()].map(patch => ({ x: patch.x, y: patch.y, field: patch.field, after: patch.before }));
   applyChangeSet(changes);
 }
 function applyPaint(cell) {
-  const field = els.layer.value; const value = Number.parseInt(els.brush.value, 10); if (!Number.isFinite(value)) return;
+  const field = canonicalFieldName(els.layer.value);
+  const value = Number.parseInt(els.brush.value, 10);
+  if (!Number.isFinite(value)) return;
   applyChangeSet([{ x: cell.col, y: cell.row, field, after: value }]);
 }
+function applyRecordFieldChange(field, rawValue) {
+  if (!state.selected) return;
+  const value = Number.parseInt(rawValue, 10);
+  const bounds = recordFieldBounds(field);
+  if (!Number.isFinite(value) || value < bounds.min || value > bounds.max) {
+    els.status.textContent = `${canonicalFieldName(field)} 超出范围 ${bounds.min}..${bounds.max}`;
+    refreshSide();
+    return;
+  }
+  const changed = applyChangeSet([{ x: state.selected.col, y: state.selected.row, field, after: value }]);
+  if (changed && state.meta.editableLayers.includes(canonicalFieldName(field)) && canonicalFieldName(field) === canonicalFieldName(els.layer.value)) {
+    state.selectedResource[canonicalFieldName(field)] = value;
+    renderResourceList();
+  }
+}
+function resetRecordField(field) {
+  if (!state.selected) return;
+  const fi = fieldIndex(field);
+  if (fi < 0) return;
+  const original = state.originalRecords[recordIndex(state.selected)][fi];
+  applyChangeSet([{ x: state.selected.col, y: state.selected.row, field, after: original }]);
+}
 function resetEditState(meta) {
-  state.meta = meta;
-  state.originalRecords = meta.records.map(record => record.slice());
+  state.meta = normalizeMeta(meta);
+  state.fieldMetaByName = new Map(state.meta.fieldMeta.map(entry => [entry.name, entry]));
+  state.originalRecords = state.meta.records.map(record => record.slice());
   state.patches.clear();
   state.undoStack = [];
   state.selected = null;
   state.transform = { x: 24, y: 24, scale: 0.8 };
-  els.title.textContent = meta.stage;
-  for (const layer of meta.editableLayers) { state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null; }
+  els.title.textContent = state.meta.stage;
+  for (const layer of state.meta.editableLayers) state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null;
   rebuildLayerStats();
   recomputeRedrawConfig();
   rebuildEditedImage();
@@ -538,13 +704,13 @@ function resetEditState(meta) {
 }
 function parseStageM(buffer, name = 'local.m') {
   const view = new DataView(buffer);
-  if (buffer.byteLength < 16) throw new Error('file too small for .m header');
+  if (buffer.byteLength < 16) throw new Error('文件太小，无法识别为 .m');
   const width = view.getUint32(0, true);
   const height = view.getUint32(4, true);
   const magic = new TextDecoder('ascii').decode(new Uint8Array(buffer, 8, 8));
-  if (magic !== 'Hello1.0') throw new Error('not a Hello1.0 .m file');
+  if (magic !== 'Hello1.0') throw new Error('这不是 Hello1.0 .m 文件');
   const expected = 16 + width * height * 16;
-  if (buffer.byteLength < expected) throw new Error(`truncated .m records: expected ${expected} bytes, got ${buffer.byteLength}`);
+  if (buffer.byteLength < expected) throw new Error(`.m 记录区不完整：期望 ${expected} 字节，实际 ${buffer.byteLength}`);
   const records = [];
   for (let i = 0; i < width * height; i++) {
     const off = 16 + i * 16;
@@ -554,13 +720,15 @@ function parseStageM(buffer, name = 'local.m') {
       view.getUint8(off + 12), view.getUint8(off + 13), view.getUint8(off + 14), view.getUint8(off + 15),
     ]);
   }
-  return {
-    format: 'san-editor-stage-v1', stage: name.replace(/\.m$/i, ''), width, height, layout: 'stagger', origin: [64, 64],
+  const stageName = name.replace(/\.m$/i, '');
+  const inheritedSidecars = state.meta?.stage === stageName ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '当前本地 .m 没有关联的 sidecar 尾区参考。' };
+  return normalizeMeta({
+    format: 'san-editor-stage-v1', stage: stageName, width, height, layout: 'stagger', origin: [64, 64],
     tile: { width: 40, height: 20, row_step: 10, odd_row_x: 20 },
-    fields: state.meta.fields.slice(), editableLayers: state.meta.editableLayers.slice(), palette: state.meta.palette,
-    image: null, minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' }, resources: state.meta.resources, records,
-    render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height }).width, canvasSizeForMeta({ width, height }).height] },
-  };
+    fields: state.meta.fields.slice(), fieldMeta: state.meta.fieldMeta.map(entry => ({ ...entry })), editableLayers: state.meta.editableLayers.slice(), editableRecordFields: state.meta.editableRecordFields.slice(), palette: state.meta.palette,
+    image: null, minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' }, sidecars: inheritedSidecars, resources: state.meta.resources, records,
+    render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
+  });
 }
 async function loadLocalMFile(file) {
   if (!file) return;
@@ -569,14 +737,14 @@ async function loadLocalMFile(file) {
     state.minimap = null;
     resetEditState(meta);
     els.stagePicker.value = '';
-    els.status.textContent = `Loaded ${file.name}`;
+    els.status.textContent = `已加载 ${file.name}`;
   } catch (err) {
     els.status.textContent = String(err.message || err);
   }
 }
 async function loadStagePicker() {
   try {
-    const index = await fetch('../index.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+    const index = await fetch('../index.json', { cache: 'no-store' }).then(resp => resp.ok ? resp.json() : null);
     const stages = index?.stages || [];
     if (!stages.length) return;
     els.stagePicker.textContent = '';
@@ -591,7 +759,137 @@ async function loadStagePicker() {
     els.stagePicker.disabled = true;
   }
 }
-function downloadPatch() { const payload = { format: 'san-editor-patch-v1', stage: state.meta.stage, fields: state.meta.fields, minimap: { dirtyCells: [...state.patches.values()].filter(p => p.minimapDirty).map(p => [p.x, p.y]) }, changes: [...state.patches.values()] }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${state.meta.stage}_patch.json`; a.click(); URL.revokeObjectURL(a.href); }
+function downloadPatch() {
+  const payload = {
+    format: 'san-editor-patch-v1',
+    stage: state.meta.stage,
+    fields: state.meta.fields,
+    minimap: { dirtyCells: [...state.patches.values()].filter(patch => patch.minimapDirty).map(patch => [patch.x, patch.y]) },
+    changes: [...state.patches.values()],
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${state.meta.stage}_patch.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function recordValue(record, field) {
+  const fi = fieldIndex(field);
+  if (fi < 0) throw new Error(`缺少字段 ${field}`);
+  return record[fi];
+}
+function buildStageBytes() {
+  const buffer = new ArrayBuffer(16 + state.meta.records.length * 16);
+  const view = new DataView(buffer);
+  view.setUint32(0, state.meta.width, true);
+  view.setUint32(4, state.meta.height, true);
+  new Uint8Array(buffer, 8, 8).set(new TextEncoder().encode('Hello1.0'));
+  for (let index = 0; index < state.meta.records.length; index++) {
+    const record = state.meta.records[index];
+    const off = 16 + index * 16;
+    view.setInt16(off, recordValue(record, 'acwx'), true);
+    view.setInt16(off + 2, recordValue(record, 'acwy'), true);
+    view.setInt16(off + 4, recordValue(record, 'acwz'), true);
+    view.setInt16(off + 6, recordValue(record, 'flags'), true);
+    view.setUint8(off + 8, recordValue(record, 'byte08'));
+    view.setUint8(off + 9, recordValue(record, 'byte09'));
+    view.setUint8(off + 10, recordValue(record, 'byte10'));
+    view.setUint8(off + 11, recordValue(record, 'byte11'));
+    view.setUint8(off + 12, recordValue(record, 'byte12'));
+    view.setUint8(off + 13, recordValue(record, 'byte13'));
+    view.setUint8(off + 14, recordValue(record, 'byte14'));
+    view.setUint8(off + 15, recordValue(record, 'byte15'));
+  }
+  return new Uint8Array(buffer);
+}
+function nearestSampleIndex(sourceSize, targetIndex, targetSize) {
+  return Math.max(0, Math.min(sourceSize - 1, Math.floor((targetIndex + 0.5) * sourceSize / targetSize)));
+}
+function buildActiveSidecarBytes() {
+  const gridSize = state.meta.sidecars.gridSize || 160;
+  const activeRows = state.meta.sidecars.activeRows || 128;
+  const fi = fieldIndex('byte13');
+  if (fi < 0) throw new Error('当前关卡缺少 byte13/minimap_color 字段。');
+  const output = new Uint8Array(gridSize * activeRows);
+  for (let targetRow = 0; targetRow < activeRows; targetRow++) {
+    const sourceRow = nearestSampleIndex(state.meta.height, targetRow, activeRows);
+    for (let targetCol = 0; targetCol < gridSize; targetCol++) {
+      const sourceCol = nearestSampleIndex(state.meta.width, targetCol, gridSize);
+      output[targetRow * gridSize + targetCol] = state.meta.records[sourceRow * state.meta.width + sourceCol][fi] & 0xFF;
+    }
+  }
+  return output;
+}
+function base64ToBytes(text) {
+  const raw = window.atob(text);
+  const bytes = new Uint8Array(raw.length);
+  for (let index = 0; index < raw.length; index++) bytes[index] = raw.charCodeAt(index);
+  return bytes;
+}
+function buildSidecarBytes(suffix) {
+  const gridSize = state.meta.sidecars.gridSize || 160;
+  const activeRows = state.meta.sidecars.activeRows || 128;
+  const activeBytes = buildActiveSidecarBytes();
+  const tailLength = gridSize * Math.max(0, gridSize - activeRows);
+  const tailEntry = state.meta.sidecars.tails?.[suffix];
+  const tailBytes = tailEntry?.tailBase64 ? base64ToBytes(tailEntry.tailBase64) : new Uint8Array(tailLength);
+  const merged = new Uint8Array(activeBytes.length + tailBytes.length);
+  merged.set(activeBytes);
+  merged.set(tailBytes, activeBytes.length);
+  return { bytes: merged, usedFallbackTail: !tailEntry?.tailBase64 };
+}
+function buildExportArtifacts() {
+  const stageName = state.meta.stage;
+  const files = [{ name: `${stageName}.m`, bytes: buildStageBytes() }];
+  const sidecarFlags = [];
+  for (const suffix of ['s', 'x']) {
+    const built = buildSidecarBytes(suffix);
+    files.push({ name: `${stageName}.${suffix}`, bytes: built.bytes });
+    sidecarFlags.push(built.usedFallbackTail);
+  }
+  return { files, usedFallbackTail: sidecarFlags.some(Boolean) };
+}
+async function writeFilesToDirectory(dirHandle, files) {
+  for (const file of files) {
+    const handle = await dirHandle.getFileHandle(file.name, { create: true });
+    const writer = await handle.createWritable();
+    await writer.write(file.bytes);
+    await writer.close();
+  }
+}
+function triggerDownload(name, bytes) {
+  const blob = new Blob([bytes], { type: 'application/octet-stream' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = name;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+async function exportEditedArtifacts() {
+  try {
+    const artifacts = buildExportArtifacts();
+    if (typeof window.showDirectoryPicker === 'function') {
+      try {
+        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        await writeFilesToDirectory(dirHandle, artifacts.files);
+        els.status.textContent = artifacts.usedFallbackTail ? '已导出 .m/.s/.x，缺失 sidecar 尾区时已用 0 填充。' : '已导出 .m/.s/.x';
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') {
+          els.status.textContent = '已取消导出';
+          return;
+        }
+      }
+    }
+    for (const [index, file] of artifacts.files.entries()) {
+      window.setTimeout(() => triggerDownload(file.name, file.bytes), index * 180);
+    }
+    els.status.textContent = artifacts.usedFallbackTail ? '已开始下载 .m/.s/.x，缺失 sidecar 尾区时已用 0 填充。' : '已开始下载 .m/.s/.x';
+  } catch (err) {
+    els.status.textContent = String(err.message || err);
+  }
+}
 canvas.addEventListener('contextmenu', ev => { ev.preventDefault(); });
 canvas.addEventListener('pointerdown', ev => {
   if (ev.button === 2) {
@@ -629,6 +927,7 @@ els.undoEdit.addEventListener('click', undoLastEdit);
 els.resetCell.addEventListener('click', resetSelectedLayerChange);
 els.resetAll.addEventListener('click', resetAllChanges);
 document.getElementById('exportPatch').addEventListener('click', downloadPatch);
+els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
 els.layer.addEventListener('change', () => { renderResourceList(); refreshSide(); refreshPatches(); });
 els.resourceFilter.addEventListener('input', renderResourceList);
@@ -649,11 +948,11 @@ window.addEventListener('keydown', ev => {
 window.addEventListener('resize', resizeCanvas);
 async function loadImage(src) { const image = new Image(); image.src = src; await image.decode(); return image; }
 async function boot() {
-  state.meta = await fetch('stage.json').then(r => r.json());
+  state.meta = normalizeMeta(await fetch('stage.json').then(resp => resp.json()));
   state.originalRecords = state.meta.records.map(record => record.slice());
-  const resourcePromise = fetch(state.meta.resources).then(r => r.json());
+  const resourcePromise = fetch(state.meta.resources).then(resp => resp.json());
   const imagePromise = loadImage(state.meta.image);
-  const minimapPromise = loadImage(state.meta.minimap.image);
+  const minimapPromise = state.meta.minimap?.image ? loadImage(state.meta.minimap.image).catch(() => null) : Promise.resolve(null);
   state.image = await imagePromise;
   state.minimap = await minimapPromise;
   state.resources = await resourcePromise;
@@ -666,7 +965,7 @@ async function boot() {
   resetEditState(state.meta);
   await loadStagePicker();
 }
-window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt };
+window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>

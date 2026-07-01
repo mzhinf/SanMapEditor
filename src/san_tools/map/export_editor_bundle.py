@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import shutil
 import struct
@@ -11,22 +12,42 @@ from PIL import Image, ImageDraw
 from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
 from render_m_cel_map import canvas_size, make_diamond_tile, make_object, parse_counted_cel, render_stage
 
+try:
+    from minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
+except ImportError:
+    from san_tools.map.minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
+
 FIELD_NAMES = [
     "acwx",
     "acwy",
     "acwz",
-    "word06",
+    "flags",
     "byte08",
     "byte09",
     "byte10",
     "byte11",
     "byte12",
-    "final_palette",
+    "byte13",
     "byte14",
     "byte15",
 ]
 
 EDITABLE_LAYERS = ("acwx", "acwy", "acwz")
+FIELD_META = [
+    {"name": "acwx", "alias": "terrain_base", "label": "底层地表", "editable": True, "reserved": False},
+    {"name": "acwy", "alias": "terrain_overlay", "label": "叠加地表", "editable": True, "reserved": False},
+    {"name": "acwz", "alias": "object_overlay", "label": "物件层", "editable": True, "reserved": False},
+    {"name": "flags", "alias": "reserved0", "label": "保留字段 0", "editable": False, "reserved": True},
+    {"name": "byte08", "alias": "land_water_hint", "label": "水陆切换提示", "editable": True, "reserved": False},
+    {"name": "byte09", "alias": "blocked", "label": "阻挡标记", "editable": True, "reserved": False},
+    {"name": "byte10", "alias": "site_trigger", "label": "据点触发", "editable": True, "reserved": False},
+    {"name": "byte11", "alias": "site_area", "label": "据点区域", "editable": True, "reserved": False},
+    {"name": "byte12", "alias": "reserved1", "label": "保留字段 1", "editable": False, "reserved": True},
+    {"name": "byte13", "alias": "minimap_color", "label": "小地图颜色", "editable": True, "reserved": False, "sidecarSource": True},
+    {"name": "byte14", "alias": "reserved2", "label": "保留字段 2", "editable": False, "reserved": True},
+    {"name": "byte15", "alias": "reserved3", "label": "保留字段 3", "editable": False, "reserved": True},
+]
+EDITABLE_RECORD_FIELDS = [entry["name"] for entry in FIELD_META if entry.get("editable")]
 
 
 def read_stage_records(stage_path: Path) -> tuple[int, int, list[list[int]]]:
@@ -66,6 +87,7 @@ def write_stage_json(
     minimap_name: str,
     render_meta: dict,
     palette_source: str,
+    sidecar_meta: dict,
 ) -> None:
     data = {
         "format": "san-editor-stage-v1",
@@ -76,10 +98,13 @@ def write_stage_json(
         "origin": list(origin),
         "tile": {"width": 40, "height": 20, "row_step": 10, "odd_row_x": 20},
         "fields": FIELD_NAMES,
+        "fieldMeta": FIELD_META,
         "editableLayers": list(EDITABLE_LAYERS),
+        "editableRecordFields": EDITABLE_RECORD_FIELDS,
         "palette": palette_source,
         "image": image_name,
         "minimap": {"image": minimap_name, "source": "rendered-map", "sync": "derived-from-m-records"},
+        "sidecars": sidecar_meta,
         "resources": "resources.json",
         "records": records,
         "render": render_meta,
@@ -225,6 +250,59 @@ def export_minimap(map_path: Path, out_path: Path, max_width: int = 280) -> None
     image.resize(size, Image.Resampling.BILINEAR).save(out_path)
 
 
+def build_sidecar_export_meta(
+    game_dir: Path,
+    stage_name: str,
+    grid_size: int = GRID_SIZE,
+    active_rows: int = ACTIVE_ROWS,
+) -> dict:
+    """为编辑页导出 `.s/.x` 准备参考尾区。"""
+
+    cut = grid_size * active_rows
+    tails: dict[str, dict[str, object]] = {}
+    missing: list[str] = []
+    for suffix in ("s", "x"):
+        reference_path = game_dir / f"{stage_name}.{suffix}"
+        if not reference_path.exists():
+            missing.append(suffix)
+            continue
+        blob = reference_path.read_bytes()
+        validate_sidecar_blob(blob, grid_size)
+        tail = blob[cut:]
+        tails[suffix] = {
+            "reference": str(reference_path),
+            "tailBase64": base64.b64encode(tail).decode("ascii"),
+            "tailBytes": len(tail),
+        }
+    available = len(tails) == 2 and not missing
+    meta = {
+        "available": available,
+        "gridSize": grid_size,
+        "activeRows": active_rows,
+        "tailRows": grid_size - active_rows,
+        "referenceStem": stage_name,
+        "tails": tails,
+    }
+    if not available:
+        missing_text = ", ".join(f".{suffix}" for suffix in missing) if missing else "参考尾区"
+        meta["reason"] = f"当前关卡缺少完整的 {missing_text} 参考文件，编辑页导出 `.s/.x` 时会对尾区使用 0 填充。"
+    return meta
+
+
+def resolve_editor_template(root: Path) -> Path:
+    """优先使用仓库内模板，兼容源码目录未携带 HTML 模板的情况。"""
+
+    candidates = [
+        root / "tools" / "editor_app.html",
+        Path(__file__).with_name("editor_app.html"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    searched = ", ".join(str(path) for path in candidates)
+    raise FileNotFoundError(f"找不到编辑器模板：{searched}")
+
+
 def write_editor_index(out_dir: Path, stages: list[dict]) -> None:
     options = "\n".join(
         f'<option value="{entry["path"]}">{entry["stage"]} ({entry["width"]}x{entry["height"]})</option>'
@@ -233,11 +311,11 @@ def write_editor_index(out_dir: Path, stages: list[dict]) -> None:
     html = (
         '<!doctype html>\n<html lang="zh-CN">\n<head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        '<title>San Map Editor Index</title>'
+        '<title>San 地图编辑器索引</title>'
         '<style>body{font-family:Segoe UI,Arial,sans-serif;margin:32px;background:#f4f2ec;color:#202124}'
         'main{max-width:720px}select,button{height:32px;font:inherit}select{min-width:260px}a{color:#0f766e}</style></head>'
-        '<body><main><h1>San Map Editor</h1><p>Select an exported stage editor.</p>'
-        f'<select id="stage">{options}</select> <button id="open">Open</button>'
+        '<body><main><h1>San 地图编辑器</h1><p>选择已经导出的关卡编辑页。</p>'
+        f'<select id="stage">{options}</select> <button id="open">打开</button>'
         '<p><a href="index.json">index.json</a></p></main>'
         "<script>document.getElementById('open').onclick=()=>{const v=document.getElementById('stage').value;if(v) location.href=v;};</script>"
         '</body></html>\n'
@@ -261,11 +339,25 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     map_path = stage_dir / "map.png"
     render_meta = render_stage(stage_path, blocks, palette, map_path, layout, layers, None)
     render_meta["source_output_size"] = [source_w, source_h]
+    sidecar_meta = build_sidecar_export_meta(game_dir, stage, GRID_SIZE, ACTIVE_ROWS)
 
     export_resource_catalog(blocks, palette, stage_dir, records)
     export_minimap(map_path, stage_dir / "minimap.png")
-    write_stage_json(stage_dir / "stage.json", stage, width, height, records, layout, (ox, oy), "map.png", "minimap.png", render_meta, palette_source)
-    template = Path(__file__).with_name("editor_app.html")
+    write_stage_json(
+        stage_dir / "stage.json",
+        stage,
+        width,
+        height,
+        records,
+        layout,
+        (ox, oy),
+        "map.png",
+        "minimap.png",
+        render_meta,
+        palette_source,
+        sidecar_meta,
+    )
+    template = resolve_editor_template(root)
     shutil.copyfile(template, stage_dir / "editor.html")
 
     index_path = out_dir / "index.json"
@@ -275,7 +367,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     stages = {entry["stage"]: entry for entry in existing.get("stages", [])}
     stages[stage] = {"stage": stage, "path": f"{stage}/editor.html", "width": width, "height": height}
     existing["stages"] = sorted(stages.values(), key=lambda item: item["stage"])
-    index_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    index_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
     write_editor_index(out_dir, existing["stages"])
 
     return {"stage": stage, "width": width, "height": height, "out": str(stage_dir), "records": len(records)}
