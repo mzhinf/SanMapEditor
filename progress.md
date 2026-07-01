@@ -64,3 +64,10 @@
 - 扩展 `export_editor_bundle.py`：导出的 `stage.json` 现在包含字段元数据与 `.s/.x` 尾区参考，页面内导出会沿用“上 128 行派生、下 32 行保留”的 sidecar 规则。
 - 修正 `apply_editor_patch.py`、`build_minimap_sidecars.py` 与 `pyproject.toml`：兼容 `flags/byte13` 与旧字段别名，补回 `Pillow` 依赖声明，并清理脚本内的乱码注释/帮助文本。
 - 验证补充：`H:\Workstation\sgby\.venv\Scripts\python.exe -m unittest tests.test_apply_editor_patch_minimap` 已通过；同时完成 `tools/editor_app.html` 的 Node 语法检查，以及 `tools/export_editor_bundle.py . --stage stage11 --out derived/editor_smoke` 的导出烟测。
+
+## 2026-07-02
+
+- 修复编辑器在 `stage01` 等超大关卡上的启动失败：当导出的 `map.png` 超过浏览器稳定解码范围时，页面会自动跳过底图加载并改用资源重建，不再因为 `EncodingError` 中断。
+- 修正资源重建模式下的局部重绘逻辑，并在加载本地 `.m` 时主动清空旧底图/小地图缓存，避免后续编辑时把旧关卡底图混入新视图。
+- 收口 `export_editor_bundle.py` 的模板来源，改为只从 `src/san_tools/map/editor_app.html` 复制编辑器页面，不再依赖 `tools/editor_app.html`。
+- 更新 `README.md` 中编辑器相关命令，推荐直接使用 `src/san_tools/map/*.py` 正式入口，同时保留 `http.server` 的原有启动方式说明。

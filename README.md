@@ -30,7 +30,7 @@
 
 - `src/san_tools/`：正式维护的 Python 源码包。
 - `tests/`：独立测试目录。
-- `tools/`：兼容旧调用方式的包装层，方便继续直接运行 `tools/*.py`。
+- `tools/`：兼容旧调用方式的包装层；新增编辑器页面与模板资源不再依赖这里。
 - `docs/`：格式笔记与文档维护约定。
 - `derived/`：中间分析结果、编辑器 bundle、图片导出。
 - `outputs/`：工作簿与外部可读导出结果。
@@ -43,7 +43,7 @@
 - 根目录使用 `pyproject.toml` 管理打包配置
 - 主要源码位于 `src/san_tools/`
 - 测试集中在 `tests/`
-- `tools/` 保留为兼容包装层，避免打断现有脚本入口
+- `tools/` 保留为兼容包装层，但推荐直接使用 `src/san_tools/` 下的正式入口
 - 提供统一入口 `python -m tools` 与安装后的 `san-tools`
 
 ## 常用脚本
@@ -59,13 +59,13 @@
 导出编辑器 bundle：
 
 ```powershell
-& $py tools/export_editor_bundle.py . --stage stage11
+& $py src/san_tools/map/export_editor_bundle.py . --stage stage11
 ```
 
 导出全部已发现关卡：
 
 ```powershell
-& $py tools/export_editor_bundle.py . --all
+& $py src/san_tools/map/export_editor_bundle.py . --all
 ```
 
 导出的编辑页现在支持：
@@ -81,8 +81,12 @@
 & $py -m http.server 8787 --bind 127.0.0.1 --directory derived/editor
 ```
 
-浏览器入口：
+说明：
 
+- 导出命令和静态服务启动命令本身没有变化。
+- `stage01` 这类超大关卡现在会在页面内自动跳过超大 `map.png`，改为按资源重建视图，因此仍然可以继续使用上面的两条命令。
+
+浏览器入口：
 - [stage11 编辑器](http://127.0.0.1:8787/stage11/editor.html)
 - [编辑器索引](http://127.0.0.1:8787/index.html)
 
@@ -91,13 +95,13 @@
 按 patch 写回复制后的 `.m`，并同步生成同名 `.s/.x`：
 
 ```powershell
-& $py tools/apply_editor_patch.py derived/editor/stage11/stage11_patch.json . --out derived/edited/stage11.m
+& $py src/san_tools/map/apply_editor_patch.py derived/editor/stage11/stage11_patch.json . --out derived/edited/stage11.m
 ```
 
 如果只想写回 `.m`，不生成 sidecar：
 
 ```powershell
-& $py tools/apply_editor_patch.py derived/editor/stage11/stage11_patch.json . --out derived/edited/stage11.m --no-minimap-sidecars
+& $py src/san_tools/map/apply_editor_patch.py derived/editor/stage11/stage11_patch.json . --out derived/edited/stage11.m --no-minimap-sidecars
 ```
 
 ### `.evt` / `.dor` / `.s/.x` 研究脚本

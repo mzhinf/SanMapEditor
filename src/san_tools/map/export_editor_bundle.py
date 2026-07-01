@@ -290,17 +290,12 @@ def build_sidecar_export_meta(
 
 
 def resolve_editor_template(root: Path) -> Path:
-    """优先使用仓库内模板，兼容源码目录未携带 HTML 模板的情况。"""
+    """只使用源码目录内的编辑器模板，避免继续依赖 tools 包装层。"""
 
-    candidates = [
-        root / "tools" / "editor_app.html",
-        Path(__file__).with_name("editor_app.html"),
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    searched = ", ".join(str(path) for path in candidates)
-    raise FileNotFoundError(f"找不到编辑器模板：{searched}")
+    candidate = Path(__file__).with_name("editor_app.html")
+    if candidate.exists():
+        return candidate
+    raise FileNotFoundError(f"找不到编辑器模板：{candidate}")
 
 
 def write_editor_index(out_dir: Path, stages: list[dict]) -> None:
