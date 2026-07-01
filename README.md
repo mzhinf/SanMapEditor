@@ -70,9 +70,9 @@
 
 导出的编辑页现在支持：
 
-- `.m` 记录字段按 `flags / byte08..byte15` 统一口径展示，其中 `reserved0/1/2/3` 只读。
-- 侧边栏顺序固定为 `Minimap -> Cell -> Record -> Resources -> Stage`。
-- `Record` 区可直接编辑所有非 `reserved` 数值字段。
+- `.m` 记录字段按 `word06 / byte08..byte15` 统一口径展示，页面不再显示旧的 `flags` 描述。
+- 页面改为左右双栏：左侧 `Cell -> Record -> 修改`，右侧 `Minimap -> Stage -> Resources`。
+- `Record` 区仅展示并编辑所有非 `reserved` 数值字段，保留字段不再出现在列表中。
 - 通过工具栏的“导出 .m/.s/.x”按钮可直接一键导出当前修改结果。
 
 启动本地静态服务：
