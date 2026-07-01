@@ -73,19 +73,20 @@
 ### 9. `.dor` 已能做候选字段与地图关系可视化
 
 - `.dor` 文件头带有 `Door    Data` 魔数，当前样本中可以稳定识别出头部与定长记录区。
-- `Emperor.exe` 的字符串线索会把 `.evt/.dor/.spr` 放进同一批 sidecar 处理流程，说明 `.dor` 更像地图相关 sidecar，而不是独立主表。
-- `tools/analyze_dor_relationship.py` 已经能够把 `.dor` 候选字段映射到 `.m` 地图坐标，并导出覆盖图和 `dor_relationship.json` 报告。
+- 重新从 `Emperor.exe` 复核后可见：`.spr/.dor/.evt` 的扩展名引用点落在两段紧凑代码簇，而 `.m/.s/.x` 在另一段；这支持 `.dor` 是与 `.m` 并列的关卡 sidecar，而不是其内嵌镜像。
+- `Door    Data` 魔数只被两处代码引用，且都出现 `push 0x0c; push "Door    Data"` 头校验模式，进一步说明 `.dor` 走的是独立 sidecar 装载路径。
+- `tools/analyze_dor_relationship.py` 已更新为同时输出候选坐标覆盖图与 `Emperor.exe` 证据摘要，报告写入 `derived/dor_relationship/<stage>/dor_relationship.json`。
 - 目前最像坐标对的字段组合已经能在部分关卡上落到合理地图范围内，但还不能直接命名成门、入口或触发边界。
 
 ### 10. `.m byte08-15` 已经形成可视化与初步判断
 
-- ??? `tools/analyze_m_byte_fields.py`?? `.m` ?? cell ??? `byte08-15` ???????????? value group ????????? `derived/m_byte_fields/<stage>/m_byte_fields.json`?
-- 全量 33 个 `.m` 样本里，`byte08=218` 与 `byte10=239` 都只在 `stage01` 出现；此前把这组猜想套到 `.dor` 上的口径应视为无效旁路，不再作为 `.m` 解释依据。
-- `byte09=1` 在 33 个 `.m` 中广泛存在；仅 `stage01` 就命中 58213 个 cell，覆盖普通地形、叠加层与物件区，当前不支持把它解释成“少量不可达点”标记。
-- `byte08=218` 命中的 268 个 cell 全部 `acwz=-1`，并强烈集中在少数 `acwy` 叠加 tile 上，当前更像地表/叠加层分类标记，而不像切换人物模型的直接信号。
-- `byte10=239` 命中的 1176 个 cell 会拆成 147 个小连通块，并与一组 `acwz` 物件索引强相关，当前更像物件变体或状态字节，而不像单独“门”字段。
-- `byte11` 的同值会严格聚成 36-cell 菱形 footprint；在 `stage01` 中非零值正好是连续的 `1..83`，因此它很像区域/脚下 footprint 编号候选，但是否就是城池 ID 还需要继续和 `.stg` 或场景对象对位。
-- `byte12`、`byte14`、`byte15` 目前在全量 `.m` 里都保持全零。
+- 已新增 `tools/analyze_m_byte_fields.py`，按 `.m` 单个 cell 的原始 `byte08-15` 绘制原始网格图、所有非零 value group 分色覆盖图，并输出 `derived/m_byte_fields/<stage>/m_byte_fields.json`。
+- `byte08` 主要出现在陆地/水面交界与码头一类切换点，用于在陆地模型与水上模型之间切换；但仍有少量码头没有被它显式标记，因此它更像高价值辅助标记，而不是唯一真值源。
+- `byte09` 已可确认为通行标记：`0` 可通行、`1` 不可通行；城墙、山寨、水陆交界、森林、山石等不可通行区域都会用到它。
+- `byte10` 已可确认为城池、山寨等建筑的触发范围，其中 `byte10=239` 表示城门。
+- `byte11` 已可确认为进入城池、山寨、军寨的触发范围编号；不同城池/山寨会使用不同 id，同值仍表现为稳定聚类区域。
+- `byte13` 已可确认为小地图渲染颜色索引；`byte12`、`byte14`、`byte15` 在当前全量样本中都保持为 0，可视作填充/保留字节。
+- `stage01.dor` 与 `stage01.m` 的对比结果已经写入 `derived/dor_relationship/stage01/dor_m_overlap.json`：当前 `.dor` 候选点位与 `.m byte08` 非零区的最佳精确重合只有 `1/38`，而与 `byte10!=0` / `byte11!=0` 的最佳精确重合可达 `26/29` / `24/29`；当前没有证据支持 `.dor` 直接记录码头/水陆交界切换点。
 
 ## 当前最值得继续推进的方向
 

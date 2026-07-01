@@ -36,6 +36,7 @@ COLOR_PALETTE = [
 ]
 
 BYTE_LABELS = {
+    7: 'word06',
     8: 'byte08',
     9: 'byte09',
     10: 'byte10',
@@ -477,7 +478,7 @@ def render_sheet(paths: list[Path], out_path: Path, max_width: int = 2400) -> st
 
 
 def scan_all_stages(root: Path, byte_start: int, byte_end: int) -> dict[str, object]:
-    """???? `.m`???????????????????"""
+    """全量扫描所有 `.m`，汇总 byte08-15 的跨关卡分布。"""
 
     game_dir = find_game_dir(root)
     totals = {BYTE_LABELS[index]: Counter() for index in range(byte_start, byte_end + 1)}
@@ -524,7 +525,7 @@ def analyze_m_byte_fields(
     byte_start: int,
     byte_end: int,
 ) -> dict[str, object]:
-    """?? `.m` ? byte08-15?????????????????????"""
+    """分析 `.m` 的 byte08-15 原始字段，并输出可视化与统计报告。"""
 
     game_dir = find_game_dir(root)
     stage_path = game_dir / f'{stage}.m'
@@ -641,7 +642,7 @@ def analyze_m_byte_fields(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='?? `.m` ? byte08-15??????????????????????????')
+    parser = argparse.ArgumentParser(description='分析 `.m` 的 byte08-15 原始字段，并导出可视化与统计结果。')
     parser.add_argument('root', nargs='?', default='.', type=Path, help='项目根目录')
     parser.add_argument('--stage', default='stage01', help='要分析的关卡名，例如 stage01')
     parser.add_argument('--out', default=Path('derived/m_byte_fields'), type=Path, help='输出目录')

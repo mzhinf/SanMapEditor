@@ -113,7 +113,7 @@
 & $py tools/analyze_dor_relationship.py . --stage stage20 --top-pairs 3
 ```
 
-? `.m` ?? cell ??? `byte08-15` ???????????? value group ????????? `byte09` / `byte11` ????????
+按 `.m` 单个 cell 的原始 `byte08-15` 绘制原始网格图、所有非零 value group 分色覆盖图，并输出 `byte09` / `byte11` 的辅助判断报告：
 
 ```powershell
 & $py tools/analyze_m_byte_fields.py . --stage stage01
@@ -142,7 +142,7 @@
 
 - 38 个 `.evt` 都能对上对应 `TalkNN.txt`，其中 `stage17.txt` 是可读脚本原型，`stage01.txt` 是二进制 blob。
 - `.evt` 中目前最稳定的 ASCII 命令 token 是 `talk`、`VIEW`、`MAP`、`MAPALL`、`MOVE`、`TIME`、`TIMEOVER`。
-- `.dor` 文件头携带 `Door    Data` 魔数，现有可视化脚本已经能把候选字段与 `.m` 地图坐标叠加到同一张图上，便于继续从 `Emperor.exe` 收口语义。
+- `.dor` 文件头携带 `Door    Data` 魔数；重新从 `Emperor.exe` 复核后，`.spr/.dor/.evt` 明确落在同一 sidecar 装配簇里，而 `.m/.s/.x` 在另一组加载链上，当前更支持“.dor 是关卡 sidecar”而不是“.m 某个字节字段的直出表”。
 - `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `final_palette` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
 - `tools/apply_editor_patch.py` 现在会在写回 `.m` 后默认同步生成同名 `.s/.x`，补齐编辑器 patch 到 sidecar 的闭环。
 - 在 33 个关卡里，`.x` 的有效区始终比 `.s` 更接近 `.m` 派生结果，平均匹配率分别为 `0.620744 / 0.47098`；保留尾区后，生成结果的尾区匹配率恒为 `1.0`。

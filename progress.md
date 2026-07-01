@@ -51,7 +51,11 @@
 
 - 新增 `src/san_tools/analysis/analyze_dor_byte_fields.py` 与 `tools/analyze_dor_byte_fields.py`，用于 `.dor` 记录自身的原始 byte 覆盖图分析。
 - 为统一入口补充 `analyze-dor-relationship`、`analyze-dor-byte-fields` 与 `analyze-m-byte-fields` 命令注册。
-- ?? `src/san_tools/analysis/analyze_m_byte_fields.py` ? `tools/analyze_m_byte_fields.py`?? `.m` ?? cell ??? `byte08-15` ???????????? value group ?????? `derived/m_byte_fields/<stage>/m_byte_fields.json`?
+- 新增 `src/san_tools/analysis/analyze_m_byte_fields.py` 与 `tools/analyze_m_byte_fields.py`，按 `.m` 单个 cell 的原始 `byte08-15` 导出原始网格图、所有非零 value group 分色覆盖图与 `derived/m_byte_fields/<stage>/m_byte_fields.json`。
 - 复核 `.m` 口径后确认：`byte08=218` 与 `byte10=239` 都只在 `stage01` 出现；`byte09=1` 广泛分布于 33 个 `.m`；`byte11` 的同值会聚成连续编号、每组 36 cell 的菱形 footprint。
 - 调整 `analyze_m_byte_fields.py`：`byte08-15` 不再只围绕 `byte08=218 / byte10=239` 一类猜想单独绘图，而是为每个字段额外输出“所有非零 value group 分色叠加”的底图覆盖图与总览拼图。
-- ?? `analyze_m_byte_fields.py` ???? `byte08=218` ? `byte10=239` ????????????????????????????????
+- 清理 `analyze_m_byte_fields.py` 中遗留的 `byte08=218` 与 `byte10=239` 专项统计、覆盖图和报告字段，避免脚本继续携带已经失效的旁路输出。
+- 根据人工复核结果，回写 `.m` 字节语义：`byte08` 为码头/水陆交界切换辅助标记，`byte09` 为通行标记，`byte10` 为城池/山寨触发范围且 `239` 表示城门，`byte11` 为进入目标区域的触发 id，`byte13` 为小地图颜色索引。
+- 新增 `derived/dor_relationship/stage01/dor_m_overlap.json`，把 `stage01.dor` 候选坐标对与 `.m byte08/09/10/11` 做重合度对比；当前结果不支持 `.dor` 直接记录码头/水陆交界切换点，反而更接近门、入口、通行限制或触发范围相关 sidecar。
+- 重写 `analyze_dor_relationship.py`，把 `Emperor.exe` 的扩展名引用簇、`Door    Data` 头校验位点与 `.dor` 候选坐标报告合并输出，并补上超大底图的 `Image.MAX_IMAGE_PIXELS = None` 保护。
+- 重新从 `Emperor.exe` 核实 `.dor` 与 `.m`：确认 `.spr/.dor/.evt` 与 `.m/.s/.x` 分属不同代码簇，且 `Door    Data` 在 `0x3e6d9 / 0x3ea3b` 做 12 字节头校验；这进一步支持 `.dor` 是关卡 sidecar，而不是 `.m` 某个字节字段的直接外置表。
