@@ -72,3 +72,4 @@
 - 收口 `export_editor_bundle.py` 的模板来源，改为只从 `src/san_tools/map/editor_app.html` 复制编辑器页面，不再依赖 `tools/editor_app.html`。
 - 更新 `README.md` 中编辑器相关命令，推荐直接使用 `src/san_tools/map/*.py` 正式入口，同时保留 `http.server` 的原有启动方式说明。
 - 根据最新页面调整字段与布局：`word06` 取代旧的 `flags` 展示，顶部移除“图层/值”，资源图层切换收入右侧 `Resources`，左侧 `Record` 改为紧凑无间隔列表。
+- 调整 `Resources` 面板：过滤控件收窄后不再挤出横向滚动，资源区拉伸到右栏底部，并改为窗口化渲染以支持全量资源滚动查看。

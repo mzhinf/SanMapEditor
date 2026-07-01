@@ -33,7 +33,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 canvas { width: 100%; height: 100%; display: block; }
 .side { min-height: 0; overflow: auto; background: var(--panel); padding: 12px; }
 .side-left { border-right: 1px solid var(--line); }
-.side-right { border-left: 1px solid var(--line); }
+.side-right { border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.side-right .section { flex: 0 0 auto; }
 .section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
 .section:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
 .section-title { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: 0; margin-bottom: 8px; }
@@ -42,9 +43,13 @@ canvas { width: 100%; height: 100%; display: block; }
 .field { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
 .field:last-child { margin-bottom: 0; }
 .patch-list { font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; color: #343434; min-height: 32px; }
-.resource-controls { display: grid; grid-template-columns: 1fr 116px 72px; gap: 8px; margin-bottom: 8px; }
-.resource-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; max-height: 260px; overflow: auto; padding-right: 2px; }
-.resource-item { height: 76px; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: 1fr 16px; align-items: center; justify-items: center; }
+.resource-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.resource-controls { display: grid; grid-template-columns: minmax(0, 1fr) 92px 56px; gap: 6px; margin-bottom: 8px; }
+.resource-controls > * { min-width: 0; width: 100%; }
+.resource-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.resource-list { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 2px; }
+.resource-spacer { position: relative; min-height: 100%; }
+.resource-item { position: absolute; height: 76px; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: 1fr 16px; align-items: center; justify-items: center; }
 .resource-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15,118,110,.18); }
 .resource-thumb { background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; }
 .resource-label { font-size: 11px; color: var(--muted); line-height: 14px; }
@@ -69,6 +74,7 @@ canvas { width: 100%; height: 100%; display: block; }
   .side-left { grid-row: 2; }
   #viewport { grid-row: 3; }
   .side-right { grid-row: 4; }
+  .resource-controls { grid-template-columns: minmax(0, 1fr) 88px 56px; }
 }
 </style>
 </head>
@@ -115,7 +121,7 @@ canvas { width: 100%; height: 100%; display: block; }
       <div class="section-title">Stage</div>
       <div class="kv" id="stageInfo"></div>
     </div>
-    <div class="section">
+    <div class="section resource-section">
       <div class="section-title">Resources</div>
       <div class="field"><label>图层</label><select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option></select></div>
       <div class="resource-controls">
@@ -123,7 +129,8 @@ canvas { width: 100%; height: 100%; display: block; }
         <select id="resourceSort"><option value="index">按编号</option><option value="used">按使用数</option></select>
         <button id="clearFilter">清除</button>
       </div>
-      <div class="resource-list" id="resourceList"></div>
+      <div class="resource-meta" id="resourceMeta"></div>
+      <div class="resource-list" id="resourceList"><div class="resource-spacer" id="resourceSpacer"></div></div>
     </div>
   </aside>
 </div>
@@ -150,6 +157,10 @@ const DEFAULT_FIELD_META = [
 const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
 const MAX_BASE_IMAGE_EDGE = 8192;
 const MAX_BASE_IMAGE_PIXELS = 100000000;
+const RESOURCE_ITEM_MIN_WIDTH = 64;
+const RESOURCE_ITEM_HEIGHT = 76;
+const RESOURCE_ITEM_GAP = 6;
+const RESOURCE_OVERSCAN_ROWS = 3;
 const state = {
   meta: null,
   resources: null,
@@ -171,6 +182,8 @@ const state = {
   originalRecords: null,
   undoStack: [],
   fieldMetaByName: new Map(),
+  resourceListModel: null,
+  resourceRenderQueued: false,
   baseImageMode: 'pending',
   baseImageNote: '',
 };
@@ -178,7 +191,7 @@ const els = {
   status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
   cellInfo: document.getElementById('cellInfo'), recordList: document.getElementById('recordList'), tool: document.getElementById('tool'),
   layer: document.getElementById('layer'), patchCount: document.getElementById('patchCount'),
-  patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceFilter: document.getElementById('resourceFilter'),
+  patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceSpacer: document.getElementById('resourceSpacer'), resourceMeta: document.getElementById('resourceMeta'), resourceFilter: document.getElementById('resourceFilter'),
   resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
   exportFiles: document.getElementById('exportFiles'),
@@ -476,47 +489,82 @@ function refreshPatches() {
   els.resetCell.disabled = !hasSelectedLayerPatch();
   els.resetAll.disabled = !state.patches.size;
 }
-function renderResourceList() {
+function scheduleResourceListRender() {
+  if (state.resourceRenderQueued) return;
+  state.resourceRenderQueued = true;
+  window.requestAnimationFrame(() => {
+    state.resourceRenderQueued = false;
+    paintResourceList();
+  });
+}
+function paintResourceList() {
+  const model = state.resourceListModel;
+  if (!model || !model.info) return;
+  const list = els.resourceList;
+  const spacer = els.resourceSpacer;
+  if (!list || !spacer) return;
+  const listWidth = list.clientWidth;
+  if (!listWidth) return;
+  const columns = Math.max(1, Math.floor((listWidth + RESOURCE_ITEM_GAP) / (RESOURCE_ITEM_MIN_WIDTH + RESOURCE_ITEM_GAP)));
+  const itemWidth = Math.max(RESOURCE_ITEM_MIN_WIDTH, Math.floor((listWidth - RESOURCE_ITEM_GAP * (columns - 1)) / columns));
+  const rowPitch = RESOURCE_ITEM_HEIGHT + RESOURCE_ITEM_GAP;
+  const totalRows = Math.ceil(model.entries.length / columns);
+  const startRow = Math.max(0, Math.floor(list.scrollTop / rowPitch) - RESOURCE_OVERSCAN_ROWS);
+  const visibleRows = Math.ceil(list.clientHeight / rowPitch) + RESOURCE_OVERSCAN_ROWS * 2 + 1;
+  const endRow = Math.min(totalRows, startRow + visibleRows);
+  const startIndex = startRow * columns;
+  const endIndex = Math.min(model.entries.length, endRow * columns);
+  const selected = state.selectedResource[model.layer];
+  spacer.textContent = '';
+  if (!model.entries.length) {
+    spacer.style.height = `${list.clientHeight}px`;
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '没有匹配的资源。';
+    spacer.append(empty);
+    els.resourceMeta.textContent = '共 0 项';
+    return;
+  }
+  spacer.style.height = `${Math.max(list.clientHeight, totalRows * rowPitch - RESOURCE_ITEM_GAP)}px`;
+  const frag = document.createDocumentFragment();
+  for (let index = startIndex; index < endIndex; index++) {
+    const entry = model.entries[index];
+    const row = Math.floor(index / columns);
+    const col = index % columns;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.index = String(entry.index);
+    button.className = 'resource-item' + (selected === entry.index ? ' selected' : '');
+    button.title = `${model.layer} ${entry.index}${entry.used ? `，使用 ${entry.used}` : ''}`;
+    button.style.left = `${col * (itemWidth + RESOURCE_ITEM_GAP)}px`;
+    button.style.top = `${row * rowPitch}px`;
+    button.style.width = `${itemWidth}px`;
+    const thumb = document.createElement('div');
+    thumb.className = 'resource-thumb';
+    thumb.style.width = `${model.info.tileSize}px`;
+    thumb.style.height = `${model.info.tileSize}px`;
+    thumb.style.backgroundImage = `url(${model.info.image})`;
+    thumb.style.backgroundPosition = `-${entry.atlas[0]}px -${entry.atlas[1]}px`;
+    const label = document.createElement('div');
+    label.className = 'resource-label';
+    label.textContent = entry.used ? `${entry.index} x${entry.used}` : entry.index;
+    button.append(thumb, label);
+    frag.append(button);
+  }
+  spacer.append(frag);
+  els.resourceMeta.textContent = `共 ${model.entries.length} 项，当前渲染 ${Math.max(0, endIndex - startIndex)} 项，滚动可查看全部`;
+}
+function renderResourceList(resetScroll = true) {
   if (!state.resources) return;
   const layer = els.layer.value;
   const info = state.resources.layers[layer];
   const filter = els.resourceFilter.value.trim();
-  const selected = state.selectedResource[layer];
   const entries = info.entries
     .filter(entry => !filter || String(entry.index).includes(filter))
-    .sort((a, b) => els.resourceSort.value === 'used' ? ((b.used || 0) - (a.used || 0) || a.index - b.index) : (a.index - b.index))
-    .slice(0, 240);
-  els.resourceList.textContent = '';
-  let cursor = 0;
-  function addChunk() {
-    const frag = document.createDocumentFragment();
-    const end = Math.min(cursor + 40, entries.length);
-    for (; cursor < end; cursor++) {
-      const entry = entries[cursor];
-      const button = document.createElement('button');
-      button.className = 'resource-item' + (selected === entry.index ? ' selected' : '');
-      button.title = `${layer} ${entry.index}${entry.used ? `，使用 ${entry.used}` : ''}`;
-      const thumb = document.createElement('div');
-      thumb.className = 'resource-thumb';
-      thumb.style.width = `${info.tileSize}px`;
-      thumb.style.height = `${info.tileSize}px`;
-      thumb.style.backgroundImage = `url(${info.image})`;
-      thumb.style.backgroundPosition = `-${entry.atlas[0]}px -${entry.atlas[1]}px`;
-      const label = document.createElement('div');
-      label.className = 'resource-label';
-      label.textContent = entry.used ? `${entry.index} x${entry.used}` : entry.index;
-      button.append(thumb, label);
-      button.addEventListener('click', () => {
-        state.selectedResource[layer] = entry.index;
-        els.tool.value = 'paint';
-        renderResourceList();
-      });
-      frag.append(button);
-    }
-    els.resourceList.append(frag);
-    if (cursor < entries.length) window.setTimeout(addChunk, 0);
-  }
-  addChunk();
+    .sort((a, b) => els.resourceSort.value === 'used' ? ((b.used || 0) - (a.used || 0) || a.index - b.index) : (a.index - b.index));
+  state.resourceListModel = { layer, info, entries };
+  if (resetScroll) els.resourceList.scrollTop = 0;
+  scheduleResourceListRender();
 }
 function buildResourceIndex() {
   state.resourceByIndex = {};
@@ -951,8 +999,19 @@ document.getElementById('exportPatch').addEventListener('click', downloadPatch);
 els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
 els.layer.addEventListener('change', () => { renderResourceList(); refreshSide(); refreshPatches(); });
-els.resourceFilter.addEventListener('input', renderResourceList);
-els.resourceSort.addEventListener('change', renderResourceList);
+els.resourceFilter.addEventListener('input', () => { renderResourceList(); });
+els.resourceSort.addEventListener('change', () => { renderResourceList(); });
+els.resourceList.addEventListener('scroll', scheduleResourceListRender);
+els.resourceList.addEventListener('click', ev => {
+  const button = ev.target.closest('.resource-item');
+  if (!button) return;
+  const layer = state.resourceListModel?.layer || els.layer.value;
+  const index = Number.parseInt(button.dataset.index || '', 10);
+  if (!Number.isFinite(index)) return;
+  state.selectedResource[layer] = index;
+  els.tool.value = 'paint';
+  scheduleResourceListRender();
+});
 window.addEventListener('keydown', ev => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
     ev.preventDefault();
@@ -966,7 +1025,7 @@ window.addEventListener('keydown', ev => {
   if (ev.key === 'ArrowUp') { ev.preventDefault(); moveSelected(0, -1); return; }
   if (ev.key === 'ArrowDown') { ev.preventDefault(); moveSelected(0, 1); }
 });
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener('resize', () => { resizeCanvas(); scheduleResourceListRender(); });
 async function loadImage(src) { const image = new Image(); image.src = src; await image.decode(); return image; }
 async function loadBaseImage(meta) {
   if (!meta?.image) return { image: null, note: '', mode: 'none' };
