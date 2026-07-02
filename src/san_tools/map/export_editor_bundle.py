@@ -13,6 +13,11 @@ from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
 from render_m_cel_map import canvas_size, make_diamond_tile, make_object, parse_counted_cel, render_stage
 
 try:
+    from palette import PAINT_RGB_FLAG_PALETTE
+except ImportError:
+    from san_tools.map.palette import PAINT_RGB_FLAG_PALETTE
+
+try:
     from minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
 except ImportError:
     from san_tools.map.minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
@@ -33,6 +38,7 @@ FIELD_NAMES = [
 ]
 
 EDITABLE_LAYERS = ("acwx", "acwy", "acwz")
+POINT_LAYER_FIELDS = ("byte08", "byte09", "byte10", "byte11")
 FIELD_META = [
     {"name": "acwx", "alias": "terrain_base", "label": "底层地表", "editable": True, "reserved": False},
     {"name": "acwy", "alias": "terrain_overlay", "label": "叠加地表", "editable": True, "reserved": False},
@@ -88,6 +94,7 @@ def write_stage_json(
     render_meta: dict,
     palette_source: str,
     sidecar_meta: dict,
+    point_palette: list[str],
 ) -> None:
     data = {
         "format": "san-editor-stage-v1",
@@ -100,8 +107,11 @@ def write_stage_json(
         "fields": FIELD_NAMES,
         "fieldMeta": FIELD_META,
         "editableLayers": list(EDITABLE_LAYERS),
+        "resourceLayers": list(EDITABLE_LAYERS),
+        "pointLayers": list(POINT_LAYER_FIELDS),
         "editableRecordFields": EDITABLE_RECORD_FIELDS,
         "palette": palette_source,
+        "pointPalette": point_palette,
         "image": image_name,
         "minimap": {"image": minimap_name, "source": "rendered-map", "sync": "derived-from-m-records"},
         "sidecars": sidecar_meta,
@@ -351,6 +361,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
         render_meta,
         palette_source,
         sidecar_meta,
+        PAINT_RGB_FLAG_PALETTE,
     )
     template = resolve_editor_template(root)
     shutil.copyfile(template, stage_dir / "editor.html")

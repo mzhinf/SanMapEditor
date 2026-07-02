@@ -32,7 +32,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 #viewport { position: relative; min-width: 0; min-height: 0; background: #1d1b18; }
 canvas { width: 100%; height: 100%; display: block; }
 .side { min-height: 0; overflow: auto; background: var(--panel); padding: 12px; }
-.side-left { border-right: 1px solid var(--line); }
+.side-left { border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.side-left .section { flex: 0 0 auto; }
 .side-right { border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
 .side-right .section { flex: 0 0 auto; }
 .side-right .resource-section { flex: 1 1 auto; min-height: 0; overflow: hidden; }
@@ -43,7 +44,8 @@ canvas { width: 100%; height: 100%; display: block; }
 .kv .k { color: var(--muted); }
 .field { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
 .field:last-child { margin-bottom: 0; }
-.patch-list { font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; color: #343434; min-height: 32px; }
+.patch-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.patch-list { font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; color: #343434; min-height: 32px; flex: 1 1 auto; overflow: auto; }
 .resource-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .resource-controls { display: grid; grid-template-columns: minmax(0, 1fr) 92px 56px; gap: 6px; margin-bottom: 8px; }
 .resource-controls > * { min-width: 0; width: 100%; }
@@ -53,6 +55,8 @@ canvas { width: 100%; height: 100%; display: block; }
 .resource-item { position: absolute; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: minmax(0, 1fr) 16px; align-items: center; justify-items: center; overflow: hidden; }
 .resource-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15,118,110,.18); }
 .resource-thumb { background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; align-self: start; }
+.resource-thumb.point-swatch { align-self: center; border-radius: 999px; background-image: none; background-color: transparent; border: 1px solid rgba(17, 24, 39, 0.16); }
+.resource-thumb.point-swatch.zero { border-radius: 6px; background: repeating-linear-gradient(135deg, #ffffff 0 5px, #e5e7eb 5px 10px); }
 .resource-label { width: 100%; font-size: 11px; color: var(--muted); line-height: 14px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .minimap-wrap { position: relative; border: 1px solid var(--line); background: #111; }
 #minimap { height: 150px; }
@@ -106,7 +110,7 @@ canvas { width: 100%; height: 100%; display: block; }
       <div class="section-title">Record</div>
       <div class="record-list" id="recordList"></div>
     </div>
-    <div class="section">
+    <div class="section patch-section">
       <div class="section-title">修改</div>
       <div class="field"><label>修改数量</label><input id="patchCount" value="0" readonly></div>
       <div class="patch-list" id="patchList"></div>
@@ -124,7 +128,7 @@ canvas { width: 100%; height: 100%; display: block; }
     </div>
     <div class="section resource-section">
       <div class="section-title">Resources</div>
-      <div class="field"><label>图层</label><select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option></select></div>
+      <div class="field"><label>图层</label><select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option><option value="byte08">byte08</option><option value="byte09">byte09</option><option value="byte10">byte10</option><option value="byte11">byte11</option></select></div>
       <div class="resource-controls">
         <input id="resourceFilter" placeholder="按编号过滤">
         <select id="resourceSort"><option value="index">按编号</option><option value="used">按使用数</option></select>
@@ -156,6 +160,9 @@ const DEFAULT_FIELD_META = [
   { name: 'byte15', alias: 'reserved3', label: '保留字段 3', editable: false, reserved: true },
 ];
 const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
+const RESOURCE_LAYER_OPTIONS = ['acwx', 'acwy', 'acwz'];
+const POINT_LAYER_OPTIONS = ['byte08', 'byte09', 'byte10', 'byte11'];
+const PAINT_LAYER_OPTIONS = [...RESOURCE_LAYER_OPTIONS, ...POINT_LAYER_OPTIONS];
 const MAX_BASE_IMAGE_EDGE = 8192;
 const MAX_BASE_IMAGE_PIXELS = 100000000;
 const RESOURCE_ITEM_MIN_WIDTH = 64;
@@ -175,7 +182,7 @@ const state = {
   renderCtx: null,
   minimap: null,
   selected: null,
-  selectedResource: { acwx: null, acwy: null, acwz: null },
+  selectedResource: Object.fromEntries(PAINT_LAYER_OPTIONS.map(layer => [layer, null])),
   transform: { x: 24, y: 24, scale: 0.8 },
   dragging: false,
   dragStart: null,
@@ -266,12 +273,44 @@ function normalizeMeta(meta) {
       sidecarSource: raw.sidecarSource ?? !!base.sidecarSource,
     };
   });
-  const editableLayers = (Array.isArray(meta.editableLayers) && meta.editableLayers.length ? meta.editableLayers : ['acwx', 'acwy', 'acwz']).map(canonicalFieldName);
+  const editableLayers = (Array.isArray(meta.editableLayers) && meta.editableLayers.length ? meta.editableLayers : RESOURCE_LAYER_OPTIONS).map(canonicalFieldName);
+  const resourceLayers = (Array.isArray(meta.resourceLayers) && meta.resourceLayers.length ? meta.resourceLayers : editableLayers).map(canonicalFieldName);
+  const pointLayers = (Array.isArray(meta.pointLayers) && meta.pointLayers.length ? meta.pointLayers : POINT_LAYER_OPTIONS).map(canonicalFieldName);
   const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name)).map(canonicalFieldName);
-  return { ...meta, fields, fieldMeta, editableLayers, editableRecordFields, sidecars: normalizeSidecars(meta.sidecars) };
+  const pointPalette = Array.isArray(meta.pointPalette) ? meta.pointPalette.slice(0, 256) : [];
+  return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, sidecars: normalizeSidecars(meta.sidecars) };
 }
 function getFieldMeta(name) {
   return state.fieldMetaByName.get(canonicalFieldName(name)) || DEFAULT_FIELD_META.find(entry => entry.name === canonicalFieldName(name)) || { name, alias: name, label: name, editable: true, reserved: false };
+}
+function isResourceLayer(name) {
+  const field = canonicalFieldName(name);
+  return state.meta?.resourceLayers?.includes(field) || RESOURCE_LAYER_OPTIONS.includes(field);
+}
+function isPointLayer(name) {
+  const field = canonicalFieldName(name);
+  return state.meta?.pointLayers?.includes(field) || POINT_LAYER_OPTIONS.includes(field);
+}
+function currentLayerName() { return canonicalFieldName(els.layer.value); }
+function visiblePointLayer() {
+  const layer = currentLayerName();
+  return isPointLayer(layer) ? layer : null;
+}
+function pointPaletteColor(value) {
+  return state.meta?.pointPalette?.[value] || '#0f766e';
+}
+function ensureSelectedResource(layer) {
+  const field = canonicalFieldName(layer);
+  if (Number.isFinite(state.selectedResource[field])) return;
+  if (isPointLayer(field)) {
+    if (state.selected) {
+      const fi = fieldIndex(field);
+      if (fi >= 0) state.selectedResource[field] = recordAt(state.selected)[fi];
+    }
+    if (!Number.isFinite(state.selectedResource[field])) state.selectedResource[field] = 0;
+    return;
+  }
+  state.selectedResource[field] = state.resources?.layers?.[field]?.entries?.[0]?.index ?? null;
 }
 function recordFieldBounds(name) {
   const field = canonicalFieldName(name);
@@ -314,10 +353,42 @@ function scheduleDraw() {
   });
 }
 function diamondPath(col, row) { const p = cellToWorld(col, row); ctx.beginPath(); ctx.moveTo(p.x + 20, p.y); ctx.lineTo(p.x + 40, p.y + 10); ctx.lineTo(p.x + 20, p.y + 20); ctx.lineTo(p.x, p.y + 10); ctx.closePath(); }
+function drawVisiblePointOverlay(viewWidth, viewHeight) {
+  const layer = visiblePointLayer();
+  if (!layer || !state.meta) return;
+  const fi = fieldIndex(layer);
+  if (fi < 0) return;
+  const left = -state.transform.x / state.transform.scale;
+  const top = -state.transform.y / state.transform.scale;
+  const right = left + viewWidth / state.transform.scale;
+  const bottom = top + viewHeight / state.transform.scale;
+  const minRow = Math.max(0, Math.floor((top - state.meta.origin[1] - 24) / 10) - 2);
+  const maxRow = Math.min(state.meta.height - 1, Math.ceil((bottom - state.meta.origin[1] + 24) / 10) + 2);
+  const radius = 3 / state.transform.scale;
+  ctx.save();
+  ctx.lineWidth = 1 / state.transform.scale;
+  for (let row = minRow; row <= maxRow; row++) {
+    const rowStartX = state.meta.origin[0] + (row & 1 ? 20 : 0);
+    const minCol = Math.max(0, Math.floor((left - rowStartX - 24) / 40) - 1);
+    const maxCol = Math.min(state.meta.width - 1, Math.ceil((right - rowStartX + 24) / 40) + 1);
+    for (let col = minCol; col <= maxCol; col++) {
+      const value = state.meta.records[row * state.meta.width + col][fi];
+      if (!value) continue;
+      const p = cellToWorld(col, row);
+      ctx.beginPath();
+      ctx.fillStyle = pointPaletteColor(value & 0xFF);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.arc(p.x + 20, p.y + 10, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
 function draw() {
   const image = displayImage();
   if (!image) return;
-  const rect = canvas.getBoundingClientRect(); ctx.save(); ctx.clearRect(0, 0, rect.width, rect.height); ctx.translate(state.transform.x, state.transform.y); ctx.scale(state.transform.scale, state.transform.scale); ctx.imageSmoothingEnabled = false; ctx.drawImage(image, 0, 0); ctx.lineWidth = 1 / state.transform.scale;
+  const rect = canvas.getBoundingClientRect(); ctx.save(); ctx.clearRect(0, 0, rect.width, rect.height); ctx.translate(state.transform.x, state.transform.y); ctx.scale(state.transform.scale, state.transform.scale); ctx.imageSmoothingEnabled = false; ctx.drawImage(image, 0, 0); drawVisiblePointOverlay(rect.width, rect.height); ctx.lineWidth = 1 / state.transform.scale;
   for (const patch of state.patches.values()) { diamondPath(patch.x, patch.y); ctx.strokeStyle = 'rgba(15,118,110,0.9)'; ctx.stroke(); }
   if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / state.transform.scale; ctx.stroke(); }
   ctx.restore(); drawMinimap();
@@ -500,6 +571,10 @@ function scheduleResourceListRender() {
     paintResourceList();
   });
 }
+function buildPointEntries(layer) {
+  const usage = state.layerStats[layer]?.counts || new Map();
+  return Array.from({ length: 256 }, (_entry, index) => ({ index, used: usage.get(index) || 0, color: pointPaletteColor(index) }));
+}
 function paintResourceList() {
   const model = state.resourceListModel;
   if (!model || !model.info) return;
@@ -508,8 +583,10 @@ function paintResourceList() {
   if (!list || !spacer) return;
   const listWidth = list.clientWidth;
   if (!listWidth) return;
-  const minItemWidth = Math.max(RESOURCE_ITEM_MIN_WIDTH, model.info.tileSize + RESOURCE_ITEM_PADDING);
-  const itemHeight = Math.max(RESOURCE_ITEM_HEIGHT, model.info.tileSize + RESOURCE_LABEL_HEIGHT + RESOURCE_ITEM_PADDING + 2);
+  const baseItemWidth = model.info.kind === 'point' ? 56 : RESOURCE_ITEM_MIN_WIDTH;
+  const baseItemHeight = model.info.kind === 'point' ? 58 : RESOURCE_ITEM_HEIGHT;
+  const minItemWidth = Math.max(baseItemWidth, model.info.tileSize + RESOURCE_ITEM_PADDING);
+  const itemHeight = Math.max(baseItemHeight, model.info.tileSize + RESOURCE_LABEL_HEIGHT + RESOURCE_ITEM_PADDING + 2);
   const columns = Math.max(1, Math.floor((listWidth + RESOURCE_ITEM_GAP) / (minItemWidth + RESOURCE_ITEM_GAP)));
   const itemWidth = Math.max(minItemWidth, Math.floor((listWidth - RESOURCE_ITEM_GAP * (columns - 1)) / columns));
   const rowPitch = itemHeight + RESOURCE_ITEM_GAP;
@@ -527,7 +604,7 @@ function paintResourceList() {
     empty.className = 'placeholder';
     empty.textContent = '没有匹配的资源。';
     spacer.append(empty);
-    els.resourceMeta.textContent = '共 0 项';
+    els.resourceMeta.textContent = `${model.info.metaLabel}共 0 项`;
     return;
   }
   spacer.style.height = `${Math.max(list.clientHeight, totalRows * rowPitch - RESOURCE_ITEM_GAP)}px`;
@@ -547,10 +624,16 @@ function paintResourceList() {
     button.style.height = `${itemHeight}px`;
     const thumb = document.createElement('div');
     thumb.className = 'resource-thumb';
+    if (model.info.kind === 'point') {
+      thumb.classList.add('point-swatch');
+      if (entry.index === 0) thumb.classList.add('zero');
+      else thumb.style.backgroundColor = entry.color;
+    } else {
+      thumb.style.backgroundImage = `url(${model.info.image})`;
+      thumb.style.backgroundPosition = `-${entry.atlas[0]}px -${entry.atlas[1]}px`;
+    }
     thumb.style.width = `${model.info.tileSize}px`;
     thumb.style.height = `${model.info.tileSize}px`;
-    thumb.style.backgroundImage = `url(${model.info.image})`;
-    thumb.style.backgroundPosition = `-${entry.atlas[0]}px -${entry.atlas[1]}px`;
     const label = document.createElement('div');
     label.className = 'resource-label';
     label.textContent = entry.used ? `${entry.index} x${entry.used}` : entry.index;
@@ -558,14 +641,25 @@ function paintResourceList() {
     frag.append(button);
   }
   spacer.append(frag);
-  els.resourceMeta.textContent = `共 ${model.entries.length} 项，当前渲染 ${Math.max(0, endIndex - startIndex)} 项，滚动可查看全部`;
+  els.resourceMeta.textContent = `${model.info.metaLabel}共 ${model.entries.length} 项，当前渲染 ${Math.max(0, endIndex - startIndex)} 项，滚动可查看全部`;
 }
 function renderResourceList(resetScroll = true) {
-  if (!state.resources) return;
-  const layer = els.layer.value;
-  const info = state.resources.layers[layer];
+  if (!state.resources || !state.meta) return;
+  const layer = currentLayerName();
+  ensureSelectedResource(layer);
   const filter = els.resourceFilter.value.trim();
-  const entries = info.entries
+  let info;
+  let entries;
+  if (isPointLayer(layer)) {
+    info = { kind: 'point', tileSize: 22, metaLabel: '可绘制取值' };
+    entries = buildPointEntries(layer);
+  } else {
+    const resourceInfo = state.resources.layers[layer];
+    if (!resourceInfo) return;
+    info = { ...resourceInfo, kind: 'resource', metaLabel: '有效资源' };
+    entries = resourceInfo.entries.slice();
+  }
+  entries = entries
     .filter(entry => !filter || String(entry.index).includes(filter))
     .sort((a, b) => els.resourceSort.value === 'used' ? ((b.used || 0) - (a.used || 0) || a.index - b.index) : (a.index - b.index));
   state.resourceListModel = { layer, info, entries };
@@ -574,7 +668,7 @@ function renderResourceList(resetScroll = true) {
 }
 function buildResourceIndex() {
   state.resourceByIndex = {};
-  for (const layer of state.meta.editableLayers) {
+  for (const layer of state.meta.resourceLayers || state.meta.editableLayers) {
     state.resourceByIndex[layer] = new Map((state.resources.layers[layer]?.entries || []).map(entry => [entry.index, entry]));
   }
 }
@@ -665,9 +759,10 @@ function syncPatchFor(cell, field) {
   if (before === after) state.patches.delete(key);
   else state.patches.set(key, { x: cell.col, y: cell.row, field: normalized, before, after, minimapDirty: true });
 }
-function refreshAfterRecordEdit(cell = null, editedCells = null) {
+function refreshAfterRecordEdit(cell = null, editedCells = null, changedFields = []) {
   if (cell) state.selected = cell;
   if (editedCells && editedCells.length) rebuildEditedImage(editedCells);
+  if (isPointLayer(currentLayerName()) && changedFields.includes(currentLayerName())) renderResourceList(false);
   refreshSide();
   refreshPatches();
   scheduleDraw();
@@ -691,9 +786,10 @@ function applyChangeSet(changes) {
   if (!applied.length) return false;
   state.undoStack.push(applied);
   const last = applied[applied.length - 1];
+  const changedFields = [...new Set(applied.map(change => change.field))];
   const needsVisualRefresh = applied.some(change => state.meta.editableLayers.includes(change.field));
   const editedCells = needsVisualRefresh ? [...new Map(applied.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell) : null;
-  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells);
+  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells, changedFields);
   return true;
 }
 function undoLastEdit() {
@@ -709,9 +805,10 @@ function undoLastEdit() {
     syncPatchFor(cell, change.field);
   }
   const last = changes[changes.length - 1];
+  const changedFields = [...new Set(changes.map(change => change.field))];
   const needsVisualRefresh = changes.some(change => state.meta.editableLayers.includes(change.field));
   const editedCells = needsVisualRefresh ? [...new Map(changes.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell) : null;
-  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells);
+  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells, changedFields);
 }
 function resetSelectedLayerChange() {
   if (!state.selected) return;
@@ -743,10 +840,11 @@ function applyRecordFieldChange(field, rawValue) {
     refreshSide();
     return;
   }
-  const changed = applyChangeSet([{ x: state.selected.col, y: state.selected.row, field, after: value }]);
-  if (changed && state.meta.editableLayers.includes(canonicalFieldName(field)) && canonicalFieldName(field) === canonicalFieldName(els.layer.value)) {
-    state.selectedResource[canonicalFieldName(field)] = value;
-    renderResourceList();
+  const normalizedField = canonicalFieldName(field);
+  const changed = applyChangeSet([{ x: state.selected.col, y: state.selected.row, field: normalizedField, after: value }]);
+  if (changed && normalizedField === currentLayerName()) {
+    state.selectedResource[normalizedField] = value;
+    renderResourceList(false);
   }
 }
 function resetRecordField(field) {
@@ -765,7 +863,9 @@ function resetEditState(meta) {
   state.selected = null;
   state.transform = { x: 24, y: 24, scale: 0.8 };
   els.title.textContent = state.meta.stage;
-  for (const layer of state.meta.editableLayers) state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null;
+  for (const layer of PAINT_LAYER_OPTIONS) state.selectedResource[layer] = null;
+  for (const layer of state.meta.resourceLayers || state.meta.editableLayers) state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null;
+  for (const layer of state.meta.pointLayers || POINT_LAYER_OPTIONS) state.selectedResource[layer] = 0;
   rebuildLayerStats();
   recomputeRedrawConfig();
   rebuildEditedImage();
@@ -1004,7 +1104,7 @@ els.resetAll.addEventListener('click', resetAllChanges);
 document.getElementById('exportPatch').addEventListener('click', downloadPatch);
 els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
-els.layer.addEventListener('change', () => { renderResourceList(); refreshSide(); refreshPatches(); });
+els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); refreshPatches(); scheduleDraw(); });
 els.resourceFilter.addEventListener('input', () => { renderResourceList(); });
 els.resourceSort.addEventListener('change', () => { renderResourceList(); });
 els.resourceList.addEventListener('scroll', scheduleResourceListRender);
