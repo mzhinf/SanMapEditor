@@ -35,6 +35,7 @@ canvas { width: 100%; height: 100%; display: block; }
 .side-left { border-right: 1px solid var(--line); }
 .side-right { border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
 .side-right .section { flex: 0 0 auto; }
+.side-right .resource-section { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
 .section:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
 .section-title { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: 0; margin-bottom: 8px; }
@@ -49,10 +50,10 @@ canvas { width: 100%; height: 100%; display: block; }
 .resource-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 .resource-list { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 2px; }
 .resource-spacer { position: relative; min-height: 100%; }
-.resource-item { position: absolute; height: 76px; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: 1fr 16px; align-items: center; justify-items: center; }
+.resource-item { position: absolute; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: minmax(0, 1fr) 16px; align-items: center; justify-items: center; overflow: hidden; }
 .resource-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15,118,110,.18); }
-.resource-thumb { background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; }
-.resource-label { font-size: 11px; color: var(--muted); line-height: 14px; }
+.resource-thumb { background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; align-self: start; }
+.resource-label { width: 100%; font-size: 11px; color: var(--muted); line-height: 14px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .minimap-wrap { position: relative; border: 1px solid var(--line); background: #111; }
 #minimap { height: 150px; }
 .record-list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
@@ -160,6 +161,8 @@ const MAX_BASE_IMAGE_PIXELS = 100000000;
 const RESOURCE_ITEM_MIN_WIDTH = 64;
 const RESOURCE_ITEM_HEIGHT = 76;
 const RESOURCE_ITEM_GAP = 6;
+const RESOURCE_ITEM_PADDING = 6;
+const RESOURCE_LABEL_HEIGHT = 16;
 const RESOURCE_OVERSCAN_ROWS = 3;
 const state = {
   meta: null,
@@ -505,9 +508,11 @@ function paintResourceList() {
   if (!list || !spacer) return;
   const listWidth = list.clientWidth;
   if (!listWidth) return;
-  const columns = Math.max(1, Math.floor((listWidth + RESOURCE_ITEM_GAP) / (RESOURCE_ITEM_MIN_WIDTH + RESOURCE_ITEM_GAP)));
-  const itemWidth = Math.max(RESOURCE_ITEM_MIN_WIDTH, Math.floor((listWidth - RESOURCE_ITEM_GAP * (columns - 1)) / columns));
-  const rowPitch = RESOURCE_ITEM_HEIGHT + RESOURCE_ITEM_GAP;
+  const minItemWidth = Math.max(RESOURCE_ITEM_MIN_WIDTH, model.info.tileSize + RESOURCE_ITEM_PADDING);
+  const itemHeight = Math.max(RESOURCE_ITEM_HEIGHT, model.info.tileSize + RESOURCE_LABEL_HEIGHT + RESOURCE_ITEM_PADDING + 2);
+  const columns = Math.max(1, Math.floor((listWidth + RESOURCE_ITEM_GAP) / (minItemWidth + RESOURCE_ITEM_GAP)));
+  const itemWidth = Math.max(minItemWidth, Math.floor((listWidth - RESOURCE_ITEM_GAP * (columns - 1)) / columns));
+  const rowPitch = itemHeight + RESOURCE_ITEM_GAP;
   const totalRows = Math.ceil(model.entries.length / columns);
   const startRow = Math.max(0, Math.floor(list.scrollTop / rowPitch) - RESOURCE_OVERSCAN_ROWS);
   const visibleRows = Math.ceil(list.clientHeight / rowPitch) + RESOURCE_OVERSCAN_ROWS * 2 + 1;
@@ -539,6 +544,7 @@ function paintResourceList() {
     button.style.left = `${col * (itemWidth + RESOURCE_ITEM_GAP)}px`;
     button.style.top = `${row * rowPitch}px`;
     button.style.width = `${itemWidth}px`;
+    button.style.height = `${itemHeight}px`;
     const thumb = document.createElement('div');
     thumb.className = 'resource-thumb';
     thumb.style.width = `${model.info.tileSize}px`;

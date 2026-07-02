@@ -73,3 +73,5 @@
 - 更新 `README.md` 中编辑器相关命令，推荐直接使用 `src/san_tools/map/*.py` 正式入口，同时保留 `http.server` 的原有启动方式说明。
 - 根据最新页面调整字段与布局：`word06` 取代旧的 `flags` 展示，顶部移除“图层/值”，资源图层切换收入右侧 `Resources`，左侧 `Record` 改为紧凑无间隔列表。
 - 调整 `Resources` 面板：过滤控件收窄后不再挤出横向滚动，资源区拉伸到右栏底部，并改为窗口化渲染以支持全量资源滚动查看。
+- 修正 `Resources` 右栏无法实际滚动的问题：给 `.side-right .resource-section` 单独恢复可伸展高度，避免被通用 `.section` 的 `flex: 0 0 auto` 覆盖。
+- 调整资源卡片尺寸计算：`acwz` 现在会按 72px 缩略图自适应卡片宽高，底部 `id x count` 标签不再被缩略图挤掉。
