@@ -894,13 +894,13 @@ function resetEditState(meta) {
 }
 function parseStageM(buffer, name = 'local.m') {
   const view = new DataView(buffer);
-  if (buffer.byteLength < 16) throw new Error('文件太小，无法识别为 .m');
+  if (buffer.byteLength < 16) throw new Error('?????????? .m');
   const width = view.getUint32(0, true);
   const height = view.getUint32(4, true);
   const magic = new TextDecoder('ascii').decode(new Uint8Array(buffer, 8, 8));
-  if (magic !== 'Hello1.0') throw new Error('这不是 Hello1.0 .m 文件');
+  if (magic !== 'Hello1.0') throw new Error('??? Hello1.0 .m ??');
   const expected = 16 + width * height * 16;
-  if (buffer.byteLength < expected) throw new Error(`.m 记录区不完整：期望 ${expected} 字节，实际 ${buffer.byteLength}`);
+  if (buffer.byteLength < expected) throw new Error(`.m ????????? ${expected} ????? ${buffer.byteLength}`);
   const records = [];
   for (let i = 0; i < width * height; i++) {
     const off = 16 + i * 16;
@@ -911,15 +911,28 @@ function parseStageM(buffer, name = 'local.m') {
     ]);
   }
   const stageName = name.replace(/\.m$/i, '');
-  const inheritedSidecars = state.meta?.stage === stageName ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '当前本地 .m 没有关联的 sidecar 尾区参考。' };
+  const inheritedSidecars = state.meta?.stage === stageName ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '???? .m ????? sidecar ?????' };
+  // ???? .m ????? bundle ???/???????? byte08~11 ????????
   return normalizeMeta({
     format: 'san-editor-stage-v1', stage: stageName, width, height, layout: 'stagger', origin: [64, 64],
     tile: { width: 40, height: 20, row_step: 10, odd_row_x: 20 },
-    fields: state.meta.fields.slice(), fieldMeta: state.meta.fieldMeta.map(entry => ({ ...entry })), editableLayers: state.meta.editableLayers.slice(), editableRecordFields: state.meta.editableRecordFields.slice(), palette: state.meta.palette,
-    image: null, minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' }, sidecars: inheritedSidecars, resources: state.meta.resources, records,
+    fields: state.meta.fields.slice(),
+    fieldMeta: state.meta.fieldMeta.map(entry => ({ ...entry })),
+    editableLayers: state.meta.editableLayers.slice(),
+    resourceLayers: state.meta.resourceLayers.slice(),
+    pointLayers: state.meta.pointLayers.slice(),
+    editableRecordFields: state.meta.editableRecordFields.slice(),
+    pointPalette: state.meta.pointPalette.slice(),
+    palette: state.meta.palette,
+    image: null,
+    minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' },
+    sidecars: inheritedSidecars,
+    resources: state.meta.resources,
+    records,
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
   });
 }
+
 async function loadLocalMFile(file) {
   if (!file) return;
   try {
