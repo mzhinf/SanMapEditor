@@ -128,7 +128,7 @@ canvas { width: 100%; height: 100%; display: block; }
     </div>
     <div class="section resource-section">
       <div class="section-title">Resources</div>
-      <div class="field"><label>图层</label><select id="layer"><option value="acwx">acwx</option><option value="acwy">acwy</option><option value="acwz">acwz</option><option value="byte08">byte08</option><option value="byte09">byte09</option><option value="byte10">byte10</option><option value="byte11">byte11</option></select></div>
+      <div class="field"><label>图层</label><select id="layer"></select></div>
       <div class="resource-controls">
         <input id="resourceFilter" placeholder="按编号过滤">
         <select id="resourceSort"><option value="index">按编号</option><option value="used">按使用数</option></select>
@@ -318,6 +318,22 @@ function recordFieldBounds(name) {
   return { min: 0, max: 255 };
 }
 function formatFieldName(meta) { return meta.alias ? `${meta.name} · ${meta.alias}` : meta.name; }
+function layerOptionLabel(name) {
+  const meta = getFieldMeta(name);
+  return `${meta.label}(${canonicalFieldName(name)})`;
+}
+function renderLayerOptions() {
+  const options = [...(state.meta?.resourceLayers || RESOURCE_LAYER_OPTIONS), ...(state.meta?.pointLayers || POINT_LAYER_OPTIONS)];
+  const current = canonicalFieldName(els.layer.value || options[0] || 'acwx');
+  els.layer.textContent = '';
+  for (const name of options) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = layerOptionLabel(name);
+    if (name === current) option.selected = true;
+    els.layer.append(option);
+  }
+}
 function moveSelected(dx, dy) {
   if (!state.meta) return;
   const next = state.selected ? { col: state.selected.col + dx, row: state.selected.row + dy } : { col: 0, row: 0 };
@@ -364,9 +380,10 @@ function drawVisiblePointOverlay(viewWidth, viewHeight) {
   const bottom = top + viewHeight / state.transform.scale;
   const minRow = Math.max(0, Math.floor((top - state.meta.origin[1] - 24) / 10) - 2);
   const maxRow = Math.min(state.meta.height - 1, Math.ceil((bottom - state.meta.origin[1] + 24) / 10) + 2);
-  const radius = 3 / state.transform.scale;
+  const screenRadius = Math.min(10, Math.max(3, state.transform.scale * 2));
+  const radius = screenRadius / state.transform.scale;
   ctx.save();
-  ctx.lineWidth = 1 / state.transform.scale;
+  ctx.lineWidth = Math.max(1, screenRadius * 0.2) / state.transform.scale;
   for (let row = minRow; row <= maxRow; row++) {
     const rowStartX = state.meta.origin[0] + (row & 1 ? 20 : 0);
     const minCol = Math.max(0, Math.floor((left - rowStartX - 24) / 40) - 1);
@@ -857,6 +874,7 @@ function resetRecordField(field) {
 function resetEditState(meta) {
   state.meta = normalizeMeta(meta);
   state.fieldMetaByName = new Map(state.meta.fieldMeta.map(entry => [entry.name, entry]));
+  renderLayerOptions();
   state.originalRecords = state.meta.records.map(record => record.slice());
   state.patches.clear();
   state.undoStack = [];
