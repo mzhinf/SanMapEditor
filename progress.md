@@ -66,7 +66,9 @@
 - 验证补充：`H:\Workstation\sgby\.venv\Scripts\python.exe -m unittest tests.test_apply_editor_patch_minimap` 已通过；同时完成 `src/san_tools/map/editor_app.html` 的 Node 语法检查，以及 `src/san_tools/map/export_editor_bundle.py . --stage stage11 --out derived/editor_smoke` 的导出烟测。
 
 ## 2026-07-02
-
+- 以 `src/san_tools/analysis/analyze_dor.py` 为新的 `.dor` 正式入口，补齐命令行参数与 `tools/analyze_dor.py` 兼容包装层，可直接导出按 group 分组的城门 JSON。
+- 清理旧的 `.dor` 猜测脚本与命令注册：移除 `analyze_dor_relationship.py`、`analyze_dor_byte_fields.py`、`analyze_dor_semantics.py` 及对应旧入口，统一改为 `analyze-dor`。
+- 更新 `README.md`、`docs/FORMAT_NOTES.zh.md`、`findings.md`、`task_plan.md` 中的 `.dor` 说明，改为以分组结构、城门坐标、据点坐标和朝向字段为准。
 - 修复编辑器在 `stage01` 等超大关卡上的启动失败：当导出的 `map.png` 超过浏览器稳定解码范围时，页面会自动跳过底图加载并改用资源重建，不再因为 `EncodingError` 中断。
 - 修正资源重建模式下的局部重绘逻辑，并在加载本地 `.m` 时主动清空旧底图/小地图缓存，避免后续编辑时把旧关卡底图混入新视图。
 - 收口 `export_editor_bundle.py` 的模板来源，改为只从 `src/san_tools/map/editor_app.html` 复制编辑器页面，不再依赖 `tools/editor_app.html`。

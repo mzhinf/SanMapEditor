@@ -19,7 +19,7 @@
 - `Emperor.exe` 已足够支撑当前稳定渲染：地图采用 staggered isometric 网格，最终渲染结果不是纯菱形大图。
 - `stage.ini` 不是文本 ini，而是全局二进制母表，已具备 JSON / Excel / 二进制互转链路。
 - `stage01.stg` 已能按原始记录顺序导出成层级表、城池状态表和工作簿，并支持安全回写。
-- `.evt/.spr/.dor/.s/.x` 已有第二轮 sidecar 研究与保守写回脚本，能输出 `.evt` 文本资源关联、`.s/.x` 缩略缓存统计，以及从 `.m` 重建 `.s/.x` 的有效区。
+- `.evt/.spr/.dor/.s/.x` 已有 sidecar 研究与保守写回脚本；其中 `.dor` 现已可按“分组 -> 城门记录”稳定导出完整数据。
 
 更详细的格式说明见：
 
@@ -120,10 +120,10 @@
 & $py tools/analyze_minimap_sidecars.py .
 ```
 
-分析 `.dor` 与 `.m` 的候选坐标关系并导出覆盖图：
+导出 `.dor` 的分组、城门坐标、据点坐标与原始记录：
 
 ```powershell
-& $py tools/analyze_dor_relationship.py . --stage stage20 --top-pairs 3
+& $py tools/analyze_dor.py 三国霸业\stage01.dor
 ```
 
 按 `.m` 单个 cell 的原始 `byte08-15` 绘制原始网格图、所有非零 value group 分色覆盖图，并输出 `byte09` / `byte11` 的辅助判断报告：
@@ -147,7 +147,7 @@
 主要产物：
 
 - `derived/sidecar_analysis/evt_resource_linkage.json`
-- `derived/dor_relationship/<stage>/dor_relationship.json`
+- `derived/dor_analysis/<dor文件名>.json`
 - `derived/minimap_sidecars/<stage>/sidecar_build_report.json`
 - `derived/sidecar_analysis/minimap_sidecar_analysis.json`
 
@@ -155,7 +155,7 @@
 
 - 38 个 `.evt` 都能对上对应 `TalkNN.txt`，其中 `stage17.txt` 是可读脚本原型，`stage01.txt` 是二进制 blob。
 - `.evt` 中目前最稳定的 ASCII 命令 token 是 `talk`、`VIEW`、`MAP`、`MAPALL`、`MOVE`、`TIME`、`TIMEOVER`。
-- `.dor` 文件头携带 `Door    Data` 魔数；重新从 `Emperor.exe` 复核后，`.spr/.dor/.evt` 明确落在同一 sidecar 装配簇里，而 `.m/.s/.x` 在另一组加载链上，当前更支持“.dor 是关卡 sidecar”而不是“.m 某个字节字段的直出表”。
+- `.dor` 现已确认结构为：`Door    Data` 文件头 + `0x3C` 记录长度 + 多个 `count + records` 分组，遇到 `count=0` 结束；`analyze_dor.py` 可稳定导出 `door_x/door_y/dir/site_x/site_y/raw`。
 - `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `byte13 / minimap_color` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
 - `tools/apply_editor_patch.py` 现在会在写回 `.m` 后默认同步生成同名 `.s/.x`；编辑器导出的 bundle 也会内嵌 sidecar 尾区参考，支持页面内一键导出 `.m/.s/.x`。
 - 在 33 个关卡里，`.x` 的有效区始终比 `.s` 更接近 `.m` 派生结果，平均匹配率分别为 `0.620744 / 0.47098`；保留尾区后，生成结果的尾区匹配率恒为 `1.0`。

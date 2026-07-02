@@ -70,14 +70,14 @@
 - `tools/apply_editor_patch.py` 已经把这条 sidecar 规则接进编辑器 patch 写回链路，能够一次完成 patch -> `.m/.s/.x` 闭环。
 - 剩余未解的是：`.x` 为什么总比 `.s` 更接近 `.m`，以及 `Emperor.exe` 是否还会对顶部有效区再做额外调色或标记。
 
-### 9. `.dor` 已能做候选字段与地图关系可视化
+### 9. `.dor` 已能稳定导出完整分组与城门数据
 
-- `.dor` 文件头带有 `Door    Data` 魔数，当前样本中可以稳定识别出头部与定长记录区。
-- 重新从 `Emperor.exe` 复核后可见：`.spr/.dor/.evt` 的扩展名引用点落在两段紧凑代码簇，而 `.m/.s/.x` 在另一段；这支持 `.dor` 是与 `.m` 并列的关卡 sidecar，而不是其内嵌镜像。
-- `Door    Data` 魔数只被两处代码引用，且都出现 `push 0x0c; push "Door    Data"` 头校验模式，进一步说明 `.dor` 走的是独立 sidecar 装载路径。
-- `tools/analyze_dor_relationship.py` 已更新为同时输出候选坐标覆盖图与 `Emperor.exe` 证据摘要，报告写入 `derived/dor_relationship/<stage>/dor_relationship.json`。
-- 目前最像坐标对的字段组合已经能在部分关卡上落到合理地图范围内，但还不能直接命名成门、入口或触发边界。
-
+- `.dor` 文件头固定为 `Door    Data` + `u32 record_size`，当前已确认 `record_size = 0x3C`。
+- 文件体按“分组”组织：每组以 `u32 count` 开头，后接 `count * 0x3C` 记录，遇到 `count = 0` 结束。
+- `src/san_tools/analysis/analyze_dor.py` 现已稳定导出 `group/index`、`door_x`、`door_y = raw[1] * 2 + 4`、`dir`、`site_x`、`site_y`、`unk_28`、`unk_2c`、`extra` 与 `raw`。
+- 当前可以把一个 group 视为同一据点下的一组城门记录；这为后续用 `.stg` 的城池坐标给城门做归属绑定提供了稳定基础。
+- `new-stage01.dor` 与 `stage01.dor` 的对比显示：旧版主要记录家族整体保留，新版在若干 Y 类字段上存在稳定的 `+178 / +356` 分档偏移，并额外展开了 43 条门记录。
+- 重新从 `Emperor.exe` 复核后，`.spr/.dor/.evt` 与 `.m/.s/.x` 仍分属不同扩展名引用簇，说明 `.dor` 是与 `.m` 并列的关卡 sidecar，而不是 `.m` 的内嵌表。
 ### 10. `.m byte08-15` 已经形成可视化与初步判断
 
 - 已新增 `tools/analyze_m_byte_fields.py`，按 `.m` 单个 cell 的原始 `byte08-15` 绘制原始网格图、所有非零 value group 分色覆盖图，并输出 `derived/m_byte_fields/<stage>/m_byte_fields.json`。
@@ -86,11 +86,11 @@
 - `byte10` 已可确认为城池、山寨等建筑的触发范围，其中 `byte10=239` 表示城门。
 - `byte11` 已可确认为进入城池、山寨、军寨的触发范围编号；不同城池/山寨会使用不同 id，同值仍表现为稳定聚类区域。
 - `byte13` 已可确认为小地图渲染颜色索引；`byte12`、`byte14`、`byte15` 在当前全量样本中都保持为 0，可视作填充/保留字节。
-- `stage01.dor` 与 `stage01.m` 的对比结果已经写入 `derived/dor_relationship/stage01/dor_m_overlap.json`：当前 `.dor` 候选点位与 `.m byte08` 非零区的最佳精确重合只有 `1/38`，而与 `byte10!=0` / `byte11!=0` 的最佳精确重合可达 `26/29` / `24/29`；当前没有证据支持 `.dor` 直接记录码头/水陆交界切换点。
+- 旧版基于 `.dor` 候选坐标对与 `.m` 字段重合度的猜测性结论已废弃；当前以 `analyze_dor.py` 导出的分组结构、城门坐标和据点坐标为准。
 
 ## 当前最值得继续推进的方向
 
 1. 继续拆 `.stg` 内剩余未命名字段。
 2. 把 `.evt` 的记录类型、坐标引用和对象引用正式化。
-3. 从 `Emperor.exe` 继续收口 `.dor` 与 `.s/.x` 的真实读取/生成链路，解释为什么 `.x` 比 `.s` 更接近 `.m` 派生结果。
+3. 根据 `.dor` 的 `site_x/site_y` 与 `.stg` 的城池坐标建立“城门 -> 据点”归属关系，并接入编辑器高亮。
 4. 把地图编辑器与 `.stg/.s/.x` 的联动补齐。

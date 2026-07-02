@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -22,8 +22,7 @@ COMMANDS: tuple[CommandEntry, ...] = (
     CommandEntry('stitch-kingdom', 'san_tools.map.stitch_kingdom_tiles', '拼接 kingdom tile 样张'),
     CommandEntry('analyze-sidecars', 'san_tools.analysis.analyze_stage_sidecars', '分析 .stg/.evt/.spr/.dor/.s/.x sidecar'),
     CommandEntry('analyze-evt-resources', 'san_tools.analysis.analyze_evt_resources', '分析 .evt 与 TalkNN.txt / stageNN.txt 的关联'),
-    CommandEntry('analyze-dor-relationship', 'san_tools.analysis.analyze_dor_relationship', '分析 .dor 与 .m 的候选坐标关系'),
-    CommandEntry('analyze-dor-byte-fields', 'san_tools.analysis.analyze_dor_byte_fields', '分析 .dor 原始 byte08-15 与地图的关系'),
+    CommandEntry('analyze-dor', 'san_tools.analysis.analyze_dor', '解析 .dor 的分组、城门坐标与据点坐标'),
     CommandEntry('analyze-m-byte-fields', 'san_tools.analysis.analyze_m_byte_fields', '分析 .m 原始 byte08-15 与地图的关系'),
     CommandEntry('analyze-minimap-sidecars', 'san_tools.analysis.analyze_minimap_sidecars', '分析 .s/.x 与地图缩略缓存的关系'),
     CommandEntry('export-sidecar-tables', 'san_tools.pipelines.export_stage_sidecar_tables', '导出 sidecar 分析表'),

@@ -225,14 +225,15 @@ screen_y = row * 10
 
 - 与单位或战场对象有关。
 - 可为空。
-### `.dor`
-- `Emperor.exe` 里，`.spr/.dor/.evt` 与 `.m/.s/.x` 分属两组扩展名引用簇，说明 `.dor` 与 `.m` 是同关卡的并列资源。
-- `Door    Data` 在 `0x3e6d9` 和 `0x3ea3b` 都以 `push 0x0c; push "Door    Data"` 方式校验，说明 `.dor` 有独立文件头。
-- `tools/analyze_dor_relationship.py` 现会把 `Emperor.exe` 的引用簇与魔数校验一并写入 `derived/dor_relationship/<stage>/dor_relationship.json`。
-- `stage01` 的重合度报告显示：最佳 `.dor` 候选对与 `.m byte08` 仅 `1/38` 精确重合，而与 `byte10!=0` / `byte11!=0` 可达 `26/29` / `24/29`。
-- 当前 `.dor` 更像入口、触发范围或通行限制相关 sidecar。
-- 可为空。
 
+### `.dor`
+
+- 文件头固定为 ASCII `Door    Data` + `u32 record_size`，当前已确认 `record_size = 0x3C`。
+- 头后按“分组”组织：`u32 count` + `count * 0x3C` 记录，遇到 `count = 0` 结束，不是先前猜测的单一平铺记录区。
+- `src/san_tools/analysis/analyze_dor.py` 当前已稳定导出以下字段：`group/index`、`door_x`、`door_y = raw[1] * 2 + 4`、`dir`、`site_x`、`site_y`、`unk_28`、`unk_2c`、`extra`、`raw`。
+- 当前可把一个 group 视为同一据点下的一组城门记录，后续可以继续与 `.stg` 中的据点坐标做归属绑定。
+- `Emperor.exe` 里，`.spr/.dor/.evt` 与 `.m/.s/.x` 仍分属两组扩展名引用簇，说明 `.dor` 是与 `.m` 并列的关卡 sidecar。
+- 可为空。
 
 ### `.s/.x`
 
@@ -258,10 +259,11 @@ screen_y = row * 10
 5. `.m` 相关闭环在能够重建 sidecar 时，也优先保留原始 `.s/.x` 尾区，只覆写已经确认的顶部有效区。
 
 这是目前最稳妥、也最适合继续逆向扩展的方案。
+
 ## 8. 当前未解问题
 
 1. `.m` 中 `flags` 的最终语义，以及 `byte08` 那些未被标记的码头/水陆交界是否还受其他字段或资源兜底。
 2. `.stg` 城池块和士兵块里剩余未命名字段的完整含义。
 3. `.evt` 如何引用地图坐标、对象和全局 id。
-4. `.dor` 记录里各字段分别对应什么业务语义，是否区分入口点、触发边界和目标位置。
+4. 根据 `.dor` 的 `site_x/site_y` 与 `.stg` 的城池坐标建立稳定的“城门 -> 据点”归属表，并接入编辑器联动。
 5. 为什么 `.x` 在顶部有效区里始终比 `.s` 更接近 `.m` 派生结果，以及 `Emperor.exe` 是否还会做额外调色、标记或压缩。
