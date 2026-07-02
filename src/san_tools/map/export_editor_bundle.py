@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from san_tools.analysis.stage_site_links import build_stage_site_links
 from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
 from render_m_cel_map import canvas_size, make_diamond_tile, make_object, parse_counted_cel, render_stage
 
@@ -95,6 +96,7 @@ def write_stage_json(
     palette_source: str,
     sidecar_meta: dict,
     point_palette: list[str],
+    site_links: dict[str, object],
 ) -> None:
     data = {
         "format": "san-editor-stage-v1",
@@ -112,6 +114,7 @@ def write_stage_json(
         "editableRecordFields": EDITABLE_RECORD_FIELDS,
         "palette": palette_source,
         "pointPalette": point_palette,
+        "siteLinks": site_links,
         "image": image_name,
         "minimap": {"image": minimap_name, "source": "rendered-map", "sync": "derived-from-m-records"},
         "sidecars": sidecar_meta,
@@ -345,6 +348,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     render_meta = render_stage(stage_path, blocks, palette, map_path, layout, layers, None)
     render_meta["source_output_size"] = [source_w, source_h]
     sidecar_meta = build_sidecar_export_meta(game_dir, stage, GRID_SIZE, ACTIVE_ROWS)
+    site_links = build_stage_site_links(root, stage)
 
     export_resource_catalog(blocks, palette, stage_dir, records)
     export_minimap(map_path, stage_dir / "minimap.png")
@@ -362,6 +366,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
         palette_source,
         sidecar_meta,
         PAINT_RGB_FLAG_PALETTE,
+        site_links,
     )
     template = resolve_editor_template(root)
     shutil.copyfile(template, stage_dir / "editor.html")

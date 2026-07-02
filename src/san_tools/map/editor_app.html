@@ -57,6 +57,9 @@ canvas { width: 100%; height: 100%; display: block; }
 .resource-thumb { background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; align-self: start; }
 .resource-thumb.point-swatch { align-self: center; border-radius: 999px; background-image: none; background-color: transparent; border: 1px solid rgba(17, 24, 39, 0.16); }
 .resource-thumb.point-swatch.zero { border-radius: 6px; background: repeating-linear-gradient(135deg, #ffffff 0 5px, #e5e7eb 5px 10px); }
+.site-tools { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 6px; margin-bottom: 8px; }
+.site-tools > * { min-width: 0; width: 100%; }
+.site-note { color: var(--muted); font-size: 12px; margin-top: 6px; }
 .resource-label { width: 100%; font-size: 11px; color: var(--muted); line-height: 14px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .minimap-wrap { position: relative; border: 1px solid var(--line); background: #111; }
 #minimap { height: 150px; }
@@ -125,6 +128,15 @@ canvas { width: 100%; height: 100%; display: block; }
     <div class="section">
       <div class="section-title">Stage</div>
       <div class="kv" id="stageInfo"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">据点</div>
+      <div class="site-tools">
+        <select id="sitePicker"><option value="">未选据点</option></select>
+        <button id="clearSite" type="button">清除</button>
+      </div>
+      <div class="kv" id="siteInfo"></div>
+      <div class="site-note" id="siteNote"></div>
     </div>
     <div class="section resource-section">
       <div class="section-title">Resources</div>
@@ -196,6 +208,8 @@ const state = {
   resourceRenderQueued: false,
   baseImageMode: 'pending',
   baseImageNote: '',
+  siteIndex: null,
+  activeSiteKey: '',
 };
 const els = {
   status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
@@ -205,6 +219,7 @@ const els = {
   resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
   exportFiles: document.getElementById('exportFiles'),
+  sitePicker: document.getElementById('sitePicker'), clearSite: document.getElementById('clearSite'), siteInfo: document.getElementById('siteInfo'), siteNote: document.getElementById('siteNote'),
 };
 function canonicalFieldName(name) { return LEGACY_FIELD_ALIASES[name] || name; }
 function fieldIndex(name) { return state.meta.fields.indexOf(canonicalFieldName(name)); }
@@ -243,6 +258,67 @@ function normalizeSidecars(sidecars) {
     reason: typeof sidecars?.reason === 'string' ? sidecars.reason : '',
   };
 }
+function normalizeSiteLinks(siteLinks) {
+  const rawCities = Array.isArray(siteLinks?.cities) ? siteLinks.cities : [];
+  const rawGates = Array.isArray(siteLinks?.gates) ? siteLinks.gates : [];
+  const cities = rawCities
+    .map((entry, index) => {
+      const mapX = Number(entry?.mapX);
+      const mapY = Number(entry?.mapY);
+      if (!Number.isFinite(mapX) || !Number.isFinite(mapY)) return null;
+      const gateIndices = Array.isArray(entry?.gateIndices)
+        ? entry.gateIndices.map(value => Number(value)).filter(Number.isFinite)
+        : [];
+      return {
+        siteKey: typeof entry?.siteKey === 'string' && entry.siteKey ? entry.siteKey : `${mapX},${mapY}`,
+        cityName: typeof entry?.cityName === 'string' && entry.cityName ? entry.cityName : `据点${index + 1}`,
+        forceIndex: Number.isFinite(Number(entry?.forceIndex)) ? Number(entry.forceIndex) : null,
+        forceName: typeof entry?.forceName === 'string' ? entry.forceName : '',
+        cityIndex: Number.isFinite(Number(entry?.cityIndex)) ? Number(entry.cityIndex) : null,
+        sourceRecordIndex: Number.isFinite(Number(entry?.sourceRecordIndex)) ? Number(entry.sourceRecordIndex) : null,
+        mapX,
+        mapY,
+        expectedX: Number.isFinite(Number(entry?.expectedX)) ? Number(entry.expectedX) : null,
+        expectedY: Number.isFinite(Number(entry?.expectedY)) ? Number(entry.expectedY) : null,
+        gateIndices,
+        gateCount: Number.isFinite(Number(entry?.gateCount)) ? Number(entry.gateCount) : gateIndices.length,
+      };
+    })
+    .filter(Boolean);
+  const gates = rawGates
+    .map(entry => {
+      const doorX = Number(entry?.doorX);
+      const doorY = Number(entry?.doorY);
+      const siteX = Number(entry?.siteX);
+      const siteY = Number(entry?.siteY);
+      if (!Number.isFinite(doorX) || !Number.isFinite(doorY) || !Number.isFinite(siteX) || !Number.isFinite(siteY)) return null;
+      return {
+        gateIndex: Number.isFinite(Number(entry?.gateIndex)) ? Number(entry.gateIndex) : 0,
+        group: Number.isFinite(Number(entry?.group)) ? Number(entry.group) : 0,
+        doorIndex: Number.isFinite(Number(entry?.doorIndex)) ? Number(entry.doorIndex) : 0,
+        doorX,
+        doorY,
+        dir: Number.isFinite(Number(entry?.dir)) ? Number(entry.dir) : 0,
+        siteX,
+        siteY,
+        siteKey: typeof entry?.siteKey === 'string' && entry.siteKey ? entry.siteKey : `${siteX},${siteY}`,
+        cityName: typeof entry?.cityName === 'string' ? entry.cityName : '',
+      };
+    })
+    .filter(Boolean);
+  return {
+    available: siteLinks?.available === true && cities.length > 0,
+    reason: typeof siteLinks?.reason === 'string' ? siteLinks.reason : '',
+    cityCount: Number.isFinite(Number(siteLinks?.cityCount)) ? Number(siteLinks.cityCount) : cities.length,
+    gateCount: Number.isFinite(Number(siteLinks?.gateCount)) ? Number(siteLinks.gateCount) : gates.length,
+    matchedGateCount: Number.isFinite(Number(siteLinks?.matchedGateCount)) ? Number(siteLinks.matchedGateCount) : gates.length,
+    unmatchedGateCount: Number.isFinite(Number(siteLinks?.unmatchedGateCount)) ? Number(siteLinks.unmatchedGateCount) : Math.max(0, gates.length),
+    cities,
+    gates,
+    sources: siteLinks?.sources || {},
+  };
+}
+
 function sourceOutputSize(meta = state.meta) {
   const size = meta?.render?.source_output_size;
   if (!Array.isArray(size) || size.length !== 2) return null;
@@ -278,7 +354,7 @@ function normalizeMeta(meta) {
   const pointLayers = (Array.isArray(meta.pointLayers) && meta.pointLayers.length ? meta.pointLayers : POINT_LAYER_OPTIONS).map(canonicalFieldName);
   const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name)).map(canonicalFieldName);
   const pointPalette = Array.isArray(meta.pointPalette) ? meta.pointPalette.slice(0, 256) : [];
-  return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, sidecars: normalizeSidecars(meta.sidecars) };
+  return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, sidecars: normalizeSidecars(meta.sidecars), siteLinks: normalizeSiteLinks(meta.siteLinks) };
 }
 function getFieldMeta(name) {
   return state.fieldMetaByName.get(canonicalFieldName(name)) || DEFAULT_FIELD_META.find(entry => entry.name === canonicalFieldName(name)) || { name, alias: name, label: name, editable: true, reserved: false };
@@ -295,6 +371,161 @@ function currentLayerName() { return canonicalFieldName(els.layer.value); }
 function visiblePointLayer() {
   const layer = currentLayerName();
   return isPointLayer(layer) ? layer : null;
+}
+function buildSiteIndex(siteLinks) {
+  if (!siteLinks?.available) return null;
+  const cityByKey = new Map();
+  const cityByCell = new Map();
+  const cityKeyByGateCell = new Map();
+  const gatesBySiteKey = new Map();
+  for (const city of siteLinks.cities) {
+    const view = { ...city, gates: [] };
+    cityByKey.set(city.siteKey, view);
+    cityByCell.set(`${city.mapX},${city.mapY}`, city.siteKey);
+    gatesBySiteKey.set(city.siteKey, view.gates);
+  }
+  for (const gate of siteLinks.gates) {
+    const list = gatesBySiteKey.get(gate.siteKey);
+    if (!list) continue;
+    list.push(gate);
+    cityKeyByGateCell.set(`${gate.doorX},${gate.doorY}`, gate.siteKey);
+  }
+  for (const city of cityByKey.values()) {
+    city.gates.sort((a, b) => a.doorY - b.doorY || a.doorX - b.doorX || a.gateIndex - b.gateIndex);
+    city.gateCount = city.gates.length;
+    city.gateIndices = city.gates.map(gate => gate.gateIndex);
+  }
+  return { cityByKey, cityByCell, cityKeyByGateCell };
+}
+function activeSite() {
+  return state.siteIndex?.cityByKey.get(state.activeSiteKey) || null;
+}
+function siteOverlayStatus() {
+  if (!state.meta?.siteLinks?.available) return '未加载';
+  return `${state.meta.siteLinks.cityCount} 据点 / ${state.meta.siteLinks.gateCount} 城门`;
+}
+function formatGateSummary(site, limit = 8) {
+  const gates = Array.isArray(site?.gates) ? site.gates : [];
+  if (!gates.length) return '-';
+  const text = gates.slice(0, limit).map(gate => `${gate.doorX},${gate.doorY}`).join(' | ');
+  return gates.length > limit ? `${text} 等 ${gates.length} 处` : text;
+}
+function refreshSiteInfo() {
+  if (!state.meta?.siteLinks?.available) {
+    setPairs(els.siteInfo, [['据点联动', '未加载']]);
+    els.siteNote.textContent = state.meta?.siteLinks?.reason || '当前 bundle 未携带 .dor / .stg 归属信息。';
+    return;
+  }
+  const site = activeSite();
+  if (!site) {
+    setPairs(els.siteInfo, [
+      ['据点数', state.meta.siteLinks.cityCount],
+      ['城门数', state.meta.siteLinks.gateCount],
+      ['已匹配', state.meta.siteLinks.matchedGateCount],
+    ]);
+    els.siteNote.textContent = '可从右侧下拉框选择据点，或在地图上直接点中城池坐标 / 城门坐标。';
+    return;
+  }
+  setPairs(els.siteInfo, [
+    ['当前据点', site.cityName],
+    ['坐标', `${site.mapX}, ${site.mapY}`],
+    ['所属势力', site.forceName || '-'],
+    ['城门数', site.gateCount],
+    ['城门坐标', formatGateSummary(site)],
+  ]);
+  els.siteNote.textContent = site.sourceRecordIndex == null ? '' : `来源记录：stg #${site.sourceRecordIndex}`;
+}
+function renderSitePicker() {
+  els.sitePicker.textContent = '';
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = '未选据点';
+  els.sitePicker.append(empty);
+  if (!state.meta?.siteLinks?.available || !state.siteIndex) {
+    els.sitePicker.disabled = true;
+    els.clearSite.disabled = true;
+    refreshSiteInfo();
+    return;
+  }
+  const sites = [...state.siteIndex.cityByKey.values()].sort((a, b) => a.mapY - b.mapY || a.mapX - b.mapX || a.cityName.localeCompare(b.cityName, 'zh-CN'));
+  for (const site of sites) {
+    const option = document.createElement('option');
+    option.value = site.siteKey;
+    option.textContent = `${site.cityName} (${site.mapX},${site.mapY}) / ${site.gateCount} 门`;
+    if (site.siteKey === state.activeSiteKey) option.selected = true;
+    els.sitePicker.append(option);
+  }
+  els.sitePicker.disabled = false;
+  els.clearSite.disabled = !state.activeSiteKey;
+  refreshSiteInfo();
+}
+function focusSite(siteKey) {
+  const site = state.siteIndex?.cityByKey.get(siteKey);
+  if (!site) return;
+  const rect = canvas.getBoundingClientRect();
+  const point = cellToWorld(site.mapX, site.mapY);
+  state.transform.x = rect.width / 2 - (point.x + 20) * state.transform.scale;
+  state.transform.y = rect.height / 2 - (point.y + 10) * state.transform.scale;
+}
+function setActiveSite(siteKey, options = {}) {
+  const nextKey = typeof siteKey === 'string' ? siteKey : '';
+  if (nextKey && !state.siteIndex?.cityByKey.has(nextKey)) return;
+  state.activeSiteKey = nextKey;
+  if (els.sitePicker.value !== nextKey) els.sitePicker.value = nextKey;
+  els.clearSite.disabled = !nextKey;
+  refreshSiteInfo();
+  if (options.focus) focusSite(nextKey);
+  if (!options.skipDraw) scheduleDraw();
+}
+function syncActiveSiteFromCell(cell) {
+  if (!state.siteIndex) return;
+  const key = `${cell.col},${cell.row}`;
+  const siteKey = state.siteIndex.cityByCell.get(key) || state.siteIndex.cityKeyByGateCell.get(key);
+  if (!siteKey || siteKey === state.activeSiteKey) return;
+  setActiveSite(siteKey, { skipDraw: true });
+}
+function drawActiveSiteOverlay() {
+  const site = activeSite();
+  if (!site) return;
+  const scale = state.transform.scale || 1;
+  const center = cellToWorld(site.mapX, site.mapY);
+  const cx = center.x + 20;
+  const cy = center.y + 10;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  for (const gate of site.gates) {
+    const point = cellToWorld(gate.doorX, gate.doorY);
+    const gx = point.x + 20;
+    const gy = point.y + 10;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(gx, gy);
+    ctx.strokeStyle = 'rgba(15,118,110,0.55)';
+    ctx.lineWidth = 1.4 / scale;
+    ctx.stroke();
+    diamondPath(gate.doorX, gate.doorY);
+    ctx.strokeStyle = 'rgba(15,118,110,0.98)';
+    ctx.lineWidth = 2.2 / scale;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(15,118,110,0.2)';
+    ctx.arc(gx, gy, 5 / scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  diamondPath(site.mapX, site.mapY);
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 3 / scale;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(245,158,11,0.22)';
+  ctx.arc(cx, cy, 8 / scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 1.2 / scale;
+  ctx.arc(cx, cy, 11 / scale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 function pointPaletteColor(value) {
   return state.meta?.pointPalette?.[value] || '#0f766e';
@@ -340,6 +571,7 @@ function moveSelected(dx, dy) {
   next.col = Math.max(0, Math.min(state.meta.width - 1, next.col));
   next.row = Math.max(0, Math.min(state.meta.height - 1, next.row));
   state.selected = next;
+  syncActiveSiteFromCell(next);
   refreshSide();
   refreshPatches();
   scheduleDraw();
@@ -405,7 +637,7 @@ function drawVisiblePointOverlay(viewWidth, viewHeight) {
 function draw() {
   const image = displayImage();
   if (!image) return;
-  const rect = canvas.getBoundingClientRect(); ctx.save(); ctx.clearRect(0, 0, rect.width, rect.height); ctx.translate(state.transform.x, state.transform.y); ctx.scale(state.transform.scale, state.transform.scale); ctx.imageSmoothingEnabled = false; ctx.drawImage(image, 0, 0); drawVisiblePointOverlay(rect.width, rect.height); ctx.lineWidth = 1 / state.transform.scale;
+  const rect = canvas.getBoundingClientRect(); ctx.save(); ctx.clearRect(0, 0, rect.width, rect.height); ctx.translate(state.transform.x, state.transform.y); ctx.scale(state.transform.scale, state.transform.scale); ctx.imageSmoothingEnabled = false; ctx.drawImage(image, 0, 0); drawVisiblePointOverlay(rect.width, rect.height); drawActiveSiteOverlay(); ctx.lineWidth = 1 / state.transform.scale;
   for (const patch of state.patches.values()) { diamondPath(patch.x, patch.y); ctx.strokeStyle = 'rgba(15,118,110,0.9)'; ctx.stroke(); }
   if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / state.transform.scale; ctx.stroke(); }
   ctx.restore(); drawMinimap();
@@ -884,6 +1116,9 @@ function resetEditState(meta) {
   for (const layer of PAINT_LAYER_OPTIONS) state.selectedResource[layer] = null;
   for (const layer of state.meta.resourceLayers || state.meta.editableLayers) state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null;
   for (const layer of state.meta.pointLayers || POINT_LAYER_OPTIONS) state.selectedResource[layer] = 0;
+  state.siteIndex = buildSiteIndex(state.meta.siteLinks);
+  state.activeSiteKey = '';
+  renderSitePicker();
   rebuildLayerStats();
   recomputeRedrawConfig();
   rebuildEditedImage();
@@ -911,8 +1146,11 @@ function parseStageM(buffer, name = 'local.m') {
     ]);
   }
   const stageName = name.replace(/\.m$/i, '');
-  const inheritedSidecars = state.meta?.stage === stageName ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '???? .m ????? sidecar ?????' };
-  // ???? .m ????? bundle ???/???????? byte08~11 ????????
+  const inheritedSidecars = state.meta?.stage === stageName ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '仅加载 .m 时无法自动读取 sidecar 参考文件' };
+  const inheritedSiteLinks = state.meta?.stage === stageName
+    ? state.meta.siteLinks
+    : { available: false, cities: [], gates: [], reason: '仅加载单个 .m 文件时，浏览器无法直接读取同目录 .dor / .stg；请优先使用已导出的关卡页面。' };
+  // 仅加载 .m 时没有 bundle 图片 / 资源统计，仍然保留 byte08~11 的统一字段语义
   return normalizeMeta({
     format: 'san-editor-stage-v1', stage: stageName, width, height, layout: 'stagger', origin: [64, 64],
     tile: { width: 40, height: 20, row_step: 10, odd_row_x: 20 },
@@ -927,6 +1165,7 @@ function parseStageM(buffer, name = 'local.m') {
     image: null,
     minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' },
     sidecars: inheritedSidecars,
+    siteLinks: inheritedSiteLinks,
     resources: state.meta.resources,
     records,
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
@@ -1107,6 +1346,7 @@ canvas.addEventListener('pointerdown', ev => {
   const cell = worldToCell(world.x, world.y);
   if (!cell) return;
   state.selected = cell;
+  syncActiveSiteFromCell(cell);
   if (els.tool.value === 'paint') {
     applyPaint(cell);
     return;
@@ -1135,6 +1375,8 @@ els.resetAll.addEventListener('click', resetAllChanges);
 document.getElementById('exportPatch').addEventListener('click', downloadPatch);
 els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
+els.sitePicker.addEventListener('change', () => { setActiveSite(els.sitePicker.value, { focus: !!els.sitePicker.value }); });
+els.clearSite.addEventListener('click', () => { setActiveSite('', { skipDraw: false }); });
 els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); refreshPatches(); scheduleDraw(); });
 els.resourceFilter.addEventListener('input', () => { renderResourceList(); });
 els.resourceSort.addEventListener('change', () => { renderResourceList(); });
@@ -1199,7 +1441,7 @@ async function boot() {
   resetEditState(state.meta);
   await loadStagePicker();
 }
-window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts };
+window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, setActiveSite, activeSite };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>

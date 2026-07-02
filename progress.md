@@ -80,3 +80,8 @@
 - 继续打磨编辑器 `Resources` 体验：资源计数文案改为“有效资源共 … 项”，左侧改为仅 `修改` 列表独立滚动；同时给 `byte08~byte11` 增加可切换的点位图层，便于直接查看并绘制这些字段。
 - 调整 `Resources` 图层切换文案为“中文字段名(英文字段名)”格式，并放大 `byte08~byte11` 的地图点位显示，使高倍缩放下仍能清晰辨认。
 - ??????????? `.m` ??? `pointPalette/resourceLayers/pointLayers` ???????? `byte08~byte11` ? `Resources` ?????????
+## 2026-07-02 据点联动补记
+
+- 新增 `src/san_tools/analysis/stage_site_links.py`，直接根据同名 `.dor/.stg` 建立“城门 -> 据点”归属表。
+- `export_editor_bundle.py` 导出的 `stage.json` 现会携带 `siteLinks`；`editor_app.html` 新增 `据点` 面板，可按据点高亮对应城门。
+- 已验证 `stage01` 可匹配 `38` 个据点、`148` 个城门，且全部城门都能落回对应据点；`stage11` 这类无据点数据的关卡会自动回退为“未加载”。
