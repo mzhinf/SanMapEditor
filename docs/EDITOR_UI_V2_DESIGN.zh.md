@@ -1,4 +1,4 @@
-﻿# 三国霸业地图编辑器 UI 2.0 设计文档
+# 三国霸业地图编辑器 UI 2.0 设计文档
 
 ## 1. 背景
 
@@ -67,24 +67,22 @@ UI 2.0 仍以 `stage.json`、`resources.json`、导出的图片资源和 `siteLi
 
 ## 4.2 左侧导航区
 
-左侧负责“定位目标”和“挑选资源”，包含两个主要块：
+左侧不再只是“关卡摘要 + 资源列表”，而是明确承担两条主线导航：
 
-### A. 结构导航
+### A. 剧本主线
 
-- 关卡摘要
-- 当前图层摘要
-- 据点列表
-- 据点搜索
-- 当前据点定位/清除
+- 剧本摘要：当前关卡、格子规模、修改数、联动状态
+- 领域骨架：剧本 / 势力 / 城池 / 城门 / 地图 的统计与入口
+- 城池导航：按名称、势力、坐标检索据点，并联动城门高亮
 
-### B. 资源库
+### B. 资源主线
 
 - 当前编辑图层
 - 资源过滤与排序
 - 资源缩略图列表
 - 点位层色板列表
 
-这样可以把“找对象”和“选资源”都收拢到画布左侧，形成更顺手的左到右工作流。
+这样左侧会从“面板堆叠”升级为“剧本对象导航 + 资源入口”的双主线结构，和游戏设计本身的层级更一致。
 
 ## 4.3 中央画布区
 
@@ -166,73 +164,197 @@ Inspector 统一为上下文面板，并拆为 4 个视图：
 
 ## 5. 数据架构
 
-## 5.1 输入数据
+## 5.1 架构目标
 
-### `stage.json`
+新版编辑器需要先建立一套“能长期扩展”的领域模型，再把当前 `.m/.dor/.stg` 与资源 bundle 映射进去。核心原则如下：
 
-承担主状态初始化，包含：
+1. 领域层优先表达“剧本对象”和“资源对象”，而不是直接把页面绑定到 `records`。
+2. 原始字段层继续保留，作为可校验、可回写、可导出 patch 的底层真值。
+3. 当前尚未完全逆向出的数据，先保留结构位，不用猜测字段填充假数据。
+4. 所有运行时视图都由领域模型派生，避免各个组件直接拼装零散字段。
 
-- `records`
-- `fieldMeta`
-- `editableLayers`
-- `resourceLayers`
-- `pointLayers`
-- `pointPalette`
-- `siteLinks`
-- `sidecars`
-- `render`
+## 5.2 剧本数据树
 
-### `resources.json`
+剧本数据是编辑器的主语义树，来源于 `.m/.dor/.stg` 及后续可接入的剧本侧文件：
 
-承担资源库视图与绘制数据：
+- 剧本
+- 势力列表
+- 城池列表
+- 城池基本信息
+- 城池门信息
+- 城池内将领、士兵信息
+- 地图记录数据
 
-- 各图层资源条目
-- 缩略图 atlas
-- 绘制 atlas
-- 使用次数
+建议的可扩展结构如下：
 
-## 5.2 运行时状态
+```text
+剧本 ScriptData
+├─ scriptMeta
+│  ├─ stageId
+│  ├─ sources(.m/.dor/.stg/...)
+│  ├─ width / height / layout / origin
+│  └─ patchState
+├─ forces[]
+│  ├─ forceId
+│  ├─ forceName
+│  ├─ cityIds[]
+│  └─ ext
+├─ cities[]
+│  ├─ cityId
+│  ├─ cityName
+│  ├─ forceId
+│  ├─ basic
+│  │  ├─ mapPoint
+│  │  ├─ coreAreaCells[]
+│  │  ├─ influenceAreaCells[]
+│  │  ├─ economy / defense / reserve ext
+│  │  └─ ext
+│  ├─ gates[]
+│  │  ├─ gateId
+│  │  ├─ mapPoint
+│  │  ├─ direction
+│  │  └─ ext
+│  ├─ roster
+│  │  ├─ officers[]
+│  │  └─ troops[]
+│  └─ sourceRefs
+│     ├─ stgRecordIndex
+│     └─ dorGateIndices[]
+└─ map
+   ├─ records[]
+   ├─ fieldMeta[]
+   ├─ editableLayers[]
+   ├─ pointLayers[]
+   └─ sidecars
+```
 
-前端状态建议按四层划分：
+其中：
 
-### A. 核心数据层
+- `.m` 当前提供地图记录真值与图层可写内容。
+- `.stg` 当前提供城池坐标、名称、势力等主锚点。
+- `.dor` 当前提供城门坐标、分组、方向与归属联动。
+- 将领、士兵、内政参数等未完全接入的数据，先保留 `roster` 与 `basic.ext` 结构位。
 
-- `meta`
-- `resources`
-- `originalRecords`
-- `drawImages`
+## 5.3 资源数据树
 
-### B. 画布工作层
+资源数据是编辑器的第二条主线，来源于 `resources.json`、`kingdom.cel` 及后续人物资源：
 
-- `selected`
-- `transform`
-- `selectedResource`
-- `activeSiteKey`
+```text
+资源 ResourceData
+├─ resourceMeta
+│  ├─ bundlePath
+│  ├─ atlasVersion
+│  └─ ext
+├─ map
+│  ├─ terrainLayers[]
+│  ├─ overlayLayers[]
+│  ├─ objectLayers[]
+│  ├─ pointLayers[]
+│  └─ objectGroups[]
+└─ characters
+   ├─ models[]
+   ├─ skills[]
+   └─ ext
+```
 
-### C. 修改历史层
+字段分工建议：
 
-- `patches`
-- `undoStack`
+- `terrainLayers`：承载基础地表资源与规则。
+- `overlayLayers`：承载叠加地表、边缘、道路、水体覆盖等。
+- `objectLayers`：承载建筑、树木、特效、城墙、桥梁等对象资源。
+- `pointLayers`：承载 `byte08~byte11` 这类取值型图层与色板映射。
+- `objectGroups`：承载“多个对象按固定阵列组成一个可复用模板”的资源组合。
+- `characters`：承载人物模型、技能表现、战场特效挂点等后续可扩展内容。
 
-### D. 视图状态层
+## 5.4 运行时领域模型
 
-- Inspector 当前标签
-- 底部抽屉当前标签
-- 站点搜索关键字
-- 资源过滤关键字
+前端运行时不应只维护 `meta + resources + selected`，而应显式维护三层模型：
 
-## 5.3 派生视图模型
+1. 原始层
+   - `stageMeta`
+   - `records`
+   - `fieldMeta`
+   - `resourcesRaw`
+2. 领域层
+   - `scenarioDomain`
+   - `resourceDomain`
+3. 视图层
+   - `siteIndex`
+   - `layerStats`
+   - `selectionSummary`
+   - `resourceListModel`
 
-本轮新增并强调以下派生模型：
+建议的运行时结构示意：
+
+```js
+{
+  raw: {
+    stageMeta,
+    records,
+    fieldMeta,
+    resourcesRaw,
+  },
+  domain: {
+    script: {
+      meta,
+      forces,
+      cities,
+      map,
+    },
+    resources: {
+      meta,
+      map,
+      characters,
+    },
+  },
+  view: {
+    activeSiteKey,
+    selectedCell,
+    selectedResource,
+    siteIndex,
+    layerStats,
+    patches,
+  },
+}
+```
+
+## 5.5 当前落地范围与预留位
+
+本轮 UI 2.0 中，实际落地范围如下：
+
+- 已落地
+- `script.meta`
+- `script.cities`
+- `script.forces` 的基础聚合
+- `script.map`
+- `cities[].gates`
+- `resources.map` 下的图层资源聚合
+
+- 预留位
+- `cities[].basic.coreAreaCells`
+- `cities[].basic.influenceAreaCells`
+- `cities[].roster.officers`
+- `cities[].roster.troops`
+- `resources.map.objectGroups`
+- `resources.characters.models`
+- `resources.characters.skills`
+
+预留位的意义是：现在先把接口和层级定住，未来补数据源时，只需要填充节点，不需要再重做 UI 语义。
+
+## 5.6 派生视图模型
+
+在领域层之上，本轮继续保留并强化以下派生模型：
 
 1. `siteIndex`
    - 从 `siteLinks` 构建据点 -> 城门、格子 -> 据点的双向索引
 2. `layerStats`
-   - 提供图层占用与资源使用摘要
+   - 提供图层占用、资源使用次数与当前图层摘要
 3. `resourceListModel`
-   - 支撑资源虚拟列表
+   - 支撑资源虚拟列表与后续资源分组
 4. `selectionSummary`
-   - 把当前格子和当前据点整理成可直接渲染的摘要信息
+   - 把当前格子、当前城池、当前城门归属整理成可直接渲染的摘要
+5. `domainSummary`
+   - 负责把“势力 / 城池 / 城门 / 资源条目 / 预留位”压缩成 UI 总览
 
 ## 6. 组件架构
 
