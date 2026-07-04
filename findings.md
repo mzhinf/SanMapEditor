@@ -98,3 +98,15 @@
 - 人物模型与技能模型
 
 这样后续继续接入新文件时，能沿着既有树结构补节点，而不是再次改 UI 语义。
+
+### 8. 当前仓库已经形成“游戏文件 -> 中间结构 -> 回写脚本”的稳定链路，适合用统一表格维护
+
+当前可以把后续维护入口统一收口为以下几条主链：
+
+- `.m` -> `stage.json` / `resources.json` / 编辑器运行时结构，入口脚本以 `src/san_tools/map/export_editor_bundle.py` 为准，回写入口为 `src/san_tools/map/apply_editor_patch.py`。
+- `.stg` -> `raw_chain` / `hierarchy` / `city_state` / `stageNN_stg.xlsx`，导出链路由 `src/san_tools/pipelines/export_stg_*.py` 组成，已确认字段通过 `src/san_tools/pipelines/import_stg_workbook.py` 回写。
+- `.dor` + `.stg` -> `siteLinks`，由 `src/san_tools/analysis/analyze_dor.py` 与 `src/san_tools/analysis/stage_site_links.py` 组合生成，是当前“城门 -> 据点”归属关系的正式来源。
+- `.s/.x` -> `sidecar_build_report.json` / `stage.json.sidecars`，由 `src/san_tools/map/build_minimap_sidecars.py` 负责闭环，策略是“顶部有效区派生 + 底部尾区保留”。
+- `stage.ini` + `uft8-game-txt/*.txt` -> `stage_ini_linked_tables.xlsx` / `stage_ini_conversion_tables.xlsx`，正式映射逻辑以 `src/san_tools/codecs/stage_ini_txt_linkage.py` 为准，回写入口为 `src/san_tools/pipelines/build_stage_ini_from_txt_workbook.py`。
+
+这意味着后续文档维护不应再只写“哪个文件大概对应什么”，而应明确写成“游戏文件 -> 中间结构 -> 转换脚本 -> 回写脚本”的可追踪链路；同时新增脚本时应优先记录 `src/san_tools/` 下的正式入口，而不是仅记录 `tools/` 包装层。

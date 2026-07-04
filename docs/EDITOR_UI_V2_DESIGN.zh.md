@@ -356,6 +356,37 @@ Inspector 统一为上下文面板，并拆为 4 个视图：
 5. `domainSummary`
    - 负责把“势力 / 城池 / 城门 / 资源条目 / 预留位”压缩成 UI 总览
 
+## 5.7 数据结构与游戏文件一一对应表
+
+说明：
+
+- 表中的“主来源游戏文件”表示当前结构的首要真值来源。
+- 如果一个结构需要多个游戏文件协同恢复，会按“主来源 + 辅助来源”的顺序并列列出。
+- “转换脚本”指从游戏文件转成编辑器或分析结构的脚本；“回写脚本”指把结构再落回游戏文件的脚本。
+
+| 数据结构 | 主来源游戏文件 | 当前转换脚本 | 回写脚本 | 说明 |
+| --- | --- | --- | --- | --- |
+| `raw.stageMeta`、`raw.records`、`raw.fieldMeta` | `stageNN.m` | `src/san_tools/map/export_editor_bundle.py` | `src/san_tools/map/apply_editor_patch.py` | 对应 `.m` 文件头与每个 cell 的 16 字节记录，是编辑器最底层真值。 |
+| `raw.resourcesRaw`、`domain.resources.map.terrainLayers / overlayLayers / objectLayers` | `kingdom.cel` + `kingdom.atr` | `src/san_tools/map/export_editor_bundle.py`、`src/san_tools/map/render_m_cel_map.py` | 暂无稳定回写链路 | 负责地图 tile、叠加层与物件层资源目录。 |
+| `domain.resources.map.pointLayers` | `stageNN.m` 的 `byte08~byte11` + `src/san_tools/map/palette.py` | `src/san_tools/map/export_editor_bundle.py` | `src/san_tools/map/apply_editor_patch.py` | 点位层本质仍是 `.m` 记录字段，只是以色板和统计列表形式投影到资源侧。 |
+| `domain.script.forces[]`、`domain.script.cities[]` | `stageNN.stg` | `src/san_tools/pipelines/export_stg_raw_chain.py`、`src/san_tools/pipelines/export_stg_hierarchy.py`、`src/san_tools/pipelines/export_stg_city_troop_analysis.py` | `src/san_tools/pipelines/import_stg_workbook.py` | 势力、城池、城池状态等语义对象当前以 `.stg` 为主锚点恢复。 |
+| `domain.script.cities[].gates[]`、`view.siteIndex` | `stageNN.dor` + `stageNN.stg` | `src/san_tools/analysis/analyze_dor.py`、`src/san_tools/analysis/stage_site_links.py` | 暂无独立 `.dor` 回写脚本 | `.dor` 提供城门，`.stg` 提供据点坐标，两者共同构成“城门 -> 据点”归属表。 |
+| `domain.script.map.sidecars`、`raw.sidecars` | `stageNN.s` + `stageNN.x` | `src/san_tools/map/export_editor_bundle.py` | `src/san_tools/map/build_minimap_sidecars.py`、`src/san_tools/map/apply_editor_patch.py` | 当前采用“上 128 行由 `.m` 的 `byte13` 派生、下 32 行保留原始尾区”的保守策略。 |
+| `stage.json` | `stageNN.m` + `stageNN.dor` + `stageNN.stg` + `stageNN.s/.x` | `src/san_tools/map/export_editor_bundle.py` | 编辑器内导出后由 `src/san_tools/map/apply_editor_patch.py` 写回 `.m/.s/.x` | 这是编辑器的主 bundle 契约，承载原始层、领域层输入与 sidecar 参考。 |
+| `resources.json` | `kingdom.cel` + `kingdom.atr` + `stageNN.m` 使用统计 | `src/san_tools/map/export_editor_bundle.py` | 暂无直接回写 | 这是编辑器的资源 bundle 契约，既包含 atlas，也包含按当前关卡统计出的资源使用次数。 |
+
+## 5.8 仓库级转换脚本总表
+
+| 游戏文件 | 结构化产物 / 中间数据 | 转换脚本 | 回写脚本 | 说明 |
+| --- | --- | --- | --- | --- |
+| `stageNN.m` | `stage.json`、`map.png`、`minimap.png`、字段分析报告 | `src/san_tools/map/export_editor_bundle.py`、`src/san_tools/map/render_m_cel_map.py`、`src/san_tools/analysis/analyze_m_byte_fields.py` | `src/san_tools/map/apply_editor_patch.py` | `.m` 既是渲染输入，也是地图编辑闭环的主写回目标。 |
+| `stageNN.s` / `stageNN.x` | `sidecar_build_report.json`、预览图、`stage.json.sidecars` | `src/san_tools/analysis/analyze_minimap_sidecars.py`、`src/san_tools/map/build_minimap_sidecars.py`、`src/san_tools/map/export_editor_bundle.py` | `src/san_tools/map/build_minimap_sidecars.py`、`src/san_tools/map/apply_editor_patch.py` | 小地图 sidecar 当前已经纳入编辑器导出闭环。 |
+| `stageNN.stg` | `stg_raw_chain.json/csv`、`stg_hierarchy.json/csv`、`city_state`、`stageNN_stg.xlsx` | `src/san_tools/pipelines/export_stg_raw_chain.py`、`src/san_tools/pipelines/export_stg_hierarchy.py`、`src/san_tools/pipelines/export_stg_city_troop_analysis.py`、`src/san_tools/pipelines/export_stg_workbook.py` | `src/san_tools/pipelines/import_stg_workbook.py` | `.stg` 当前同时支持原始链、层级树、工作簿与已确认字段的安全回写。 |
+| `stageNN.dor` | `derived/dor_analysis/*.json`、`site_links` | `src/san_tools/analysis/analyze_dor.py`、`src/san_tools/analysis/stage_site_links.py` | 暂无 | `.dor` 当前定位是城门 sidecar，重点产出为分组门数据与据点归属表。 |
+| `stageNN.evt` | `evt_resource_linkage.json` | `src/san_tools/analysis/analyze_evt_resources.py` | 暂无 | 目前仍是研究态，稳定产物以分析报告为主。 |
+| `kingdom.cel` / `kingdom.atr` | `resources.json`、资源 atlas、地图渲染图、图层导出图 | `src/san_tools/map/render_m_cel_map.py`、`src/san_tools/map/export_editor_bundle.py`、`src/san_tools/map/export_m_layers.py`、`src/san_tools/map/export_map_previews.py` | 暂无 | 资源容器目前只读，承担地图与资源目录生成。 |
+| `stage.ini` | `stage_ini_tables.json`、`stage_ini_linked_tables.xlsx`、`stage_ini_conversion_tables.xlsx` | `src/san_tools/pipelines/export_stage_ini_tables.py`、`src/san_tools/pipelines/export_stage_ini_txt_workbook.py`、`src/san_tools/codecs/stage_ini_txt_linkage.py` | `src/san_tools/pipelines/build_stage_ini.py`、`src/san_tools/pipelines/build_stage_ini_from_txt_workbook.py` | `stage.ini` 的直接文本映射当前稳定对应 `general.txt`、`castle.txt`、`magic.txt`、`soldier.txt`。 |
+
 ## 6. 组件架构
 
 ## 6.1 页面壳层

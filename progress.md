@@ -23,3 +23,9 @@
 - 同步更新 `task_plan.md` 与 `findings.md`，确保计划、结论、实现目标使用同一套中文术语。
 - 已将领域模型摘要映射到新 UI 左侧总览与右侧 Inspector，使页面能直接反映数据骨架而不是只展示布局。
 - 完成 `editor_app.js` 运行时领域模型接线，并通过 `node --check` 与 `export_editor_bundle.py --stage stage11` 冒烟验证。
+
+## 2026-07-05
+
+- 盘点 `src/san_tools/` 下的正式入口，确认编辑器主 bundle、`.stg` 工作簿、`.dor` 归属表、`.s/.x` sidecar、`stage.ini` 文本映射都已有稳定脚本链路。
+- 在 `docs/EDITOR_UI_V2_DESIGN.zh.md` 新增“数据结构与游戏文件一一对应表”与“仓库级转换脚本总表”，把数据结构、游戏文件、转换脚本、回写脚本放进同一套表格。
+- 同步更新 `task_plan.md` 与 `findings.md`，把这次补齐的映射关系纳入长期维护基线，后续新增结构时可直接按表扩展。
