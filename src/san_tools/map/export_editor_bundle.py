@@ -14,9 +14,9 @@ from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
 from render_m_cel_map import canvas_size, make_diamond_tile, make_object, parse_counted_cel, render_stage
 
 try:
-    from palette import PAINT_RGB_PALETTE_HEX
+    from palette import PAINT_RGB_FLAG_PALETTE
 except ImportError:
-    from san_tools.map.palette import PAINT_RGB_PALETTE_HEX
+    from san_tools.map.palette import PAINT_RGB_FLAG_PALETTE
 
 try:
     from minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
@@ -41,7 +41,7 @@ FIELD_NAMES = [
 EDITABLE_LAYERS = ("acwx", "acwy", "acwz")
 POINT_LAYER_FIELDS = ("byte08", "byte09", "byte10", "byte11")
 FIELD_META = [
-    {"name": "acwx", "alias": "terrain_base", "label": "基础地表", "editable": True, "reserved": False},
+    {"name": "acwx", "alias": "terrain_base", "label": "底层地表", "editable": True, "reserved": False},
     {"name": "acwy", "alias": "terrain_overlay", "label": "叠加地表", "editable": True, "reserved": False},
     {"name": "acwz", "alias": "object_overlay", "label": "物件层", "editable": True, "reserved": False},
     {"name": "word06", "alias": "", "label": "保留字段", "editable": False, "reserved": True},
@@ -269,7 +269,7 @@ def build_sidecar_export_meta(
     grid_size: int = GRID_SIZE,
     active_rows: int = ACTIVE_ROWS,
 ) -> dict:
-    """为编辑器导出 `.s/.x` 准备参考尾区信息。"""
+    """为编辑页导出 `.s/.x` 准备参考尾区。"""
 
     cut = grid_size * active_rows
     tails: dict[str, dict[str, object]] = {}
@@ -298,7 +298,7 @@ def build_sidecar_export_meta(
     }
     if not available:
         missing_text = ", ".join(f".{suffix}" for suffix in missing) if missing else "参考尾区"
-        meta["reason"] = f"当前关卡缺少完整的 {missing_text} 参考文件，编辑器导出 `.s/.x` 时会对尾区使用 0 填充。"
+        meta["reason"] = f"当前关卡缺少完整的 {missing_text} 参考文件，编辑页导出 `.s/.x` 时会对尾区使用 0 填充。"
     return meta
 
 
@@ -319,10 +319,10 @@ def write_editor_index(out_dir: Path, stages: list[dict]) -> None:
     html = (
         '<!doctype html>\n<html lang="zh-CN">\n<head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        '<title>《三国霸业》地图编辑器索引</title>'
+        '<title>San 地图编辑器索引</title>'
         '<style>body{font-family:Segoe UI,Arial,sans-serif;margin:32px;background:#f4f2ec;color:#202124}'
         'main{max-width:720px}select,button{height:32px;font:inherit}select{min-width:260px}a{color:#0f766e}</style></head>'
-        '<body><main><h1>《三国霸业》地图编辑器</h1><p>选择已经导出的关卡编辑页。</p>'
+        '<body><main><h1>San 地图编辑器</h1><p>选择已经导出的关卡编辑页。</p>'
         f'<select id="stage">{options}</select> <button id="open">打开</button>'
         '<p><a href="index.json">index.json</a></p></main>'
         "<script>document.getElementById('open').onclick=()=>{const v=document.getElementById('stage').value;if(v) location.href=v;};</script>"
@@ -365,15 +365,11 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
         render_meta,
         palette_source,
         sidecar_meta,
-        PAINT_RGB_PALETTE_HEX,
+        PAINT_RGB_FLAG_PALETTE,
         site_links,
     )
     template = resolve_editor_template(root)
     shutil.copyfile(template, stage_dir / "editor.html")
-    script_template = template.with_name("editor_app.js")
-    # 新版编辑器页面把交互脚本拆到独立文件，导出 bundle 时需要一并复制。
-    if script_template.exists():
-        shutil.copyfile(script_template, stage_dir / "editor_app.js")
 
     index_path = out_dir / "index.json"
     existing = {"stages": []}

@@ -3,29 +3,1446 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>《三国霸业》地图编辑器</title>
+<title>San 地图编辑器</title>
 <style>
-:root{color-scheme:light;--bg:#ece6d9;--panel:rgba(255,251,244,.92);--panel-soft:rgba(246,240,230,.96);--line:rgba(103,89,67,.18);--ink:#231f19;--muted:#7a6d5d;--accent:#0f6a61;--accent-soft:rgba(15,106,97,.12);--gold:#c58a2b;--shadow:0 18px 40px rgba(45,31,14,.12);--shadow-soft:0 10px 24px rgba(45,31,14,.08);--radius:18px;--radius-sm:12px}
-*{box-sizing:border-box}html,body{height:100%}body{margin:0;overflow:hidden;color:var(--ink);font-family:"Microsoft YaHei UI","PingFang SC","Noto Sans SC",sans-serif;background:radial-gradient(circle at top left,rgba(255,255,255,.65),transparent 26%),radial-gradient(circle at right 12%,rgba(197,138,43,.08),transparent 22%),linear-gradient(180deg,#f2ede2 0%,#e3d8c7 100%)}button,select,input{font:inherit}button{cursor:pointer}button,select,input{border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.92);color:var(--ink);min-height:34px}button:disabled{opacity:.55;cursor:not-allowed}select,input{padding:0 10px}button{padding:0 12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}#app{display:grid;grid-template-rows:44px 36px 56px minmax(0,1fr) 188px 28px;height:100vh}.chrome-bar,.menu-bar,.action-bar,.status-bar{display:flex;align-items:center;padding:0 18px}.chrome-bar{justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.34);background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,.28));backdrop-filter:blur(12px)}.brand{display:flex;align-items:center;gap:10px;min-width:0}.brand-mark{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,#6f4c1d,#c58a2b);color:#fff7e7;font-size:13px;font-weight:800}.brand-title{font-family:"STZhongsong","Microsoft YaHei UI","PingFang SC",serif;font-size:18px;font-weight:700;white-space:nowrap}.brand-subtitle{color:var(--muted);font-size:12px}.chrome-actions{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px}.window-dot{width:11px;height:11px;border-radius:999px;background:rgba(103,89,67,.26)}.menu-bar{gap:16px;border-bottom:1px solid rgba(103,89,67,.12);background:rgba(255,250,243,.55)}.menu-link{border:0;background:transparent;color:var(--muted);padding:0;min-height:auto;font-size:13px}.menu-link:hover{color:var(--ink)}.action-bar{gap:16px;border-bottom:1px solid rgba(103,89,67,.14);background:rgba(255,251,246,.74);backdrop-filter:blur(10px)}.toolbar-group{display:flex;align-items:center;gap:10px;min-width:0}.toolbar-group.push-right{margin-left:auto}.toolbar-label,.group-label{color:var(--muted);font-size:12px;white-space:nowrap}.segmented{display:inline-flex;padding:3px;gap:4px;border-radius:12px;background:rgba(15,106,97,.08)}.segmented button{min-height:28px;border:0;background:transparent;color:var(--muted);padding:0 12px}.segmented button.active{background:#fff;color:#0b5a53;box-shadow:var(--shadow-soft)}button.primary{background:linear-gradient(180deg,#11786e,#0f655d);border-color:#0f655d;color:#fff}button.ghost{background:rgba(255,255,255,.4);color:#0b5a53;border-color:rgba(15,106,97,.24)}.workspace{display:grid;grid-template-columns:320px minmax(0,1fr) 360px;gap:16px;padding:16px;min-height:0}.left-rail,.right-rail,.center-stage{min-height:0}.left-rail,.right-rail{display:flex;flex-direction:column;gap:16px}.center-stage{display:flex;flex-direction:column;gap:12px}.panel{min-height:0;display:flex;flex-direction:column;background:var(--panel);border:1px solid rgba(255,255,255,.45);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}.panel-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,.28))}.panel-title{font-size:13px;font-weight:700;letter-spacing:.02em}.panel-body{padding:14px 16px 16px;min-height:0}.navigator-panel .panel-body,.site-panel .panel-body,.library-panel .panel-body,.inspector-shell .panel-body{display:flex;flex-direction:column;gap:14px}.panel-note{color:var(--muted);font-size:12px;line-height:1.6}.quick-grid,.kv{display:grid;grid-template-columns:94px minmax(0,1fr);gap:8px 10px;font-size:13px}.k{color:var(--muted)}.stack-field{display:flex;flex-direction:column;gap:6px}.stack-field label{color:var(--muted);font-size:12px}.site-panel{flex:1 1 280px}.site-list{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px}.site-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.site-card{border:1px solid rgba(15,106,97,.12);border-radius:14px;background:rgba(255,255,255,.78);padding:10px 12px;text-align:left;display:grid;gap:6px}.site-card.active{border-color:rgba(15,106,97,.48);background:linear-gradient(180deg,rgba(15,106,97,.12),rgba(255,255,255,.85));box-shadow:inset 0 0 0 1px rgba(15,106,97,.12)}.site-name-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.site-name{font-weight:700;font-size:13px}.site-force{font-size:11px;color:var(--muted);background:rgba(15,106,97,.08);border-radius:999px;padding:2px 8px}.site-meta{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:12px;color:var(--muted)}.library-panel{flex:1 1 360px}.resource-controls{display:grid;grid-template-columns:minmax(0,1fr) 96px 62px;gap:8px}.resource-meta{color:var(--muted);font-size:12px}.resource-list{position:relative;flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px}.resource-spacer{position:relative;min-height:100%}.resource-item{position:absolute;border:1px solid rgba(103,89,67,.16);border-radius:12px;background:rgba(255,255,255,.9);padding:4px;display:grid;grid-template-rows:minmax(0,1fr) 16px;align-items:center;justify-items:center;overflow:hidden}.resource-item.selected{border-color:rgba(15,106,97,.56);box-shadow:0 0 0 2px rgba(15,106,97,.14)}.resource-thumb{background-color:#111;background-repeat:no-repeat;image-rendering:pixelated;align-self:start}.resource-thumb.point-swatch{align-self:center;border-radius:999px;background-image:none;background-color:transparent;border:1px solid rgba(17,24,39,.14)}.resource-thumb.point-swatch.zero{border-radius:8px;background:repeating-linear-gradient(135deg,#fff 0 5px,#e5e7eb 5px 10px)}.resource-label{width:100%;font-size:11px;color:var(--muted);line-height:14px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.canvas-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.badge-row{display:flex;flex-wrap:wrap;gap:8px}.badge{display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.5);box-shadow:var(--shadow-soft);color:var(--muted);font-size:12px}.badge strong{color:var(--ink);margin-left:4px}.canvas-head-note{color:var(--muted);font-size:12px;text-align:right}#viewport{position:relative;min-width:0;min-height:0;flex:1 1 auto;overflow:hidden;border-radius:26px;background:linear-gradient(180deg,rgba(12,15,17,.3),rgba(12,15,17,.45)),radial-gradient(circle at top,rgba(255,255,255,.12),transparent 18%),#1e1a15;border:1px solid rgba(255,255,255,.18);box-shadow:var(--shadow)}canvas{width:100%;height:100%;display:block}.floating-minimap{position:absolute;top:18px;right:18px;width:214px;display:grid;gap:8px;padding:12px;border-radius:18px;background:rgba(255,251,244,.86);border:1px solid rgba(255,255,255,.4);box-shadow:var(--shadow);backdrop-filter:blur(10px)}.floating-title{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:var(--muted)}#minimap{height:128px;border-radius:12px;overflow:hidden;border:1px solid rgba(103,89,67,.16);background:#111}.floating-tip{position:absolute;left:18px;bottom:18px;max-width:420px;padding:10px 14px;border-radius:14px;background:rgba(22,20,18,.72);color:rgba(255,255,255,.92);font-size:12px;line-height:1.6;backdrop-filter:blur(10px)}.tab-bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tab-bar button{min-height:32px;border:0;background:rgba(15,106,97,.07);color:var(--muted)}.tab-bar button.active{background:linear-gradient(180deg,rgba(15,106,97,.18),rgba(15,106,97,.1));color:#0b5a53;box-shadow:inset 0 0 0 1px rgba(15,106,97,.16)}.tab-panel{display:none;min-height:0}.tab-panel.active{display:flex;flex-direction:column;gap:14px;min-height:0}.subsection{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:16px;background:rgba(255,255,255,.72);border:1px solid rgba(103,89,67,.12)}.subsection-title{color:var(--muted);font-size:12px;font-weight:700}.record-list{display:grid;gap:0;border:1px solid rgba(103,89,67,.14);border-radius:16px;overflow:auto;background:rgba(255,255,255,.84)}.record-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid rgba(103,89,67,.08)}.record-row:first-child{border-top:0}.record-row.dirty{background:rgba(15,106,97,.08);box-shadow:inset 3px 0 0 rgba(15,106,97,.7)}.record-copy{min-width:0}.record-name{font-size:13px;font-weight:700}.record-note{color:var(--muted);font-size:12px;margin-top:2px}.record-actions{display:flex;align-items:center;gap:8px}.record-actions input{width:110px}.placeholder{color:var(--muted);font-size:13px;line-height:1.7;padding:10px 12px}.patch-count-input{width:100%;text-align:center;font-weight:700}.patch-summary,.patch-list,.tips-card{padding:14px;border-radius:16px;background:rgba(255,255,255,.74);border:1px solid rgba(103,89,67,.12)}.patch-summary,.patch-list{font-family:Consolas,"Courier New",monospace;font-size:12px;line-height:1.65;white-space:pre-wrap;overflow:auto}.site-note{color:var(--muted);font-size:12px;line-height:1.7}.bottom-dock{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:16px;padding:0 16px 16px;min-height:0}.dock-card{min-height:0;display:flex;flex-direction:column;background:var(--panel-soft);border:1px solid rgba(255,255,255,.38);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}.dock-card .panel-body{min-height:0;display:flex;flex-direction:column}.patch-list{flex:1 1 auto;min-height:0}.tips-stack{display:grid;gap:12px}.tips-card h3{margin:0 0 8px;font-size:13px}.tips-card p,.tips-card ul{margin:0;color:var(--muted);font-size:12px;line-height:1.7}.tips-card ul{padding-left:18px}.status-bar{justify-content:space-between;gap:16px;border-top:1px solid rgba(103,89,67,.12);background:rgba(255,251,245,.72);color:var(--muted);font-size:12px}.status-right{display:flex;align-items:center;gap:18px;white-space:nowrap}@media (max-width:1180px){#app{grid-template-rows:44px 36px auto minmax(0,1fr) 220px 28px}.action-bar{flex-wrap:wrap;padding-top:10px;padding-bottom:10px}.workspace{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto}.left-rail,.right-rail{flex-direction:row;overflow:auto}.left-rail>.panel,.right-rail>.panel{min-width:320px}.bottom-dock{grid-template-columns:1fr}}
+:root {
+  color-scheme: light;
+  --bg: #f4f2ec;
+  --ink: #202124;
+  --muted: #666a70;
+  --line: #c9c3b8;
+  --panel: #fbfaf7;
+  --accent: #0f766e;
+  --mark: #f59e0b;
+  --soft: #ece7dc;
+}
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; overflow: hidden; font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg); }
+#app { display: grid; grid-template-columns: 320px minmax(0, 1fr) 360px; grid-template-rows: 42px minmax(0, 1fr); height: 100vh; }
+.toolbar { grid-column: 1 / 4; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.toolbar .title { font-weight: 650; margin-right: 10px; white-space: nowrap; }
+.toolbar label, .field label { font-size: 12px; color: var(--muted); }
+select, input, button { height: 28px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); font: inherit; }
+select, input { padding: 0 8px; }
+button { padding: 0 10px; cursor: pointer; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.secondary { background: #fff; color: var(--accent); border-color: var(--accent); }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
+.status { margin-left: auto; color: var(--muted); font-size: 12px; }
+#viewport { position: relative; min-width: 0; min-height: 0; background: #1d1b18; }
+canvas { width: 100%; height: 100%; display: block; }
+.side { min-height: 0; overflow: auto; background: var(--panel); padding: 12px; }
+.side-left { border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.side-left .section { flex: 0 0 auto; }
+.side-right { border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.side-right .section { flex: 0 0 auto; }
+.side-right .resource-section { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+.section:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.section-title { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: 0; margin-bottom: 8px; }
+.kv { display: grid; grid-template-columns: 100px 1fr; gap: 6px 10px; font-size: 13px; }
+.kv .k { color: var(--muted); }
+.field { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+.field:last-child { margin-bottom: 0; }
+.patch-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.patch-list { font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; color: #343434; min-height: 32px; flex: 1 1 auto; overflow: auto; }
+.resource-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.resource-controls { display: grid; grid-template-columns: minmax(0, 1fr) 92px 56px; gap: 6px; margin-bottom: 8px; }
+.resource-controls > * { min-width: 0; width: 100%; }
+.resource-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.resource-list { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 2px; }
+.resource-spacer { position: relative; min-height: 100%; }
+.resource-item { position: absolute; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: minmax(0, 1fr) 16px; align-items: center; justify-items: center; overflow: hidden; }
+.resource-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15,118,110,.18); }
+.resource-thumb { background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; align-self: start; }
+.resource-thumb.point-swatch { align-self: center; border-radius: 999px; background-image: none; background-color: transparent; border: 1px solid rgba(17, 24, 39, 0.16); }
+.resource-thumb.point-swatch.zero { border-radius: 6px; background: repeating-linear-gradient(135deg, #ffffff 0 5px, #e5e7eb 5px 10px); }
+.site-tools { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 6px; margin-bottom: 8px; }
+.site-tools > * { min-width: 0; width: 100%; }
+.site-note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.resource-label { width: 100%; font-size: 11px; color: var(--muted); line-height: 14px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.minimap-wrap { position: relative; border: 1px solid var(--line); background: #111; }
+#minimap { height: 150px; }
+.record-list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+.record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--soft); background: #fff; }
+.record-row:first-child { border-top: 0; }
+.record-row.dirty { background: #f3fbf9; box-shadow: inset 3px 0 0 rgba(15,118,110,.7); }
+.record-copy { min-width: 0; }
+.record-name { font-size: 13px; font-weight: 600; }
+.record-name span { color: var(--muted); font-weight: 400; }
+.record-note { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.record-actions { display: flex; align-items: center; gap: 6px; }
+.record-actions input { width: 104px; }
+.record-readonly { min-width: 104px; text-align: right; font-family: Consolas, monospace; color: var(--muted); }
+.placeholder { color: var(--muted); font-size: 13px; padding: 8px 2px; }
+@media (max-width: 980px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 320px minmax(0, 1fr) 360px; }
+  .toolbar { grid-column: 1; flex-wrap: wrap; height: auto; }
+  .side { border: 0; border-top: 1px solid var(--line); }
+  .side-left { grid-row: 2; }
+  #viewport { grid-row: 3; }
+  .side-right { grid-row: 4; }
+  .resource-controls { grid-template-columns: minmax(0, 1fr) 88px 56px; }
+}
 </style>
 </head>
 <body>
 <div id="app">
-<header class="chrome-bar"><div class="brand"><div class="brand-mark">霸</div><div><div class="brand-title" id="stageTitle">《三国霸业》地图编辑器</div><div class="brand-subtitle">任务导向 UI 2.0 / 关卡工作台</div></div></div><div class="chrome-actions"><span>地图编辑</span><span class="window-dot"></span><span class="window-dot"></span><span class="window-dot"></span></div></header>
-<div class="menu-bar"><button class="menu-link" type="button">文件</button><button class="menu-link" type="button">编辑</button><button class="menu-link" type="button">视图</button><button class="menu-link" type="button">地图</button><button class="menu-link" type="button">据点</button><button class="menu-link" type="button">工具</button><button class="menu-link" type="button">帮助</button></div>
-<div class="action-bar"><div class="toolbar-group"><span class="toolbar-label">关卡</span><select id="stagePicker"><option value="">当前</option></select><input id="loadMFile" class="sr-only" type="file" accept=".m"><button id="openMFile" type="button">打开 .m</button></div><div class="toolbar-group"><span class="group-label">工具</span><div class="segmented"><button id="toolInspect" type="button" data-tool-mode="inspect" class="active">查看</button><button id="toolPaint" type="button" data-tool-mode="paint">绘制</button></div><select id="tool" class="sr-only"><option value="inspect">查看</option><option value="paint">绘制</option></select></div><div class="toolbar-group"><button id="resetView" type="button">重置视图</button><button id="undoEdit" type="button">撤销</button><button id="resetCell" type="button">重置当前图层</button><button id="resetAll" type="button">重置全部修改</button></div><div class="toolbar-group push-right"><button id="exportPatch" type="button" class="ghost">导出 patch</button><button id="exportFiles" type="button" class="primary">导出 .m/.s/.x</button></div></div>
-<div class="workspace">
-<aside class="left-rail">
-<section class="panel navigator-panel"><div class="panel-header"><div class="panel-title">剧本总览</div></div><div class="panel-body"><div class="quick-grid" id="stageQuickInfo"></div><div class="subsection"><div class="subsection-title">领域骨架</div><div class="kv" id="domainSummary"></div></div><div class="stack-field"><label for="layer">当前编辑图层</label><select id="layer"></select></div><div class="panel-note" id="layerSummary">正在准备图层信息。</div></div></section>
-<section class="panel site-panel"><div class="panel-header"><div class="panel-title">城池 / 城门</div><button id="clearSite" type="button">清除高亮</button></div><div class="panel-body"><div class="site-tools"><input id="siteSearch" type="search" placeholder="搜索据点名称、势力或坐标"><select id="sitePicker"><option value="">未选据点</option></select></div><div class="site-list" id="siteList"></div></div></section>
-<section class="panel library-panel"><div class="panel-header"><div class="panel-title">资源总览</div></div><div class="panel-body"><div class="resource-controls"><input id="resourceFilter" type="search" placeholder="按编号过滤资源"><select id="resourceSort"><option value="index">按编号</option><option value="used">按使用数</option></select><button id="clearFilter" type="button">清空</button></div><div class="resource-meta" id="resourceMeta">正在统计资源。</div><div class="resource-list" id="resourceList"><div class="resource-spacer" id="resourceSpacer"></div></div></div></section>
-</aside>
-<main class="center-stage"><div class="canvas-head"><div class="badge-row"><div class="badge" id="currentModeLabel">工具<strong>查看</strong></div><div class="badge" id="currentLayerLabel">图层<strong>-</strong></div><div class="badge" id="currentResourceLabel">资源<strong>-</strong></div><div class="badge" id="currentSiteLabel">据点<strong>未选</strong></div></div><div class="canvas-head-note" id="canvasHeadNote">左键选中，右键拖动，滚轮缩放</div></div><div id="viewport"><canvas id="canvas"></canvas><div class="floating-minimap"><div class="floating-title"><span>总览地图</span><span id="siteOverlayStatus">未加载</span></div><canvas id="minimap"></canvas></div><div class="floating-tip" id="canvasHint">查看模式下左键只选中格子；绘制模式下左键会把当前资源写入当前图层。</div></div></main>
-<aside class="right-rail"><section class="panel inspector-shell"><div class="panel-header"><div class="panel-title">上下文检查器</div></div><div class="panel-body"><div class="tab-bar" id="inspectorTabs"><button type="button" data-tab="selection" class="active">选中项</button><button type="button" data-tab="stage">架构</button><button type="button" data-tab="raw">Raw</button><button type="button" data-tab="changes">修改</button></div><div class="tab-panel active" id="panelSelection"><div class="subsection"><div class="subsection-title">当前格子</div><div class="kv" id="cellInfo"></div></div><div class="subsection"><div class="subsection-title">当前据点</div><div class="kv" id="siteInfo"></div><div class="site-note" id="siteNote"></div></div></div><div class="tab-panel" id="panelStage"><div class="subsection"><div class="subsection-title">关卡元数据</div><div class="kv" id="stageInfo"></div></div><div class="subsection"><div class="subsection-title">剧本 / 资源架构</div><div class="kv" id="domainDetail"></div></div></div><div class="tab-panel" id="panelRaw"><div class="subsection" style="min-height:0;flex:1 1 auto"><div class="subsection-title">Record 字段</div><div class="record-list" id="recordList"></div></div></div><div class="tab-panel" id="panelChanges"><div class="subsection"><div class="subsection-title">修改摘要</div><input id="patchCount" class="patch-count-input" value="0" readonly><div class="patch-summary" id="patchSummary">当前没有未提交修改。</div></div></div></div></section></aside>
+  <div class="toolbar">
+    <div class="title" id="stageTitle">关卡</div>
+    <label>关卡</label>
+    <select id="stagePicker"><option value="">当前</option></select>
+    <label>工具</label>
+    <select id="tool" title="查看用于选中格子，绘制会写入当前资源。右键拖动平移地图。"><option value="inspect">查看</option><option value="paint">绘制</option></select>
+    <input id="loadMFile" type="file" accept=".m" hidden>
+    <button id="openMFile">打开 .m</button>
+    <button id="resetView">重置视图</button>
+    <button id="undoEdit">撤销</button>
+    <button id="resetCell">重置当前图层</button>
+    <button id="resetAll">重置全部</button>
+    <button id="exportFiles" class="primary">导出 .m/.s/.x</button>
+    <button id="exportPatch" class="secondary">导出 patch</button>
+    <span class="status" id="status">正在加载</span>
+  </div>
+  <aside class="side side-left">
+    <div class="section">
+      <div class="section-title">Cell</div>
+      <div class="kv" id="cellInfo"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Record</div>
+      <div class="record-list" id="recordList"></div>
+    </div>
+    <div class="section patch-section">
+      <div class="section-title">修改</div>
+      <div class="field"><label>修改数量</label><input id="patchCount" value="0" readonly></div>
+      <div class="patch-list" id="patchList"></div>
+    </div>
+  </aside>
+  <div id="viewport"><canvas id="canvas"></canvas></div>
+  <aside class="side side-right">
+    <div class="section">
+      <div class="section-title">Minimap</div>
+      <div class="minimap-wrap"><canvas id="minimap"></canvas></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Stage</div>
+      <div class="kv" id="stageInfo"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">据点</div>
+      <div class="site-tools">
+        <select id="sitePicker"><option value="">未选据点</option></select>
+        <button id="clearSite" type="button">清除</button>
+      </div>
+      <div class="kv" id="siteInfo"></div>
+      <div class="site-note" id="siteNote"></div>
+    </div>
+    <div class="section resource-section">
+      <div class="section-title">Resources</div>
+      <div class="field"><label>图层</label><select id="layer"></select></div>
+      <div class="resource-controls">
+        <input id="resourceFilter" placeholder="按编号过滤">
+        <select id="resourceSort"><option value="index">按编号</option><option value="used">按使用数</option></select>
+        <button id="clearFilter">清除</button>
+      </div>
+      <div class="resource-meta" id="resourceMeta"></div>
+      <div class="resource-list" id="resourceList"><div class="resource-spacer" id="resourceSpacer"></div></div>
+    </div>
+  </aside>
 </div>
-<div class="bottom-dock"><section class="dock-card"><div class="panel-header"><div class="panel-title">修改时间线</div></div><div class="panel-body"><div class="patch-list" id="patchList"></div></div></section><section class="dock-card"><div class="panel-header"><div class="panel-title">工作提示</div></div><div class="panel-body"><div class="tips-stack"><div class="tips-card"><h3>当前状态</h3><p id="tipsMeta">正在加载关卡数据。</p></div><div class="tips-card"><h3>快捷操作</h3><ul><li>`Ctrl+Z`：撤销最近一次修改</li><li>方向键：移动当前选中格子</li><li>右键拖动：平移地图，滚轮缩放视图</li></ul></div><div class="tips-card"><h3>数据架构</h3><p id="tipsDomain">正在整理剧本与资源领域模型。</p></div><div class="tips-card"><h3>导出规则</h3><p id="tipsSidecar">导出 `.m/.s/.x` 时会沿用当前 sidecar 策略。</p></div></div></div></section></div>
-<footer class="status-bar"><div id="status">正在加载</div><div class="status-right"><span id="statusSelection">坐标：-</span><span id="statusLayer">图层：-</span><span id="statusPatch">修改：0</span></div></footer>
-</div>
-<script src="editor_app.js"></script>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const mini = document.getElementById('minimap');
+const miniCtx = mini.getContext('2d');
+const LEGACY_FIELD_ALIASES = { flags: 'word06', final_palette: 'byte13' };
+const DEFAULT_FIELD_META = [
+  { name: 'acwx', alias: 'terrain_base', label: '底层地表', editable: true, reserved: false },
+  { name: 'acwy', alias: 'terrain_overlay', label: '叠加地表', editable: true, reserved: false },
+  { name: 'acwz', alias: 'object_overlay', label: '物件层', editable: true, reserved: false },
+  { name: 'word06', alias: '', label: '保留字段', editable: false, reserved: true },
+  { name: 'byte08', alias: 'land_water_hint', label: '水陆切换提示', editable: true, reserved: false },
+  { name: 'byte09', alias: 'blocked', label: '阻挡标记', editable: true, reserved: false },
+  { name: 'byte10', alias: 'site_trigger', label: '据点触发', editable: true, reserved: false },
+  { name: 'byte11', alias: 'site_area', label: '据点区域', editable: true, reserved: false },
+  { name: 'byte12', alias: 'reserved1', label: '保留字段 1', editable: false, reserved: true },
+  { name: 'byte13', alias: 'minimap_color', label: '小地图颜色', editable: true, reserved: false, sidecarSource: true },
+  { name: 'byte14', alias: 'reserved2', label: '保留字段 2', editable: false, reserved: true },
+  { name: 'byte15', alias: 'reserved3', label: '保留字段 3', editable: false, reserved: true },
+];
+const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
+const RESOURCE_LAYER_OPTIONS = ['acwx', 'acwy', 'acwz'];
+const POINT_LAYER_OPTIONS = ['byte08', 'byte09', 'byte10', 'byte11'];
+const PAINT_LAYER_OPTIONS = [...RESOURCE_LAYER_OPTIONS, ...POINT_LAYER_OPTIONS];
+const MAX_BASE_IMAGE_EDGE = 8192;
+const MAX_BASE_IMAGE_PIXELS = 100000000;
+const RESOURCE_ITEM_MIN_WIDTH = 64;
+const RESOURCE_ITEM_HEIGHT = 76;
+const RESOURCE_ITEM_GAP = 6;
+const RESOURCE_ITEM_PADDING = 6;
+const RESOURCE_LABEL_HEIGHT = 16;
+const RESOURCE_OVERSCAN_ROWS = 3;
+const state = {
+  meta: null,
+  resources: null,
+  resourceByIndex: {},
+  drawImages: {},
+  layerStats: {},
+  image: null,
+  renderCanvas: null,
+  renderCtx: null,
+  minimap: null,
+  selected: null,
+  selectedResource: Object.fromEntries(PAINT_LAYER_OPTIONS.map(layer => [layer, null])),
+  transform: { x: 24, y: 24, scale: 0.8 },
+  dragging: false,
+  dragStart: null,
+  drawQueued: false,
+  redrawConfig: { maxLeft: 20, maxRight: 40, maxUp: 20, maxDown: 20, colRadius: 2, rowRadius: 2 },
+  patches: new Map(),
+  originalRecords: null,
+  undoStack: [],
+  fieldMetaByName: new Map(),
+  resourceListModel: null,
+  resourceRenderQueued: false,
+  baseImageMode: 'pending',
+  baseImageNote: '',
+  siteIndex: null,
+  activeSiteKey: '',
+};
+const els = {
+  status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
+  cellInfo: document.getElementById('cellInfo'), recordList: document.getElementById('recordList'), tool: document.getElementById('tool'),
+  layer: document.getElementById('layer'), patchCount: document.getElementById('patchCount'),
+  patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceSpacer: document.getElementById('resourceSpacer'), resourceMeta: document.getElementById('resourceMeta'), resourceFilter: document.getElementById('resourceFilter'),
+  resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
+  openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
+  exportFiles: document.getElementById('exportFiles'),
+  sitePicker: document.getElementById('sitePicker'), clearSite: document.getElementById('clearSite'), siteInfo: document.getElementById('siteInfo'), siteNote: document.getElementById('siteNote'),
+};
+function canonicalFieldName(name) { return LEGACY_FIELD_ALIASES[name] || name; }
+function fieldIndex(name) { return state.meta.fields.indexOf(canonicalFieldName(name)); }
+function recordIndex(cell) { return cell.row * state.meta.width + cell.col; }
+function recordAt(cell) { return state.meta.records[recordIndex(cell)]; }
+function cellKey(cell) { return `${cell.col},${cell.row}`; }
+function patchKey(cell, field) { return `${cellKey(cell)}:${canonicalFieldName(field)}`; }
+function cellToWorld(col, row) { const [ox, oy] = state.meta.origin; return { x: ox + col * 40 + (row & 1 ? 20 : 0), y: oy + row * 10 }; }
+function displayImage() { return state.renderCanvas || state.image; }
+function canvasSizeForMeta(meta = state.meta) { return { width: meta.width * 40 + 20 + 128, height: meta.height * 10 + 20 + 128 }; }
+function worldToCell(x, y) {
+  const [ox, oy] = state.meta.origin;
+  const row = Math.floor((y - oy) / 10);
+  const col = Math.floor((x - ox - (row & 1 ? 20 : 0)) / 40);
+  if (col < 0 || row < 0 || col >= state.meta.width || row >= state.meta.height) return null;
+  return { col, row };
+}
+function clientToWorld(ev) { const rect = canvas.getBoundingClientRect(); return { x: (ev.clientX - rect.left - state.transform.x) / state.transform.scale, y: (ev.clientY - rect.top - state.transform.y) / state.transform.scale }; }
+function isEditableTarget(target) { return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable); }
+function defaultFieldMetaByName() { return new Map(DEFAULT_FIELD_META.map(entry => [entry.name, entry])); }
+function normalizeSidecars(sidecars) {
+  const gridSize = Number.isInteger(sidecars?.gridSize) ? sidecars.gridSize : 160;
+  const activeRows = Number.isInteger(sidecars?.activeRows) ? sidecars.activeRows : 128;
+  const tails = {};
+  for (const suffix of ['s', 'x']) {
+    const entry = sidecars?.tails?.[suffix];
+    if (entry && typeof entry.tailBase64 === 'string' && entry.tailBase64) tails[suffix] = { ...entry };
+  }
+  return {
+    available: sidecars?.available === true && Object.keys(tails).length === 2,
+    gridSize,
+    activeRows,
+    tailRows: Number.isInteger(sidecars?.tailRows) ? sidecars.tailRows : Math.max(0, gridSize - activeRows),
+    referenceStem: typeof sidecars?.referenceStem === 'string' ? sidecars.referenceStem : '',
+    tails,
+    reason: typeof sidecars?.reason === 'string' ? sidecars.reason : '',
+  };
+}
+function normalizeSiteLinks(siteLinks) {
+  const rawCities = Array.isArray(siteLinks?.cities) ? siteLinks.cities : [];
+  const rawGates = Array.isArray(siteLinks?.gates) ? siteLinks.gates : [];
+  const cities = rawCities
+    .map((entry, index) => {
+      const mapX = Number(entry?.mapX);
+      const mapY = Number(entry?.mapY);
+      if (!Number.isFinite(mapX) || !Number.isFinite(mapY)) return null;
+      const gateIndices = Array.isArray(entry?.gateIndices)
+        ? entry.gateIndices.map(value => Number(value)).filter(Number.isFinite)
+        : [];
+      return {
+        siteKey: typeof entry?.siteKey === 'string' && entry.siteKey ? entry.siteKey : `${mapX},${mapY}`,
+        cityName: typeof entry?.cityName === 'string' && entry.cityName ? entry.cityName : `据点${index + 1}`,
+        forceIndex: Number.isFinite(Number(entry?.forceIndex)) ? Number(entry.forceIndex) : null,
+        forceName: typeof entry?.forceName === 'string' ? entry.forceName : '',
+        cityIndex: Number.isFinite(Number(entry?.cityIndex)) ? Number(entry.cityIndex) : null,
+        sourceRecordIndex: Number.isFinite(Number(entry?.sourceRecordIndex)) ? Number(entry.sourceRecordIndex) : null,
+        mapX,
+        mapY,
+        expectedX: Number.isFinite(Number(entry?.expectedX)) ? Number(entry.expectedX) : null,
+        expectedY: Number.isFinite(Number(entry?.expectedY)) ? Number(entry.expectedY) : null,
+        gateIndices,
+        gateCount: Number.isFinite(Number(entry?.gateCount)) ? Number(entry.gateCount) : gateIndices.length,
+      };
+    })
+    .filter(Boolean);
+  const gates = rawGates
+    .map(entry => {
+      const doorX = Number(entry?.doorX);
+      const doorY = Number(entry?.doorY);
+      const siteX = Number(entry?.siteX);
+      const siteY = Number(entry?.siteY);
+      if (!Number.isFinite(doorX) || !Number.isFinite(doorY) || !Number.isFinite(siteX) || !Number.isFinite(siteY)) return null;
+      return {
+        gateIndex: Number.isFinite(Number(entry?.gateIndex)) ? Number(entry.gateIndex) : 0,
+        group: Number.isFinite(Number(entry?.group)) ? Number(entry.group) : 0,
+        doorIndex: Number.isFinite(Number(entry?.doorIndex)) ? Number(entry.doorIndex) : 0,
+        doorX,
+        doorY,
+        dir: Number.isFinite(Number(entry?.dir)) ? Number(entry.dir) : 0,
+        siteX,
+        siteY,
+        siteKey: typeof entry?.siteKey === 'string' && entry.siteKey ? entry.siteKey : `${siteX},${siteY}`,
+        cityName: typeof entry?.cityName === 'string' ? entry.cityName : '',
+      };
+    })
+    .filter(Boolean);
+  return {
+    available: siteLinks?.available === true && cities.length > 0,
+    reason: typeof siteLinks?.reason === 'string' ? siteLinks.reason : '',
+    cityCount: Number.isFinite(Number(siteLinks?.cityCount)) ? Number(siteLinks.cityCount) : cities.length,
+    gateCount: Number.isFinite(Number(siteLinks?.gateCount)) ? Number(siteLinks.gateCount) : gates.length,
+    matchedGateCount: Number.isFinite(Number(siteLinks?.matchedGateCount)) ? Number(siteLinks.matchedGateCount) : gates.length,
+    unmatchedGateCount: Number.isFinite(Number(siteLinks?.unmatchedGateCount)) ? Number(siteLinks.unmatchedGateCount) : Math.max(0, gates.length),
+    cities,
+    gates,
+    sources: siteLinks?.sources || {},
+  };
+}
+
+function sourceOutputSize(meta = state.meta) {
+  const size = meta?.render?.source_output_size;
+  if (!Array.isArray(size) || size.length !== 2) return null;
+  const width = Number(size[0]);
+  const height = Number(size[1]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  return [width, height];
+}
+function shouldLoadBaseImage(meta = state.meta) {
+  const size = sourceOutputSize(meta);
+  if (!size) return true;
+  return size[0] <= MAX_BASE_IMAGE_EDGE && size[1] <= MAX_BASE_IMAGE_EDGE && size[0] * size[1] <= MAX_BASE_IMAGE_PIXELS;
+}
+function normalizeMeta(meta) {
+  const defaultMeta = defaultFieldMetaByName();
+  const fields = (Array.isArray(meta.fields) && meta.fields.length ? meta.fields : EXPORT_FIELD_ORDER).map(canonicalFieldName);
+  const rawFieldMeta = Array.isArray(meta.fieldMeta) ? meta.fieldMeta : [];
+  const rawMetaByName = new Map(rawFieldMeta.map(entry => [canonicalFieldName(entry?.name || ''), entry]));
+  const fieldMeta = fields.map(name => {
+    const base = defaultMeta.get(name) || { name, alias: name, label: name, editable: true, reserved: false };
+    const raw = rawMetaByName.get(name) || {};
+    return {
+      name,
+      alias: typeof raw.alias === 'string' ? raw.alias : base.alias,
+      label: typeof raw.label === 'string' ? raw.label : base.label,
+      editable: raw.editable ?? base.editable,
+      reserved: raw.reserved ?? base.reserved,
+      sidecarSource: raw.sidecarSource ?? !!base.sidecarSource,
+    };
+  });
+  const editableLayers = (Array.isArray(meta.editableLayers) && meta.editableLayers.length ? meta.editableLayers : RESOURCE_LAYER_OPTIONS).map(canonicalFieldName);
+  const resourceLayers = (Array.isArray(meta.resourceLayers) && meta.resourceLayers.length ? meta.resourceLayers : editableLayers).map(canonicalFieldName);
+  const pointLayers = (Array.isArray(meta.pointLayers) && meta.pointLayers.length ? meta.pointLayers : POINT_LAYER_OPTIONS).map(canonicalFieldName);
+  const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name)).map(canonicalFieldName);
+  const pointPalette = Array.isArray(meta.pointPalette) ? meta.pointPalette.slice(0, 256) : [];
+  return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, sidecars: normalizeSidecars(meta.sidecars), siteLinks: normalizeSiteLinks(meta.siteLinks) };
+}
+function getFieldMeta(name) {
+  return state.fieldMetaByName.get(canonicalFieldName(name)) || DEFAULT_FIELD_META.find(entry => entry.name === canonicalFieldName(name)) || { name, alias: name, label: name, editable: true, reserved: false };
+}
+function isResourceLayer(name) {
+  const field = canonicalFieldName(name);
+  return state.meta?.resourceLayers?.includes(field) || RESOURCE_LAYER_OPTIONS.includes(field);
+}
+function isPointLayer(name) {
+  const field = canonicalFieldName(name);
+  return state.meta?.pointLayers?.includes(field) || POINT_LAYER_OPTIONS.includes(field);
+}
+function currentLayerName() { return canonicalFieldName(els.layer.value); }
+function visiblePointLayer() {
+  const layer = currentLayerName();
+  return isPointLayer(layer) ? layer : null;
+}
+function buildSiteIndex(siteLinks) {
+  if (!siteLinks?.available) return null;
+  const cityByKey = new Map();
+  const cityByCell = new Map();
+  const cityKeyByGateCell = new Map();
+  const gatesBySiteKey = new Map();
+  for (const city of siteLinks.cities) {
+    const view = { ...city, gates: [] };
+    cityByKey.set(city.siteKey, view);
+    cityByCell.set(`${city.mapX},${city.mapY}`, city.siteKey);
+    gatesBySiteKey.set(city.siteKey, view.gates);
+  }
+  for (const gate of siteLinks.gates) {
+    const list = gatesBySiteKey.get(gate.siteKey);
+    if (!list) continue;
+    list.push(gate);
+    cityKeyByGateCell.set(`${gate.doorX},${gate.doorY}`, gate.siteKey);
+  }
+  for (const city of cityByKey.values()) {
+    city.gates.sort((a, b) => a.doorY - b.doorY || a.doorX - b.doorX || a.gateIndex - b.gateIndex);
+    city.gateCount = city.gates.length;
+    city.gateIndices = city.gates.map(gate => gate.gateIndex);
+  }
+  return { cityByKey, cityByCell, cityKeyByGateCell };
+}
+function activeSite() {
+  return state.siteIndex?.cityByKey.get(state.activeSiteKey) || null;
+}
+function siteOverlayStatus() {
+  if (!state.meta?.siteLinks?.available) return '未加载';
+  return `${state.meta.siteLinks.cityCount} 据点 / ${state.meta.siteLinks.gateCount} 城门`;
+}
+function formatGateSummary(site, limit = 8) {
+  const gates = Array.isArray(site?.gates) ? site.gates : [];
+  if (!gates.length) return '-';
+  const text = gates.slice(0, limit).map(gate => `${gate.doorX},${gate.doorY}`).join(' | ');
+  return gates.length > limit ? `${text} 等 ${gates.length} 处` : text;
+}
+function refreshSiteInfo() {
+  if (!state.meta?.siteLinks?.available) {
+    setPairs(els.siteInfo, [['据点联动', '未加载']]);
+    els.siteNote.textContent = state.meta?.siteLinks?.reason || '当前 bundle 未携带 .dor / .stg 归属信息。';
+    return;
+  }
+  const site = activeSite();
+  if (!site) {
+    setPairs(els.siteInfo, [
+      ['据点数', state.meta.siteLinks.cityCount],
+      ['城门数', state.meta.siteLinks.gateCount],
+      ['已匹配', state.meta.siteLinks.matchedGateCount],
+    ]);
+    els.siteNote.textContent = '可从右侧下拉框选择据点，或在地图上直接点中城池坐标 / 城门坐标。';
+    return;
+  }
+  setPairs(els.siteInfo, [
+    ['当前据点', site.cityName],
+    ['坐标', `${site.mapX}, ${site.mapY}`],
+    ['所属势力', site.forceName || '-'],
+    ['城门数', site.gateCount],
+    ['城门坐标', formatGateSummary(site)],
+  ]);
+  els.siteNote.textContent = site.sourceRecordIndex == null ? '' : `来源记录：stg #${site.sourceRecordIndex}`;
+}
+function renderSitePicker() {
+  els.sitePicker.textContent = '';
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = '未选据点';
+  els.sitePicker.append(empty);
+  if (!state.meta?.siteLinks?.available || !state.siteIndex) {
+    els.sitePicker.disabled = true;
+    els.clearSite.disabled = true;
+    refreshSiteInfo();
+    return;
+  }
+  const sites = [...state.siteIndex.cityByKey.values()].sort((a, b) => a.mapY - b.mapY || a.mapX - b.mapX || a.cityName.localeCompare(b.cityName, 'zh-CN'));
+  for (const site of sites) {
+    const option = document.createElement('option');
+    option.value = site.siteKey;
+    option.textContent = `${site.cityName} (${site.mapX},${site.mapY}) / ${site.gateCount} 门`;
+    if (site.siteKey === state.activeSiteKey) option.selected = true;
+    els.sitePicker.append(option);
+  }
+  els.sitePicker.disabled = false;
+  els.clearSite.disabled = !state.activeSiteKey;
+  refreshSiteInfo();
+}
+function focusSite(siteKey) {
+  const site = state.siteIndex?.cityByKey.get(siteKey);
+  if (!site) return;
+  const rect = canvas.getBoundingClientRect();
+  const point = cellToWorld(site.mapX, site.mapY);
+  state.transform.x = rect.width / 2 - (point.x + 20) * state.transform.scale;
+  state.transform.y = rect.height / 2 - (point.y + 10) * state.transform.scale;
+}
+function setActiveSite(siteKey, options = {}) {
+  const nextKey = typeof siteKey === 'string' ? siteKey : '';
+  if (nextKey && !state.siteIndex?.cityByKey.has(nextKey)) return;
+  state.activeSiteKey = nextKey;
+  if (els.sitePicker.value !== nextKey) els.sitePicker.value = nextKey;
+  els.clearSite.disabled = !nextKey;
+  refreshSiteInfo();
+  if (options.focus) focusSite(nextKey);
+  if (!options.skipDraw) scheduleDraw();
+}
+function syncActiveSiteFromCell(cell) {
+  if (!state.siteIndex) return;
+  const key = `${cell.col},${cell.row}`;
+  const siteKey = state.siteIndex.cityByCell.get(key) || state.siteIndex.cityKeyByGateCell.get(key);
+  if (!siteKey || siteKey === state.activeSiteKey) return;
+  setActiveSite(siteKey, { skipDraw: true });
+}
+function drawActiveSiteOverlay() {
+  const site = activeSite();
+  if (!site) return;
+  const scale = state.transform.scale || 1;
+  const center = cellToWorld(site.mapX, site.mapY);
+  const cx = center.x + 20;
+  const cy = center.y + 10;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  for (const gate of site.gates) {
+    const point = cellToWorld(gate.doorX, gate.doorY);
+    const gx = point.x + 20;
+    const gy = point.y + 10;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(gx, gy);
+    ctx.strokeStyle = 'rgba(15,118,110,0.55)';
+    ctx.lineWidth = 1.4 / scale;
+    ctx.stroke();
+    diamondPath(gate.doorX, gate.doorY);
+    ctx.strokeStyle = 'rgba(15,118,110,0.98)';
+    ctx.lineWidth = 2.2 / scale;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(15,118,110,0.2)';
+    ctx.arc(gx, gy, 5 / scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  diamondPath(site.mapX, site.mapY);
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 3 / scale;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(245,158,11,0.22)';
+  ctx.arc(cx, cy, 8 / scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 1.2 / scale;
+  ctx.arc(cx, cy, 11 / scale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+function pointPaletteColor(value) {
+  return state.meta?.pointPalette?.[value] || '#0f766e';
+}
+function ensureSelectedResource(layer) {
+  const field = canonicalFieldName(layer);
+  if (Number.isFinite(state.selectedResource[field])) return;
+  if (isPointLayer(field)) {
+    if (state.selected) {
+      const fi = fieldIndex(field);
+      if (fi >= 0) state.selectedResource[field] = recordAt(state.selected)[fi];
+    }
+    if (!Number.isFinite(state.selectedResource[field])) state.selectedResource[field] = 0;
+    return;
+  }
+  state.selectedResource[field] = state.resources?.layers?.[field]?.entries?.[0]?.index ?? null;
+}
+function recordFieldBounds(name) {
+  const field = canonicalFieldName(name);
+  if (field === 'acwx' || field === 'acwy' || field === 'acwz' || field === 'word06') return { min: -32768, max: 32767 };
+  return { min: 0, max: 255 };
+}
+function formatFieldName(meta) { return meta.alias ? `${meta.name} · ${meta.alias}` : meta.name; }
+function layerOptionLabel(name) {
+  const meta = getFieldMeta(name);
+  return `${meta.label}(${canonicalFieldName(name)})`;
+}
+function renderLayerOptions() {
+  const options = [...(state.meta?.resourceLayers || RESOURCE_LAYER_OPTIONS), ...(state.meta?.pointLayers || POINT_LAYER_OPTIONS)];
+  const current = canonicalFieldName(els.layer.value || options[0] || 'acwx');
+  els.layer.textContent = '';
+  for (const name of options) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = layerOptionLabel(name);
+    if (name === current) option.selected = true;
+    els.layer.append(option);
+  }
+}
+function moveSelected(dx, dy) {
+  if (!state.meta) return;
+  const next = state.selected ? { col: state.selected.col + dx, row: state.selected.row + dy } : { col: 0, row: 0 };
+  next.col = Math.max(0, Math.min(state.meta.width - 1, next.col));
+  next.row = Math.max(0, Math.min(state.meta.height - 1, next.row));
+  state.selected = next;
+  syncActiveSiteFromCell(next);
+  refreshSide();
+  refreshPatches();
+  scheduleDraw();
+}
+function startDrag(ev) {
+  canvas.setPointerCapture(ev.pointerId);
+  state.dragging = true;
+  state.dragStart = { pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY, tx: state.transform.x, ty: state.transform.y };
+}
+function stopDrag(ev = null) {
+  if (ev && state.dragStart && ev.pointerId !== state.dragStart.pointerId) return;
+  state.dragging = false;
+  state.dragStart = null;
+}
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr)); canvas.height = Math.max(1, Math.floor(rect.height * dpr)); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const mrect = mini.getBoundingClientRect(); mini.width = Math.max(1, Math.floor(mrect.width * dpr)); mini.height = Math.max(1, Math.floor(mrect.height * dpr)); miniCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw(); drawMinimap();
+}
+function scheduleDraw() {
+  if (state.drawQueued) return;
+  state.drawQueued = true;
+  window.requestAnimationFrame(() => {
+    state.drawQueued = false;
+    draw();
+  });
+}
+function diamondPath(col, row) { const p = cellToWorld(col, row); ctx.beginPath(); ctx.moveTo(p.x + 20, p.y); ctx.lineTo(p.x + 40, p.y + 10); ctx.lineTo(p.x + 20, p.y + 20); ctx.lineTo(p.x, p.y + 10); ctx.closePath(); }
+function drawVisiblePointOverlay(viewWidth, viewHeight) {
+  const layer = visiblePointLayer();
+  if (!layer || !state.meta) return;
+  const fi = fieldIndex(layer);
+  if (fi < 0) return;
+  const left = -state.transform.x / state.transform.scale;
+  const top = -state.transform.y / state.transform.scale;
+  const right = left + viewWidth / state.transform.scale;
+  const bottom = top + viewHeight / state.transform.scale;
+  const minRow = Math.max(0, Math.floor((top - state.meta.origin[1] - 24) / 10) - 2);
+  const maxRow = Math.min(state.meta.height - 1, Math.ceil((bottom - state.meta.origin[1] + 24) / 10) + 2);
+  const screenRadius = Math.min(10, Math.max(3, state.transform.scale * 2));
+  const radius = screenRadius / state.transform.scale;
+  ctx.save();
+  ctx.lineWidth = Math.max(1, screenRadius * 0.2) / state.transform.scale;
+  for (let row = minRow; row <= maxRow; row++) {
+    const rowStartX = state.meta.origin[0] + (row & 1 ? 20 : 0);
+    const minCol = Math.max(0, Math.floor((left - rowStartX - 24) / 40) - 1);
+    const maxCol = Math.min(state.meta.width - 1, Math.ceil((right - rowStartX + 24) / 40) + 1);
+    for (let col = minCol; col <= maxCol; col++) {
+      const value = state.meta.records[row * state.meta.width + col][fi];
+      if (!value) continue;
+      const p = cellToWorld(col, row);
+      ctx.beginPath();
+      ctx.fillStyle = pointPaletteColor(value & 0xFF);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.arc(p.x + 20, p.y + 10, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function draw() {
+  const image = displayImage();
+  if (!image) return;
+  const rect = canvas.getBoundingClientRect(); ctx.save(); ctx.clearRect(0, 0, rect.width, rect.height); ctx.translate(state.transform.x, state.transform.y); ctx.scale(state.transform.scale, state.transform.scale); ctx.imageSmoothingEnabled = false; ctx.drawImage(image, 0, 0); drawVisiblePointOverlay(rect.width, rect.height); drawActiveSiteOverlay(); ctx.lineWidth = 1 / state.transform.scale;
+  for (const patch of state.patches.values()) { diamondPath(patch.x, patch.y); ctx.strokeStyle = 'rgba(15,118,110,0.9)'; ctx.stroke(); }
+  if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / state.transform.scale; ctx.stroke(); }
+  ctx.restore(); drawMinimap();
+}
+function drawMinimap() {
+  const image = displayImage();
+  if (!image) return;
+  const source = state.minimap || image;
+  const rect = mini.getBoundingClientRect(); miniCtx.clearRect(0, 0, rect.width, rect.height);
+  const scale = Math.min(rect.width / source.width, rect.height / source.height);
+  const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2;
+  miniCtx.imageSmoothingEnabled = true; miniCtx.drawImage(source, ox, oy, w, h);
+  const mainRect = canvas.getBoundingClientRect();
+  const view = { x: -state.transform.x / state.transform.scale, y: -state.transform.y / state.transform.scale, w: mainRect.width / state.transform.scale, h: mainRect.height / state.transform.scale };
+  miniCtx.strokeStyle = '#f59e0b'; miniCtx.lineWidth = 2; miniCtx.strokeRect(ox + view.x / image.width * w, oy + view.y / image.height * h, view.w / image.width * w, view.h / image.height * h);
+}
+function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = String(v); node.append(a, b); } }
+function layerStats(layer) {
+  const stats = state.layerStats[layer];
+  if (!stats) return '-';
+  return `${stats.nonEmpty} 格 / ${stats.counts.size} 个编号`;
+}
+function rebuildLayerStats() {
+  state.layerStats = {};
+  for (const layer of state.meta.editableLayers) {
+    const fi = fieldIndex(layer);
+    const counts = new Map();
+    let nonEmpty = 0;
+    for (const rec of state.meta.records) {
+      const value = rec[fi];
+      if (value === -1) continue;
+      nonEmpty++;
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+    state.layerStats[layer] = { nonEmpty, counts };
+  }
+}
+function updateLayerStats(field, before, after) {
+  const stats = state.layerStats[canonicalFieldName(field)];
+  if (!stats || before === after) return;
+  if (before !== -1) {
+    const next = (stats.counts.get(before) || 0) - 1;
+    stats.nonEmpty--;
+    if (next > 0) stats.counts.set(before, next);
+    else stats.counts.delete(before);
+  }
+  if (after !== -1) {
+    stats.nonEmpty++;
+    stats.counts.set(after, (stats.counts.get(after) || 0) + 1);
+  }
+}
+function nearbyValues(cell, layer, radius = 3, limit = 5) {
+  const fi = fieldIndex(layer);
+  const hits = [];
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const col = cell.col + dx;
+      const row = cell.row + dy;
+      if (col < 0 || row < 0 || col >= state.meta.width || row >= state.meta.height) continue;
+      const value = state.meta.records[row * state.meta.width + col][fi];
+      if (value !== -1) hits.push({ value, col, row, dist: Math.abs(dx) + Math.abs(dy) });
+    }
+  }
+  hits.sort((a, b) => a.dist - b.dist || a.row - b.row || a.col - b.col);
+  return hits.slice(0, limit).map(hit => `${hit.value} @ ${hit.col},${hit.row}`).join(' | ') || '-';
+}
+function safeAnchor(value) { return Number.isFinite(value) && value >= 0 && value <= 512 ? value : 0; }
+function recomputeRedrawConfig() {
+  let maxLeft = 20;
+  let maxRight = 40;
+  let maxUp = 20;
+  let maxDown = 20;
+  for (const layer of state.meta.editableLayers) {
+    for (const entry of state.resources.layers[layer]?.entries || []) {
+      const draw = entry.draw;
+      if (!draw) continue;
+      const sw = draw[2] || 0;
+      const sh = draw[3] || 0;
+      if (layer === 'acwz') {
+        const xa = safeAnchor(entry.xAnchor);
+        const ya = safeAnchor(entry.yAnchor);
+        maxLeft = Math.max(maxLeft, Math.max(0, xa - 20));
+        maxRight = Math.max(maxRight, Math.max(40, 20 - xa + sw));
+        maxUp = Math.max(maxUp, Math.max(0, ya - 20));
+        maxDown = Math.max(maxDown, Math.max(20, 20 - ya + sh));
+      } else {
+        maxRight = Math.max(maxRight, 40);
+        maxDown = Math.max(maxDown, 20);
+      }
+    }
+  }
+  state.redrawConfig = {
+    maxLeft, maxRight, maxUp, maxDown,
+    colRadius: Math.ceil((maxLeft + maxRight) / 40) + 2,
+    rowRadius: Math.ceil((maxUp + maxDown) / 10) + 2,
+  };
+}
+function renderRecordEditor() {
+  if (!state.selected) {
+    els.recordList.innerHTML = '<div class="placeholder">先在地图上选中一个格子，再编辑 Record 字段。</div>';
+    return;
+  }
+  const rec = recordAt(state.selected);
+  els.recordList.textContent = '';
+  for (const field of state.meta.editableRecordFields) {
+    const meta = getFieldMeta(field);
+    const fi = fieldIndex(meta.name);
+    if (fi < 0) continue;
+    const row = document.createElement('div');
+    row.className = 'record-row' + (state.patches.has(patchKey(state.selected, meta.name)) ? ' dirty' : '');
+    const copy = document.createElement('div');
+    copy.className = 'record-copy';
+    const name = document.createElement('div');
+    name.className = 'record-name';
+    name.textContent = formatFieldName(meta);
+    const note = document.createElement('div');
+    note.className = 'record-note';
+    note.textContent = meta.label;
+    copy.append(name, note);
+    row.append(copy);
+    const actions = document.createElement('div');
+    actions.className = 'record-actions';
+    const input = document.createElement('input');
+    const bounds = recordFieldBounds(meta.name);
+    input.type = 'number';
+    input.step = '1';
+    input.min = String(bounds.min);
+    input.max = String(bounds.max);
+    input.value = String(rec[fi]);
+    input.addEventListener('change', () => applyRecordFieldChange(meta.name, input.value));
+    input.addEventListener('keydown', ev => {
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      applyRecordFieldChange(meta.name, input.value);
+    });
+    const reset = document.createElement('button');
+    reset.textContent = '恢复';
+    reset.addEventListener('click', () => resetRecordField(meta.name));
+    actions.append(input, reset);
+    row.append(actions);
+    els.recordList.append(row);
+  }
+}
+function refreshSide() {
+  const sidecarText = state.meta.sidecars.available ? '保留原始尾区' : '尾区改为 0 填充';
+  const sidecarReason = state.meta.sidecars.available ? `${state.meta.sidecars.gridSize}x${state.meta.sidecars.gridSize}` : (state.meta.sidecars.reason || '缺少参考 sidecar');
+  setPairs(els.stageInfo, [
+    ['关卡', state.meta.stage],
+    ['格子数', `${state.meta.width} x ${state.meta.height}`],
+    ['布局', state.meta.layout],
+    ['调色板', state.meta.palette],
+    ['acwy', layerStats('acwy')],
+    ['acwz', layerStats('acwz')],
+    ['.s/.x 导出', sidecarText],
+    ['尾区策略', sidecarReason],
+  ]);
+  if (!state.selected) {
+    setPairs(els.cellInfo, [['格子', '-'], ['索引', '-']]);
+    renderRecordEditor();
+    return;
+  }
+  const cell = state.selected; const idx = cell.row * state.meta.width + cell.col;
+  setPairs(els.cellInfo, [['格子', `${cell.col}, ${cell.row}`], ['索引', idx], ['附近 acwy', nearbyValues(cell, 'acwy')], ['附近 acwz', nearbyValues(cell, 'acwz')]]);
+  renderRecordEditor();
+}
+function hasSelectedLayerPatch() { return !!state.selected && state.patches.has(patchKey(state.selected, els.layer.value)); }
+function refreshPatches() {
+  els.patchCount.value = String(state.patches.size);
+  els.patchList.textContent = [...state.patches.values()].slice(-12).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`).join('\n');
+  els.status.textContent = state.patches.size ? `已修改（${state.patches.size}）` : (state.baseImageNote || '就绪');
+  els.undoEdit.disabled = !state.undoStack.length;
+  els.resetCell.disabled = !hasSelectedLayerPatch();
+  els.resetAll.disabled = !state.patches.size;
+}
+function scheduleResourceListRender() {
+  if (state.resourceRenderQueued) return;
+  state.resourceRenderQueued = true;
+  window.requestAnimationFrame(() => {
+    state.resourceRenderQueued = false;
+    paintResourceList();
+  });
+}
+function buildPointEntries(layer) {
+  const usage = state.layerStats[layer]?.counts || new Map();
+  return Array.from({ length: 256 }, (_entry, index) => ({ index, used: usage.get(index) || 0, color: pointPaletteColor(index) }));
+}
+function paintResourceList() {
+  const model = state.resourceListModel;
+  if (!model || !model.info) return;
+  const list = els.resourceList;
+  const spacer = els.resourceSpacer;
+  if (!list || !spacer) return;
+  const listWidth = list.clientWidth;
+  if (!listWidth) return;
+  const baseItemWidth = model.info.kind === 'point' ? 56 : RESOURCE_ITEM_MIN_WIDTH;
+  const baseItemHeight = model.info.kind === 'point' ? 58 : RESOURCE_ITEM_HEIGHT;
+  const minItemWidth = Math.max(baseItemWidth, model.info.tileSize + RESOURCE_ITEM_PADDING);
+  const itemHeight = Math.max(baseItemHeight, model.info.tileSize + RESOURCE_LABEL_HEIGHT + RESOURCE_ITEM_PADDING + 2);
+  const columns = Math.max(1, Math.floor((listWidth + RESOURCE_ITEM_GAP) / (minItemWidth + RESOURCE_ITEM_GAP)));
+  const itemWidth = Math.max(minItemWidth, Math.floor((listWidth - RESOURCE_ITEM_GAP * (columns - 1)) / columns));
+  const rowPitch = itemHeight + RESOURCE_ITEM_GAP;
+  const totalRows = Math.ceil(model.entries.length / columns);
+  const startRow = Math.max(0, Math.floor(list.scrollTop / rowPitch) - RESOURCE_OVERSCAN_ROWS);
+  const visibleRows = Math.ceil(list.clientHeight / rowPitch) + RESOURCE_OVERSCAN_ROWS * 2 + 1;
+  const endRow = Math.min(totalRows, startRow + visibleRows);
+  const startIndex = startRow * columns;
+  const endIndex = Math.min(model.entries.length, endRow * columns);
+  const selected = state.selectedResource[model.layer];
+  spacer.textContent = '';
+  if (!model.entries.length) {
+    spacer.style.height = `${list.clientHeight}px`;
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '没有匹配的资源。';
+    spacer.append(empty);
+    els.resourceMeta.textContent = `${model.info.metaLabel}共 0 项`;
+    return;
+  }
+  spacer.style.height = `${Math.max(list.clientHeight, totalRows * rowPitch - RESOURCE_ITEM_GAP)}px`;
+  const frag = document.createDocumentFragment();
+  for (let index = startIndex; index < endIndex; index++) {
+    const entry = model.entries[index];
+    const row = Math.floor(index / columns);
+    const col = index % columns;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.index = String(entry.index);
+    button.className = 'resource-item' + (selected === entry.index ? ' selected' : '');
+    button.title = `${model.layer} ${entry.index}${entry.used ? `，使用 ${entry.used}` : ''}`;
+    button.style.left = `${col * (itemWidth + RESOURCE_ITEM_GAP)}px`;
+    button.style.top = `${row * rowPitch}px`;
+    button.style.width = `${itemWidth}px`;
+    button.style.height = `${itemHeight}px`;
+    const thumb = document.createElement('div');
+    thumb.className = 'resource-thumb';
+    if (model.info.kind === 'point') {
+      thumb.classList.add('point-swatch');
+      if (entry.index === 0) thumb.classList.add('zero');
+      else thumb.style.backgroundColor = entry.color;
+    } else {
+      thumb.style.backgroundImage = `url(${model.info.image})`;
+      thumb.style.backgroundPosition = `-${entry.atlas[0]}px -${entry.atlas[1]}px`;
+    }
+    thumb.style.width = `${model.info.tileSize}px`;
+    thumb.style.height = `${model.info.tileSize}px`;
+    const label = document.createElement('div');
+    label.className = 'resource-label';
+    label.textContent = entry.used ? `${entry.index} x${entry.used}` : entry.index;
+    button.append(thumb, label);
+    frag.append(button);
+  }
+  spacer.append(frag);
+  els.resourceMeta.textContent = `${model.info.metaLabel}共 ${model.entries.length} 项，当前渲染 ${Math.max(0, endIndex - startIndex)} 项，滚动可查看全部`;
+}
+function renderResourceList(resetScroll = true) {
+  if (!state.resources || !state.meta) return;
+  const layer = currentLayerName();
+  ensureSelectedResource(layer);
+  const filter = els.resourceFilter.value.trim();
+  let info;
+  let entries;
+  if (isPointLayer(layer)) {
+    info = { kind: 'point', tileSize: 22, metaLabel: '可绘制取值' };
+    entries = buildPointEntries(layer);
+  } else {
+    const resourceInfo = state.resources.layers[layer];
+    if (!resourceInfo) return;
+    info = { ...resourceInfo, kind: 'resource', metaLabel: '有效资源' };
+    entries = resourceInfo.entries.slice();
+  }
+  entries = entries
+    .filter(entry => !filter || String(entry.index).includes(filter))
+    .sort((a, b) => els.resourceSort.value === 'used' ? ((b.used || 0) - (a.used || 0) || a.index - b.index) : (a.index - b.index));
+  state.resourceListModel = { layer, info, entries };
+  if (resetScroll) els.resourceList.scrollTop = 0;
+  scheduleResourceListRender();
+}
+function buildResourceIndex() {
+  state.resourceByIndex = {};
+  for (const layer of state.meta.resourceLayers || state.meta.editableLayers) {
+    state.resourceByIndex[layer] = new Map((state.resources.layers[layer]?.entries || []).map(entry => [entry.index, entry]));
+  }
+}
+function drawResource(layer, value, col, row, targetCtx) {
+  if (value < 0) return;
+  const entry = state.resourceByIndex[layer]?.get(value);
+  const atlas = state.drawImages[layer];
+  if (!entry || !atlas || !entry.draw) return;
+  const [sx, sy, sw, sh] = entry.draw;
+  const p = cellToWorld(col, row);
+  let dx = p.x;
+  let dy = p.y;
+  if (layer === 'acwz') {
+    dx = p.x + 20 - (entry.xAnchor || 0);
+    dy = p.y + 20 - (entry.yAnchor || 0);
+  }
+  targetCtx.drawImage(atlas, sx, sy, sw, sh, dx, dy, sw, sh);
+}
+function rebuildEditedImage(cells = null) {
+  if (!state.resources || !state.meta) return;
+  const size = canvasSizeForMeta();
+  if (!state.renderCanvas || state.renderCanvas.width !== size.width || state.renderCanvas.height !== size.height) {
+    state.renderCanvas = document.createElement('canvas');
+    state.renderCanvas.width = size.width;
+    state.renderCanvas.height = size.height;
+    state.renderCtx = state.renderCanvas.getContext('2d');
+  }
+  const rctx = state.renderCtx;
+  rctx.imageSmoothingEnabled = false;
+  if (!cells || !cells.length) {
+    rctx.clearRect(0, 0, state.renderCanvas.width, state.renderCanvas.height);
+    for (let row = 0; row < state.meta.height; row++) for (let col = 0; col < state.meta.width; col++) drawResource('acwx', state.meta.records[row * state.meta.width + col][fieldIndex('acwx')], col, row, rctx);
+    for (let row = 0; row < state.meta.height; row++) for (let col = 0; col < state.meta.width; col++) drawResource('acwy', state.meta.records[row * state.meta.width + col][fieldIndex('acwy')], col, row, rctx);
+    for (let row = 0; row < state.meta.height; row++) for (let col = 0; col < state.meta.width; col++) drawResource('acwz', state.meta.records[row * state.meta.width + col][fieldIndex('acwz')], col, row, rctx);
+    return;
+  }
+  const { maxLeft, maxRight, maxUp, maxDown, colRadius, rowRadius } = state.redrawConfig;
+  let dirtyLeft = state.renderCanvas.width;
+  let dirtyTop = state.renderCanvas.height;
+  let dirtyRight = 0;
+  let dirtyBottom = 0;
+  let minCol = state.meta.width;
+  let maxCol = 0;
+  let minRow = state.meta.height;
+  let maxRow = 0;
+  for (const cell of cells) {
+    const p = cellToWorld(cell.col, cell.row);
+    dirtyLeft = Math.min(dirtyLeft, p.x - maxLeft);
+    dirtyTop = Math.min(dirtyTop, p.y - maxUp);
+    dirtyRight = Math.max(dirtyRight, p.x + maxRight);
+    dirtyBottom = Math.max(dirtyBottom, p.y + maxDown);
+    minCol = Math.min(minCol, cell.col - colRadius);
+    maxCol = Math.max(maxCol, cell.col + colRadius);
+    minRow = Math.min(minRow, cell.row - rowRadius);
+    maxRow = Math.max(maxRow, cell.row + rowRadius);
+  }
+  const sx = Math.max(0, Math.floor(dirtyLeft));
+  const sy = Math.max(0, Math.floor(dirtyTop));
+  const sw = Math.max(1, Math.ceil(Math.min(state.renderCanvas.width, dirtyRight) - sx));
+  const sh = Math.max(1, Math.ceil(Math.min(state.renderCanvas.height, dirtyBottom) - sy));
+  minCol = Math.max(0, minCol);
+  minRow = Math.max(0, minRow);
+  maxCol = Math.min(state.meta.width - 1, maxCol);
+  maxRow = Math.min(state.meta.height - 1, maxRow);
+  rctx.clearRect(sx, sy, sw, sh);
+  if (state.image) rctx.drawImage(state.image, sx, sy, sw, sh, sx, sy, sw, sh);
+  rctx.save();
+  rctx.beginPath();
+  rctx.rect(sx, sy, sw, sh);
+  rctx.clip();
+  for (const layer of ['acwx', 'acwy', 'acwz']) {
+    const fi = fieldIndex(layer);
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        drawResource(layer, state.meta.records[row * state.meta.width + col][fi], col, row, rctx);
+      }
+    }
+  }
+  rctx.restore();
+}
+function syncPatchFor(cell, field) {
+  const normalized = canonicalFieldName(field);
+  const fi = fieldIndex(normalized);
+  const idx = recordIndex(cell);
+  const before = state.originalRecords[idx][fi];
+  const after = state.meta.records[idx][fi];
+  const key = patchKey(cell, normalized);
+  if (before === after) state.patches.delete(key);
+  else state.patches.set(key, { x: cell.col, y: cell.row, field: normalized, before, after, minimapDirty: true });
+}
+function refreshAfterRecordEdit(cell = null, editedCells = null, changedFields = []) {
+  if (cell) state.selected = cell;
+  if (editedCells && editedCells.length) rebuildEditedImage(editedCells);
+  if (isPointLayer(currentLayerName()) && changedFields.includes(currentLayerName())) renderResourceList(false);
+  refreshSide();
+  refreshPatches();
+  scheduleDraw();
+}
+function applyChangeSet(changes) {
+  const applied = [];
+  for (const change of changes) {
+    const cell = { col: change.x, row: change.y };
+    const normalizedField = canonicalFieldName(change.field);
+    const fi = fieldIndex(normalizedField);
+    if (fi < 0) continue;
+    const rec = recordAt(cell);
+    const before = rec[fi];
+    const after = change.after;
+    if (before === after) continue;
+    rec[fi] = after;
+    updateLayerStats(normalizedField, before, after);
+    syncPatchFor(cell, normalizedField);
+    applied.push({ x: change.x, y: change.y, field: normalizedField, before, after });
+  }
+  if (!applied.length) return false;
+  state.undoStack.push(applied);
+  const last = applied[applied.length - 1];
+  const changedFields = [...new Set(applied.map(change => change.field))];
+  const needsVisualRefresh = applied.some(change => state.meta.editableLayers.includes(change.field));
+  const editedCells = needsVisualRefresh ? [...new Map(applied.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell) : null;
+  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells, changedFields);
+  return true;
+}
+function undoLastEdit() {
+  const changes = state.undoStack.pop();
+  if (!changes) return;
+  for (const change of [...changes].reverse()) {
+    const cell = { col: change.x, row: change.y };
+    const fi = fieldIndex(change.field);
+    const rec = recordAt(cell);
+    const after = rec[fi];
+    rec[fi] = change.before;
+    updateLayerStats(change.field, after, change.before);
+    syncPatchFor(cell, change.field);
+  }
+  const last = changes[changes.length - 1];
+  const changedFields = [...new Set(changes.map(change => change.field))];
+  const needsVisualRefresh = changes.some(change => state.meta.editableLayers.includes(change.field));
+  const editedCells = needsVisualRefresh ? [...new Map(changes.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell) : null;
+  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells, changedFields);
+}
+function resetSelectedLayerChange() {
+  if (!state.selected) return;
+  const field = canonicalFieldName(els.layer.value);
+  const fi = fieldIndex(field);
+  if (fi < 0) return;
+  const original = state.originalRecords[recordIndex(state.selected)][fi];
+  applyChangeSet([{ x: state.selected.col, y: state.selected.row, field, after: original }]);
+}
+function resetAllChanges() {
+  const changes = [...state.patches.values()].map(patch => ({ x: patch.x, y: patch.y, field: patch.field, after: patch.before }));
+  applyChangeSet(changes);
+}
+function applyPaint(cell) {
+  const field = canonicalFieldName(els.layer.value);
+  const value = state.selectedResource[field];
+  if (!Number.isFinite(value)) {
+    els.status.textContent = `${field} 还没有选择可绘制资源`;
+    return;
+  }
+  applyChangeSet([{ x: cell.col, y: cell.row, field, after: value }]);
+}
+function applyRecordFieldChange(field, rawValue) {
+  if (!state.selected) return;
+  const value = Number.parseInt(rawValue, 10);
+  const bounds = recordFieldBounds(field);
+  if (!Number.isFinite(value) || value < bounds.min || value > bounds.max) {
+    els.status.textContent = `${canonicalFieldName(field)} 超出范围 ${bounds.min}..${bounds.max}`;
+    refreshSide();
+    return;
+  }
+  const normalizedField = canonicalFieldName(field);
+  const changed = applyChangeSet([{ x: state.selected.col, y: state.selected.row, field: normalizedField, after: value }]);
+  if (changed && normalizedField === currentLayerName()) {
+    state.selectedResource[normalizedField] = value;
+    renderResourceList(false);
+  }
+}
+function resetRecordField(field) {
+  if (!state.selected) return;
+  const fi = fieldIndex(field);
+  if (fi < 0) return;
+  const original = state.originalRecords[recordIndex(state.selected)][fi];
+  applyChangeSet([{ x: state.selected.col, y: state.selected.row, field, after: original }]);
+}
+function resetEditState(meta) {
+  state.meta = normalizeMeta(meta);
+  state.fieldMetaByName = new Map(state.meta.fieldMeta.map(entry => [entry.name, entry]));
+  renderLayerOptions();
+  state.originalRecords = state.meta.records.map(record => record.slice());
+  state.patches.clear();
+  state.undoStack = [];
+  state.selected = null;
+  state.transform = { x: 24, y: 24, scale: 0.8 };
+  els.title.textContent = state.meta.stage;
+  for (const layer of PAINT_LAYER_OPTIONS) state.selectedResource[layer] = null;
+  for (const layer of state.meta.resourceLayers || state.meta.editableLayers) state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null;
+  for (const layer of state.meta.pointLayers || POINT_LAYER_OPTIONS) state.selectedResource[layer] = 0;
+  state.siteIndex = buildSiteIndex(state.meta.siteLinks);
+  state.activeSiteKey = '';
+  renderSitePicker();
+  rebuildLayerStats();
+  recomputeRedrawConfig();
+  rebuildEditedImage();
+  refreshSide();
+  refreshPatches();
+  resizeCanvas();
+  renderResourceList();
+}
+function parseStageM(buffer, name = 'local.m') {
+  const view = new DataView(buffer);
+  if (buffer.byteLength < 16) throw new Error('?????????? .m');
+  const width = view.getUint32(0, true);
+  const height = view.getUint32(4, true);
+  const magic = new TextDecoder('ascii').decode(new Uint8Array(buffer, 8, 8));
+  if (magic !== 'Hello1.0') throw new Error('??? Hello1.0 .m ??');
+  const expected = 16 + width * height * 16;
+  if (buffer.byteLength < expected) throw new Error(`.m ????????? ${expected} ????? ${buffer.byteLength}`);
+  const records = [];
+  for (let i = 0; i < width * height; i++) {
+    const off = 16 + i * 16;
+    records.push([
+      view.getInt16(off, true), view.getInt16(off + 2, true), view.getInt16(off + 4, true), view.getInt16(off + 6, true),
+      view.getUint8(off + 8), view.getUint8(off + 9), view.getUint8(off + 10), view.getUint8(off + 11),
+      view.getUint8(off + 12), view.getUint8(off + 13), view.getUint8(off + 14), view.getUint8(off + 15),
+    ]);
+  }
+  const stageName = name.replace(/\.m$/i, '');
+  const inheritedSidecars = state.meta?.stage === stageName ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '仅加载 .m 时无法自动读取 sidecar 参考文件' };
+  const inheritedSiteLinks = state.meta?.stage === stageName
+    ? state.meta.siteLinks
+    : { available: false, cities: [], gates: [], reason: '仅加载单个 .m 文件时，浏览器无法直接读取同目录 .dor / .stg；请优先使用已导出的关卡页面。' };
+  // 仅加载 .m 时没有 bundle 图片 / 资源统计，仍然保留 byte08~11 的统一字段语义
+  return normalizeMeta({
+    format: 'san-editor-stage-v1', stage: stageName, width, height, layout: 'stagger', origin: [64, 64],
+    tile: { width: 40, height: 20, row_step: 10, odd_row_x: 20 },
+    fields: state.meta.fields.slice(),
+    fieldMeta: state.meta.fieldMeta.map(entry => ({ ...entry })),
+    editableLayers: state.meta.editableLayers.slice(),
+    resourceLayers: state.meta.resourceLayers.slice(),
+    pointLayers: state.meta.pointLayers.slice(),
+    editableRecordFields: state.meta.editableRecordFields.slice(),
+    pointPalette: state.meta.pointPalette.slice(),
+    palette: state.meta.palette,
+    image: null,
+    minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' },
+    sidecars: inheritedSidecars,
+    siteLinks: inheritedSiteLinks,
+    resources: state.meta.resources,
+    records,
+    render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
+  });
+}
+
+async function loadLocalMFile(file) {
+  if (!file) return;
+  try {
+    const meta = parseStageM(await file.arrayBuffer(), file.name);
+    state.image = null;
+    state.minimap = null;
+    state.baseImageMode = 'rebuild';
+    state.baseImageNote = '已加载本地 .m，当前视图改用资源重建';
+    resetEditState(meta);
+    els.stagePicker.value = '';
+    els.status.textContent = `已加载 ${file.name}`;
+  } catch (err) {
+    els.status.textContent = String(err.message || err);
+  }
+}
+async function loadStagePicker() {
+  try {
+    const index = await fetch('../index.json', { cache: 'no-store' }).then(resp => resp.ok ? resp.json() : null);
+    const stages = index?.stages || [];
+    if (!stages.length) return;
+    els.stagePicker.textContent = '';
+    for (const entry of stages) {
+      const option = document.createElement('option');
+      option.value = entry.stage;
+      option.textContent = `${entry.stage} (${entry.width}x${entry.height})`;
+      if (entry.stage === state.meta.stage) option.selected = true;
+      els.stagePicker.append(option);
+    }
+  } catch (_err) {
+    els.stagePicker.disabled = true;
+  }
+}
+function downloadPatch() {
+  const payload = {
+    format: 'san-editor-patch-v1',
+    stage: state.meta.stage,
+    fields: state.meta.fields,
+    minimap: { dirtyCells: [...state.patches.values()].filter(patch => patch.minimapDirty).map(patch => [patch.x, patch.y]) },
+    changes: [...state.patches.values()],
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${state.meta.stage}_patch.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function recordValue(record, field) {
+  const fi = fieldIndex(field);
+  if (fi < 0) throw new Error(`缺少字段 ${field}`);
+  return record[fi];
+}
+function buildStageBytes() {
+  const buffer = new ArrayBuffer(16 + state.meta.records.length * 16);
+  const view = new DataView(buffer);
+  view.setUint32(0, state.meta.width, true);
+  view.setUint32(4, state.meta.height, true);
+  new Uint8Array(buffer, 8, 8).set(new TextEncoder().encode('Hello1.0'));
+  for (let index = 0; index < state.meta.records.length; index++) {
+    const record = state.meta.records[index];
+    const off = 16 + index * 16;
+    view.setInt16(off, recordValue(record, 'acwx'), true);
+    view.setInt16(off + 2, recordValue(record, 'acwy'), true);
+    view.setInt16(off + 4, recordValue(record, 'acwz'), true);
+    view.setInt16(off + 6, recordValue(record, 'word06'), true);
+    view.setUint8(off + 8, recordValue(record, 'byte08'));
+    view.setUint8(off + 9, recordValue(record, 'byte09'));
+    view.setUint8(off + 10, recordValue(record, 'byte10'));
+    view.setUint8(off + 11, recordValue(record, 'byte11'));
+    view.setUint8(off + 12, recordValue(record, 'byte12'));
+    view.setUint8(off + 13, recordValue(record, 'byte13'));
+    view.setUint8(off + 14, recordValue(record, 'byte14'));
+    view.setUint8(off + 15, recordValue(record, 'byte15'));
+  }
+  return new Uint8Array(buffer);
+}
+function nearestSampleIndex(sourceSize, targetIndex, targetSize) {
+  return Math.max(0, Math.min(sourceSize - 1, Math.floor((targetIndex + 0.5) * sourceSize / targetSize)));
+}
+function buildActiveSidecarBytes() {
+  const gridSize = state.meta.sidecars.gridSize || 160;
+  const activeRows = state.meta.sidecars.activeRows || 128;
+  const fi = fieldIndex('byte13');
+  if (fi < 0) throw new Error('当前关卡缺少 byte13/minimap_color 字段。');
+  const output = new Uint8Array(gridSize * activeRows);
+  for (let targetRow = 0; targetRow < activeRows; targetRow++) {
+    const sourceRow = nearestSampleIndex(state.meta.height, targetRow, activeRows);
+    for (let targetCol = 0; targetCol < gridSize; targetCol++) {
+      const sourceCol = nearestSampleIndex(state.meta.width, targetCol, gridSize);
+      output[targetRow * gridSize + targetCol] = state.meta.records[sourceRow * state.meta.width + sourceCol][fi] & 0xFF;
+    }
+  }
+  return output;
+}
+function base64ToBytes(text) {
+  const raw = window.atob(text);
+  const bytes = new Uint8Array(raw.length);
+  for (let index = 0; index < raw.length; index++) bytes[index] = raw.charCodeAt(index);
+  return bytes;
+}
+function buildSidecarBytes(suffix) {
+  const gridSize = state.meta.sidecars.gridSize || 160;
+  const activeRows = state.meta.sidecars.activeRows || 128;
+  const activeBytes = buildActiveSidecarBytes();
+  const tailLength = gridSize * Math.max(0, gridSize - activeRows);
+  const tailEntry = state.meta.sidecars.tails?.[suffix];
+  const tailBytes = tailEntry?.tailBase64 ? base64ToBytes(tailEntry.tailBase64) : new Uint8Array(tailLength);
+  const merged = new Uint8Array(activeBytes.length + tailBytes.length);
+  merged.set(activeBytes);
+  merged.set(tailBytes, activeBytes.length);
+  return { bytes: merged, usedFallbackTail: !tailEntry?.tailBase64 };
+}
+function buildExportArtifacts() {
+  const stageName = state.meta.stage;
+  const files = [{ name: `${stageName}.m`, bytes: buildStageBytes() }];
+  const sidecarFlags = [];
+  for (const suffix of ['s', 'x']) {
+    const built = buildSidecarBytes(suffix);
+    files.push({ name: `${stageName}.${suffix}`, bytes: built.bytes });
+    sidecarFlags.push(built.usedFallbackTail);
+  }
+  return { files, usedFallbackTail: sidecarFlags.some(Boolean) };
+}
+async function writeFilesToDirectory(dirHandle, files) {
+  for (const file of files) {
+    const handle = await dirHandle.getFileHandle(file.name, { create: true });
+    const writer = await handle.createWritable();
+    await writer.write(file.bytes);
+    await writer.close();
+  }
+}
+function triggerDownload(name, bytes) {
+  const blob = new Blob([bytes], { type: 'application/octet-stream' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = name;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+async function exportEditedArtifacts() {
+  try {
+    const artifacts = buildExportArtifacts();
+    if (typeof window.showDirectoryPicker === 'function') {
+      try {
+        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        await writeFilesToDirectory(dirHandle, artifacts.files);
+        els.status.textContent = artifacts.usedFallbackTail ? '已导出 .m/.s/.x，缺失 sidecar 尾区时已用 0 填充。' : '已导出 .m/.s/.x';
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') {
+          els.status.textContent = '已取消导出';
+          return;
+        }
+      }
+    }
+    for (const [index, file] of artifacts.files.entries()) {
+      window.setTimeout(() => triggerDownload(file.name, file.bytes), index * 180);
+    }
+    els.status.textContent = artifacts.usedFallbackTail ? '已开始下载 .m/.s/.x，缺失 sidecar 尾区时已用 0 填充。' : '已开始下载 .m/.s/.x';
+  } catch (err) {
+    els.status.textContent = String(err.message || err);
+  }
+}
+canvas.addEventListener('contextmenu', ev => { ev.preventDefault(); });
+canvas.addEventListener('pointerdown', ev => {
+  if (ev.button === 2) {
+    startDrag(ev);
+    return;
+  }
+  if (ev.button !== 0) return;
+  const world = clientToWorld(ev);
+  const cell = worldToCell(world.x, world.y);
+  if (!cell) return;
+  state.selected = cell;
+  syncActiveSiteFromCell(cell);
+  if (els.tool.value === 'paint') {
+    applyPaint(cell);
+    return;
+  }
+  refreshSide();
+  scheduleDraw();
+});
+canvas.addEventListener('pointermove', ev => {
+  if (!state.dragging || !state.dragStart || ev.pointerId !== state.dragStart.pointerId) return;
+  state.transform.x = state.dragStart.tx + ev.clientX - state.dragStart.x;
+  state.transform.y = state.dragStart.ty + ev.clientY - state.dragStart.y;
+  scheduleDraw();
+});
+canvas.addEventListener('pointerup', ev => { stopDrag(ev); });
+canvas.addEventListener('pointercancel', ev => { stopDrag(ev); });
+canvas.addEventListener('lostpointercapture', ev => { stopDrag(ev); });
+canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; scheduleDraw(); }, { passive: false });
+mini.addEventListener('pointerdown', ev => { const image = displayImage(); if (!image) return; const source = state.minimap || image; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / source.width, rect.height / source.height); const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * image.width; const y = (ev.clientY - rect.top - oy) / h * image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; scheduleDraw(); });
+els.openMFile.addEventListener('click', () => { els.loadMFile.click(); });
+els.loadMFile.addEventListener('change', () => { loadLocalMFile(els.loadMFile.files?.[0]); els.loadMFile.value = ''; });
+els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
+document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; scheduleDraw(); });
+els.undoEdit.addEventListener('click', undoLastEdit);
+els.resetCell.addEventListener('click', resetSelectedLayerChange);
+els.resetAll.addEventListener('click', resetAllChanges);
+document.getElementById('exportPatch').addEventListener('click', downloadPatch);
+els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
+document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
+els.sitePicker.addEventListener('change', () => { setActiveSite(els.sitePicker.value, { focus: !!els.sitePicker.value }); });
+els.clearSite.addEventListener('click', () => { setActiveSite('', { skipDraw: false }); });
+els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); refreshPatches(); scheduleDraw(); });
+els.resourceFilter.addEventListener('input', () => { renderResourceList(); });
+els.resourceSort.addEventListener('change', () => { renderResourceList(); });
+els.resourceList.addEventListener('scroll', scheduleResourceListRender);
+els.resourceList.addEventListener('click', ev => {
+  const button = ev.target.closest('.resource-item');
+  if (!button) return;
+  const layer = state.resourceListModel?.layer || els.layer.value;
+  const index = Number.parseInt(button.dataset.index || '', 10);
+  if (!Number.isFinite(index)) return;
+  state.selectedResource[layer] = index;
+  els.tool.value = 'paint';
+  scheduleResourceListRender();
+});
+window.addEventListener('keydown', ev => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
+    ev.preventDefault();
+    undoLastEdit();
+    return;
+  }
+  if (isEditableTarget(ev.target)) return;
+  if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+  if (ev.key === 'ArrowLeft') { ev.preventDefault(); moveSelected(-1, 0); return; }
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); moveSelected(1, 0); return; }
+  if (ev.key === 'ArrowUp') { ev.preventDefault(); moveSelected(0, -1); return; }
+  if (ev.key === 'ArrowDown') { ev.preventDefault(); moveSelected(0, 1); }
+});
+window.addEventListener('resize', () => { resizeCanvas(); scheduleResourceListRender(); });
+async function loadImage(src) { const image = new Image(); image.src = src; await image.decode(); return image; }
+async function loadBaseImage(meta) {
+  if (!meta?.image) return { image: null, note: '', mode: 'none' };
+  if (!shouldLoadBaseImage(meta)) {
+    const size = sourceOutputSize(meta);
+    const detail = size ? `${size[0]}x${size[1]}` : '未知尺寸';
+    return { image: null, note: `底图 ${detail} 过大，已改用资源重建`, mode: 'rebuild' };
+  }
+  try {
+    return { image: await loadImage(meta.image), note: '', mode: 'image' };
+  } catch (err) {
+    const reason = err?.message || String(err);
+    return { image: null, note: `底图加载失败，已改用资源重建（${reason}）`, mode: 'rebuild' };
+  }
+}
+async function boot() {
+  state.meta = normalizeMeta(await fetch('stage.json').then(resp => resp.json()));
+  state.originalRecords = state.meta.records.map(record => record.slice());
+  const resourcePromise = fetch(state.meta.resources).then(resp => resp.json());
+  const imagePromise = loadBaseImage(state.meta);
+  const minimapPromise = state.meta.minimap?.image ? loadImage(state.meta.minimap.image).catch(() => null) : Promise.resolve(null);
+  const imageResult = await imagePromise;
+  state.image = imageResult.image;
+  state.baseImageMode = imageResult.mode;
+  state.baseImageNote = imageResult.note;
+  state.minimap = await minimapPromise;
+  state.resources = await resourcePromise;
+  const drawPromises = state.meta.editableLayers.map(async layer => {
+    const src = state.resources.layers[layer]?.drawImage;
+    if (src) state.drawImages[layer] = await loadImage(src);
+  });
+  await Promise.all(drawPromises);
+  buildResourceIndex();
+  resetEditState(state.meta);
+  await loadStagePicker();
+}
+window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, setActiveSite, activeSite };
+boot().catch(err => { els.status.textContent = String(err); });
+</script>
 </body>
 </html>
