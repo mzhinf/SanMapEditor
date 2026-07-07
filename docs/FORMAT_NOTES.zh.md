@@ -130,83 +130,105 @@ screen_y = row * 10
 
 ## 5. `.stg`：关卡语义表
 
-### 5.1 文件外形
+### 5.1 当前稳定文件外形
 
-当前脚本按以下方式处理 `.stg`：
+`.stg` 当前以 EXE 对象流模型为准，不再使用早期“8 字节头 + 76 字节记录”的格式作为主结论。
 
 ```text
-8 字节文件头
-+ N 条 76 字节记录
-+ 尾部余数字节
+u32 present_or_version
+Block root_part1 = u32 size + payload[0x48 或 0x4C]
+Block root_part2 = u32 size + payload[0x34]
+u32 force_count
+Force * force_count
+  Block force_part1 = u32 size + payload[0x60]
+  Block force_part2 = u32 size + payload[0x7C 或 0x84]
+  u32 site_list_pre_count_or_flag
+  Site * force_part2.site_count
+    Block site_part1 = u32 size + payload[0x58 或 0x5C]
+    Block site_part2 = u32 size + payload[0x2B0]
+    u32 primary_entity_count
+    Entity * primary_entity_count
+      Block entity_part1 = u32 size + payload[0x30 或 0x34]
+      Block entity_part2 = u32 size + payload[0xE0]
+    optional Entity blocks controlled by site_part2 +0x27C..+0x28C flags
+after_forces_tail
 ```
 
-以 `stage01.stg` 为例：
+每个 `Block` 的 `size` 都只表示 payload 长度，不包含 size 字段自身。当前 `src/san_tools/ksy/stg.ksy` 已按这个模型维护。
 
-- `record_count = 2502`
-- `stride = 76`
-- `tail_bytes = 48`
+### 5.2 样本覆盖与验证
 
-### 5.2 当前稳定读取方式
+当前已用同一套块流规则验证 42 个 `.stg` 样本：
 
-`.stg` 不能只导出“有文本的记录”。大量 `binary_record`、`zero_record` 也是层级结构的一部分，必须保留原始顺序。
+- 原版 `三国霸业/stage00.stg`、`stage01.stg` 到 `stage45.stg` 中存在的全部样本。
+- 非原版 `三国霸业/SGBY_MAP/new_san/stage01.stg` 到 `stage04.stg`。
+- `三国霸业/new-stage01.stg`。
 
-当前最稳定的解释方式是：
+验证结论：
 
-- 先按原始顺序读取全部 76 字节记录。
-- 再按势力块、城池块、武将/士兵附属块恢复层级。
-- `family_guess`、`text_layout`、`city_92_family` 这类名字都是分析脚本的标签，不是文件内原生字段名。
+- 42 个样本都能按块流结构走完整个文件边界。
+- 42 个样本都能通过 `src/san_tools/codecs/stg_stream_codec_refactored.py` 做 byte-for-byte roundtrip。
+- `new_san` 的 4 个大剧本使用同一结构，只是据点数量、实体数量和尾区长度不同。
 
-其中：
+### 5.3 已确认字段映射
 
-- `city_92_family` 只是“命中 92 锚点的城市记录家族”这个分析名。
-- `faction_or_ruler`、`text_mixed_record` 等同样是导出期分类名，不能直接当作二进制字段名使用。
+`root_part1`：
 
-### 5.3 `stage01.stg` 已确认的城池状态定位
+- `+0x00..+0x0F` 是 Big5 定长剧本名。
+- `+0x1C` 是剧本起始年份。
+- `+0x20` 是剧本结束年份/关卡结束年。
+- `+0x30` 是剧本 ID，通常与 `stageNN` 编号一致。
+- `+0x34` 是剧本 ID 镜像或子编号，剧情剧本常与 `+0x30` 相同。
 
-`tools/export_stg_city_troop_analysis.py` 会把城池块起始后的若干条记录展开成连续 `u16` 流，再定位 `city_id` 附近的字段。
+`root_part2`：
 
-当前已能稳定导出的字段包括：
+- `+0x14` 是势力数量镜像候选，当前样本通常等于顶层 `force_count`。
 
-- `city_id`
-- `city_size`
-- `population`
-- `gold`
-- `grain`
-- `dev`
-- `commerce`
-- `security`
-- `dev_max`
-- `commerce_max`
-- `security_max`
-- `map_x`
-- `map_y`
-- `prefect_general_id_candidate`
+`force_part1` / `force_part2`：
 
-这些字段已经进入 `.stg` Excel 工作簿中的 `city_state` sheet，并具备回写能力。
+- `force_part1 +0x00..+0x13` 是 Big5 定长势力名。
+- `force_part1 +0x14` 是 1-based 势力序号候选。
+- `force_part1 +0x18` 是君主/代表武将人物编号候选。
+- `force_part2 +0x00` 是该势力拥有的据点数量，EXE 按此值循环读取 `Site`。
+- `force_part2 +0x04` 是 1-based 势力序号镜像候选。
 
-### 5.4 `.stg` Excel 工作簿契约
+`site_part1`：
 
-`tools/export_stg_workbook.py` 导出的工作簿包含：
+- `+0x00..+0x13` 是 Big5 定长据点名。
+- `+0x14` 起与 `castle.txt` 数值列对齐：都市索引、房子属性、城规模、人口、金、粮、待命士兵、开发/商业/治安、上限、坐标、太守、武将。
+- 0x5C 版本比 0x58 版本多一个尾部保留 `u32`，回写时应保留原值。
 
-- `说明`
-- `meta`
-- `raw_records`
-- `hierarchy_records`
-- `force_city_summary`
-- `city_state`
-- `troop_candidates`
+`site_part2`：
 
-回写规则：
+- `+0x27C`、`+0x280`、`+0x284`、`+0x288`、`+0x28C` 是可选 Entity 控制 flag，非 0 时在主实体列表后追加一个 `Entity`。
+- `+0x2AC` 是额外 Entity 数量候选；当前 42 个样本中为 0。
+- 其余区域按运行态/AI 保留 `u32` 处理，不清零、不重排。
 
-1. 优先以 `raw_records.raw_hex` 重建每条 76 字节记录。
-2. 只覆盖 `city_state` 中已经确认映射的 `candidate_*` 字段。
-3. 未解字段一律保持原始字节。
-4. `meta.header_hex`、`meta.tail_hex` 必须原样写回。
+`entity_part1` / `entity_part2`：
 
-现有验证：
+- `entity_part1 +0x00` 是运行时所属势力序号候选。
+- `entity_part2 +0x00..+0x13` 是 Big5 定长实体名。
+- `entity_part2 +0x14` 起与 `general.txt` 数值列对齐：人物编号、头像编号、所属君主、所在地、统御、兵种、等级、带兵数、武力、智力、忠诚、经验、技能位、AI 方针、最大带兵/武力/智力等。
+- `entity_part2 +0xD8/+0xDC` 是 `general.txt` 未覆盖的尾部保留字段。
 
-- 未修改工作簿时，默认模式和 `--no-city-state` 模式都能回写出与原始 `stage01.stg` 字节完全一致的文件。
-- 修改 `candidate_population` 后，只会改动预期的单个 `u16` 字段。
+### 5.4 尾区规则
+
+主对象流结束后的 `after_forces_tail` 不是固定长度：
+
+- 若尾区大于 `0xA0`，当前按“前置尾区 + 最后 `0xA0` 字节候选尾块”保留。
+- 若尾区小于或等于 `0xA0`，则整个尾区都作为小尾块保留。
+- 尾区全部按 4 字节对齐的 `u32` words 保存；大剧本尾区中可检测到 entity-like 片段，但完整列表逻辑尚未完全收口，因此不应自动重排或重算。
+
+### 5.5 旧 76 字节工作簿链路的适用范围
+
+`tools/export_stg_workbook.py` / `tools/import_stg_workbook.py` 的 76 字节记录工作簿仍可作为 `stage01.stg` 的局部编辑兼容链路使用，尤其是 `city_state` 中已确认的候选字段回写。
+
+但它现在不是 `.stg` 的主格式定义：
+
+1. 新增结构定义、文档和 Kaitai 描述应以块流模型为准。
+2. 旧工作簿的 `raw_records.raw_hex` 只能视为兼容导出视图。
+3. 未解字段仍必须保持原始字节，不能按 76 字节视图重算对象边界。
+4. 若后续扩展编辑器写回 `.stg`，优先接入 `src/san_tools/codecs/stg_stream_codec_refactored.py` 的块流 roundtrip 能力。
 
 ## 6. `.evt/.spr/.dor/.s/.x`：sidecar 现状
 

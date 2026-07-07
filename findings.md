@@ -110,3 +110,11 @@
 - `stage.ini` + `uft8-game-txt/*.txt` -> `stage_ini_linked_tables.xlsx` / `stage_ini_conversion_tables.xlsx`，正式映射逻辑以 `src/san_tools/codecs/stage_ini_txt_linkage.py` 为准，回写入口为 `src/san_tools/pipelines/build_stage_ini_from_txt_workbook.py`。
 
 这意味着后续文档维护不应再只写“哪个文件大概对应什么”，而应明确写成“游戏文件 -> 中间结构 -> 转换脚本 -> 回写脚本”的可追踪链路；同时新增脚本时应优先记录 `src/san_tools/` 下的正式入口，而不是仅记录 `tools/` 包装层。
+
+## 2026-07-08 STG 块流结构结论
+
+- `.stg` 主格式已从早期“8 字节头 + 76 字节记录”修正为 Emperor.exe 风格对象流：`u32 present_or_version`，随后是多级 `u32 size + payload` Block。
+- 已验证 42 个样本：原版 `三国霸业/stage00.stg`、`stage01.stg` 到 `stage45.stg` 中存在的全部样本，`SGBY_MAP/new_san/stage01.stg` 到 `stage04.stg`，以及 `new-stage01.stg`。
+- 已见块大小变体：`root_part1=0x48/0x4C`、`force_part2=0x7C/0x84`、`site_part1=0x58/0x5C`、`entity_part1=0x30/0x34`；其余核心块为 `root_part2=0x34`、`force_part1=0x60`、`site_part2=0x2B0`、`entity_part2=0xE0`。
+- `site_part2 +0x27C..+0x28C` 是可选 Entity 控制 flag；`+0x2AC` 当前 42 个样本均为 0，仍作为额外 Entity 数量候选保留。
+- `after_forces_tail` 不是固定 0xA0：尾区小于等于 0xA0 时整体保留，尾区大于 0xA0 时按“前置尾区 + 最后 0xA0 候选尾块”保留；全部按 u32 words 保存。

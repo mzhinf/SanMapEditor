@@ -29,3 +29,10 @@
 - 盘点 `src/san_tools/` 下的正式入口，确认编辑器主 bundle、`.stg` 工作簿、`.dor` 归属表、`.s/.x` sidecar、`stage.ini` 文本映射都已有稳定脚本链路。
 - 在 `docs/EDITOR_UI_V2_DESIGN.zh.md` 新增“数据结构与游戏文件一一对应表”与“仓库级转换脚本总表”，把数据结构、游戏文件、转换脚本、回写脚本放进同一套表格。
 - 同步更新 `task_plan.md` 与 `findings.md`，把这次补齐的映射关系纳入长期维护基线，后续新增结构时可直接按表扩展。
+
+## 2026-07-08
+
+- 将 `src/san_tools/ksy/stg.ksy` 更新为 EXE 块流模型，覆盖 root、force、site、entity 和尾区结构，未知/保留区域按 u32 words 保留。
+- 同步更新 `docs/FORMAT_NOTES.zh.md` 的 `.stg` 章节，移除旧的 76 字节记录主格式说法，并说明旧工作簿链路仅作为兼容视图。
+- 验证：42 个 `.stg` 样本使用 `stg_stream_codec_refactored.py` roundtrip 全部 OK；KSY 规则模拟解析 42 个样本全部走完整个文件边界。
+- 验证：`python -m unittest tests.test_assets tests.test_stg_workbook_roundtrip tests.test_stg_troop_analysis` 通过 11 个测试。未找到本机 Kaitai 编译器，因此未运行 `ksc`。
