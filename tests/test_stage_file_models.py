@@ -3,8 +3,7 @@ from __future__ import annotations
 import struct
 import unittest
 
-from san_tools.map.editor_model import StageMapModel
-from san_tools.map.stage_file_models import DorModel, StageEditFilesModel, StgModel
+from san_tools.map.editor_model import DorModel, StageEditFilesModel, StageMapModel, StgModel
 
 
 def fixed_big5(text: str, size: int) -> bytes:
