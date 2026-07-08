@@ -70,6 +70,7 @@
 
 导出的编辑页现在支持：
 
+- `src/san_tools/map/editor_model.py` 提供基于 `src/san_tools/ksy/m.ksy` 字段口径的地图编辑数据模型，可统一保存 `.m` cell、编辑器 stage JSON 与 patch JSON。
 - `.m` 记录字段按 `word06 / byte08..byte15` 统一口径展示，页面不再显示旧的 `flags` 描述。
 - 页面改为左右双栏：左侧 `Cell -> Record -> 修改`，右侧 `Minimap -> Stage -> Resources`。
 - `Record` 区仅展示并编辑所有非 `reserved` 数值字段，保留字段不再出现在列表中。
@@ -281,6 +282,12 @@
 
 ```powershell
 & $py -m unittest tests.test_apply_editor_patch_minimap
+```
+
+运行地图编辑数据模型测试：
+
+```powershell
+& $py -m unittest tests.test_map_editor_model
 ```
 
 ## 文档维护要求
