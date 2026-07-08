@@ -38,6 +38,7 @@ COMMANDS: tuple[CommandEntry, ...] = (
     CommandEntry('export-stg-hierarchy', 'san_tools.pipelines.export_stg_hierarchy', '导出 .stg 势力/城市层级'),
     CommandEntry('export-stg-city-troop', 'san_tools.pipelines.export_stg_city_troop_analysis', '导出 .stg 城池状态与士兵候选表'),
     CommandEntry('export-stg-workbook', 'san_tools.pipelines.export_stg_workbook', '导出 .stg Excel 工作簿'),
+    CommandEntry('roundtrip-stg-json', 'san_tools.pipelines.roundtrip_stg_json', '执行 .stg -> json -> .stg，并可移除保留字段'),
     CommandEntry('import-stg-workbook', 'san_tools.pipelines.import_stg_workbook', '根据 .stg Excel 工作簿回写二进制'),
     CommandEntry('export-stg-phase7', 'san_tools.pipelines.export_stg_phase7_links', '导出旧版 .stg 字段候选对照表'),
     CommandEntry('convert-game-texts', 'san_tools.text.convert_game_texts', '批量把游戏文本转换成 UTF-8 对照目录'),
@@ -48,4 +49,5 @@ def command_map() -> dict[str, CommandEntry]:
     """按命令名返回注册表，便于统一入口查找。"""
 
     return {entry.name: entry for entry in COMMANDS}
+
 
