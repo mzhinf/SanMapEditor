@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from san_tools.codecs.stg_stream_codec_refactored import (
+    FIELD_SPECS,
     build_stage_file_from_json,
     parse_stage_file,
     resolve_tables,
@@ -71,6 +72,74 @@ def strip_reserved_fields_inplace(doc: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
+def compute_defined_byte_mask(kind: str, payload_size: int) -> list[bool]:
+    """根据当前字段规格计算 payload 中哪些字节已被定义覆盖。"""
+
+    mask = [False] * payload_size
+    for spec in FIELD_SPECS.get(kind, []):
+        width = int(spec.size)
+        start = int(spec.offset)
+        end = min(payload_size, start + width)
+        for index in range(start, end):
+            mask[index] = True
+    return mask
+
+
+def zero_undefined_bytes_in_block(block: Mapping[str, Any]) -> int:
+    """把一个 block 的未定义 payload 字节清 0，并返回清零的字节数。"""
+
+    kind = str(block.get("kind", ""))
+    raw_hex = block.get("raw_hex")
+    if not kind or not isinstance(raw_hex, str):
+        return 0
+    payload = bytearray.fromhex(raw_hex)
+    mask = compute_defined_byte_mask(kind, len(payload))
+    zeroed = 0
+    for index, covered in enumerate(mask):
+        if not covered and payload[index] != 0:
+            payload[index] = 0
+            zeroed += 1
+    block["raw_hex"] = payload.hex()
+    return zeroed
+
+
+def zero_undefined_data_inplace(doc: dict[str, Any]) -> int:
+    """把当前格式未覆盖到的 `.stg` 二进制区域全部清 0。"""
+
+    zeroed = 0
+
+    def visit_block(block: Any) -> None:
+        nonlocal zeroed
+        if isinstance(block, Mapping):
+            zeroed += zero_undefined_bytes_in_block(block)
+
+    visit_block(doc.get("root_part1"))
+    visit_block(doc.get("root_part2"))
+    for force in doc.get("forces", []):
+        if not isinstance(force, dict):
+            continue
+        visit_block(force.get("part1"))
+        visit_block(force.get("part2"))
+        for site in force.get("sites", []):
+            if not isinstance(site, dict):
+                continue
+            visit_block(site.get("part1"))
+            visit_block(site.get("part2"))
+            for entity_list_name in ("entities", "optional_entities", "extra_entities"):
+                for entity in site.get(entity_list_name, []):
+                    if not isinstance(entity, dict):
+                        continue
+                    visit_block(entity.get("part1"))
+                    visit_block(entity.get("part2"))
+
+    tail = doc.get("after_forces_tail")
+    if isinstance(tail, dict) and isinstance(tail.get("raw_hex"), str):
+        tail_bytes = bytearray.fromhex(tail["raw_hex"])
+        zeroed += sum(1 for value in tail_bytes if value != 0)
+        tail["raw_hex"] = bytes(len(tail_bytes)).hex()
+    return zeroed
+
+
 def default_output_paths(source_path: Path, out_dir: Path) -> tuple[Path, Path]:
     """根据源文件名生成默认的 JSON 与回写 STG 路径。"""
 
@@ -89,10 +158,11 @@ def convert_stg_json_roundtrip(
     strict: bool = True,
     detect_tail_entities: bool = True,
     strip_reserved_fields: bool = False,
+    zero_undefined_data: bool = False,
     recompute_counts: bool = True,
     patch_fields: bool = True,
 ) -> dict[str, Any]:
-    """执行 `stg -> json -> stg`，可选在 JSON 中移除保留字段。"""
+    """执行 `stg -> json -> stg`，可选移除保留字段或清 0 未定义字节。"""
 
     source_path = Path(stg_path)
     table_map = resolve_tables(tables=tables, tables_dir=tables_dir, xlsx_path=xlsx_path)
@@ -104,8 +174,11 @@ def convert_stg_json_roundtrip(
         detect_tail_entities=detect_tail_entities,
     )
     json_doc = copy.deepcopy(doc)
+    zeroed_byte_count = 0
     if strip_reserved_fields:
         strip_reserved_fields_inplace(json_doc)
+    if zero_undefined_data:
+        zeroed_byte_count = zero_undefined_data_inplace(json_doc)
 
     json_path = Path(json_out)
     write_json(json_doc, json_path)
@@ -121,6 +194,8 @@ def convert_stg_json_roundtrip(
         "json": str(json_path),
         "rebuilt": str(stg_out),
         "strip_reserved_fields": strip_reserved_fields,
+        "zero_undefined_data": zero_undefined_data,
+        "zeroed_byte_count": zeroed_byte_count,
         "identical": build_result.get("identical_to_compare"),
         "size": build_result.get("size"),
         "sha256": build_result.get("sha256"),
@@ -139,7 +214,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--include-words", action="store_true", help="在 JSON 中附带每个 block 的 u32/i32 words。")
     parser.add_argument("--no-strict", action="store_true", help="关闭严格结构校验。")
     parser.add_argument("--no-tail-detect", action="store_true", help="关闭 after_forces_tail 中 entity-like 候选扫描。")
-    parser.add_argument("--strip-reserved-fields", action="store_true", help="导出 JSON 前移除所有保留字段。")
+    parser.add_argument("--strip-reserved-fields", action="store_true", help="仅移除 JSON 中的保留字段名与字段值。")
+    parser.add_argument("--zero-undefined-data", action="store_true", help="把当前格式未定义覆盖到的二进制字节清 0，并写回 `.stg`。")
     parser.add_argument("--no-recompute-counts", action="store_true", help="回写时不重算 force/site/entity 计数。")
     parser.add_argument("--no-patch-fields", action="store_true", help="回写时不把 JSON fields patch 回 raw_hex。")
     return parser
@@ -161,12 +237,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         strict=not args.no_strict,
         detect_tail_entities=not args.no_tail_detect,
         strip_reserved_fields=args.strip_reserved_fields,
+        zero_undefined_data=args.zero_undefined_data,
         recompute_counts=not args.no_recompute_counts,
         patch_fields=not args.no_patch_fields,
     )
     print(f"JSON: {result['json']}")
     print(f"STG : {result['rebuilt']}")
     print(f"identical: {result['identical']}")
+    if result["zero_undefined_data"]:
+        print(f"zeroed_undefined_bytes: {result['zeroed_byte_count']}")
     return 0 if result.get("identical") is not False else 2
 
 
