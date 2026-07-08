@@ -6,9 +6,9 @@ from pathlib import Path
 
 from san_tools.codecs.stg_stream_codec_refactored import build_stage_bytes, load_txt_tables, parse_stage_file
 from san_tools.pipelines.roundtrip_stg_json import (
-    compute_defined_byte_mask,
+    reserved_zero_ranges,
     strip_reserved_fields_inplace,
-    zero_undefined_data_inplace,
+    zero_reserved_zero_fields_inplace,
 )
 
 
@@ -43,22 +43,27 @@ class TestStgJsonRoundtrip(unittest.TestCase):
                 for field_name in block.get("fields", {}).keys():
                     self.assertNotIn("reserved", field_name.lower())
 
-    def test_zero_undefined_data_zeroes_uncovered_bytes(self) -> None:
+    def test_zero_reserved_zero_fields_only_touches_reserved_ranges(self) -> None:
         json_doc = copy.deepcopy(self.doc)
-        zeroed = zero_undefined_data_inplace(json_doc)
-        self.assertGreater(zeroed, 0)
 
         root_block = json_doc["root_part1"]
-        payload = bytes.fromhex(root_block["raw_hex"])
-        mask = compute_defined_byte_mask(str(root_block.get("kind", "")), len(payload))
-        self.assertTrue(any(not covered for covered in mask))
-        for index, covered in enumerate(mask):
-            if not covered:
-                self.assertEqual(payload[index], 0)
+        root_payload = bytearray.fromhex(root_block["raw_hex"])
+        root_payload[0x10:0x14] = bytes.fromhex("78563412")
+        root_payload[0x14:0x18] = bytes.fromhex("21436587")
+        root_block["raw_hex"] = root_payload.hex()
 
-        tail_hex = json_doc.get("after_forces_tail", {}).get("raw_hex", "")
-        self.assertTrue(tail_hex)
-        self.assertEqual(set(bytes.fromhex(tail_hex)), {0})
+        tail = json_doc.get("after_forces_tail", {})
+        original_tail_hex = str(tail.get("raw_hex", ""))
+
+        zeroed = zero_reserved_zero_fields_inplace(json_doc)
+        self.assertGreaterEqual(zeroed, 4)
+
+        new_root_payload = bytes.fromhex(json_doc["root_part1"]["raw_hex"])
+        self.assertEqual(new_root_payload[0x10:0x14], bytes.fromhex("78563412"))
+        self.assertEqual(new_root_payload[0x14:0x18], b"\x00\x00\x00\x00")
+
+        self.assertEqual(str(json_doc.get("after_forces_tail", {}).get("raw_hex", "")), original_tail_hex)
+        self.assertIn((0x14, 0x1C), reserved_zero_ranges("root_part1", len(new_root_payload)))
 
         rebuilt = build_stage_bytes(json_doc, recompute_counts=True, patch_fields=True)
         self.assertEqual(len(rebuilt), len(self.original_bytes))
