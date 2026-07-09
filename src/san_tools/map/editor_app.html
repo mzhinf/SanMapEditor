@@ -7,140 +7,140 @@
 <style>
 :root {
   color-scheme: light;
-  --bg: #f4f2ec;
-  --ink: #202124;
-  --muted: #666a70;
-  --line: #c9c3b8;
+  --bg: #ece8df;
   --panel: #fbfaf7;
+  --panel-2: #f5f1e8;
+  --ink: #202124;
+  --muted: #687079;
+  --line: #c9c3b8;
+  --soft: #e6dfd3;
   --accent: #0f766e;
-  --mark: #f59e0b;
-  --soft: #ece7dc;
+  --accent-weak: #d9f1ed;
+  --mark: #b7791f;
+  --danger: #b91c1c;
+  --canvas: #1d1b18;
 }
 * { box-sizing: border-box; }
-body { margin: 0; height: 100vh; overflow: hidden; font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg); }
-#app { display: grid; grid-template-columns: 320px minmax(0, 1fr) 360px; grid-template-rows: 42px minmax(0, 1fr); height: 100vh; }
-.toolbar { grid-column: 1 / 4; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
-.toolbar .title { font-weight: 650; margin-right: 10px; white-space: nowrap; }
-.toolbar label, .field label { font-size: 12px; color: var(--muted); }
-select, input, button { height: 28px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); font: inherit; }
-select, input { padding: 0 8px; }
-button { padding: 0 10px; cursor: pointer; }
-button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-button.secondary { background: #fff; color: var(--accent); border-color: var(--accent); }
-button:disabled { cursor: not-allowed; opacity: 0.55; }
-.status { margin-left: auto; color: var(--muted); font-size: 12px; }
-#viewport { position: relative; min-width: 0; min-height: 0; background: #1d1b18; }
-canvas { width: 100%; height: 100%; display: block; }
-.side { min-height: 0; overflow: auto; background: var(--panel); padding: 12px; }
-.side-left { border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
-.side-left .section { flex: 0 0 auto; }
-.side-right { border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
-.side-right .section { flex: 0 0 auto; }
-.side-right .resource-section { flex: 1 1 auto; min-height: 0; overflow: hidden; }
-.section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
-.section:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
-.section-title { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: 0; margin-bottom: 8px; }
-.kv { display: grid; grid-template-columns: 100px 1fr; gap: 6px 10px; font-size: 13px; }
-.kv .k { color: var(--muted); }
-.field { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
-.field:last-child { margin-bottom: 0; }
-.patch-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.patch-list { font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; color: #343434; min-height: 32px; flex: 1 1 auto; overflow: auto; }
-.resource-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+body { margin: 0; height: 100vh; overflow: hidden; font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg); }
+button, select, input { height: 28px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); font: inherit; }
+button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px; cursor: pointer; white-space: nowrap; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.secondary { border-color: var(--accent); color: var(--accent); }
+button.ghost { background: transparent; }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
+select, input { min-width: 0; padding: 0 8px; }
+canvas { display: block; width: 100%; height: 100%; }
+#app { height: 100vh; display: grid; grid-template-columns: 316px minmax(0, 1fr) 380px; grid-template-rows: 48px minmax(0, 1fr) 138px; grid-template-areas: "top top top" "left canvas right" "bottom bottom bottom"; }
+.topbar { grid-area: top; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.title { font-weight: 700; min-width: 130px; }
+.toolbar-group { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.toolbar-group label { font-size: 12px; color: var(--muted); }
+.status { margin-left: auto; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resource-panel, .inspector-panel, .bottom-dock { min-width: 0; min-height: 0; background: var(--panel); }
+.resource-panel { grid-area: left; border-right: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; padding: 12px; overflow: hidden; }
+.canvas-zone { grid-area: canvas; position: relative; min-width: 0; min-height: 0; background: var(--canvas); overflow: hidden; }
+.inspector-panel { grid-area: right; border-left: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+.bottom-dock { grid-area: bottom; border-top: 1px solid var(--line); display: grid; grid-template-columns: 320px minmax(0, 1fr) 360px; gap: 12px; padding: 10px 12px; overflow: hidden; }
+.section { min-width: 0; }
+.section + .section { border-top: 1px solid var(--soft); padding-top: 12px; }
+.section-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.layer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.field { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 8px; }
+.field label { color: var(--muted); font-size: 12px; }
+.resource-section { min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
 .resource-controls { display: grid; grid-template-columns: minmax(0, 1fr) 92px 56px; gap: 6px; margin-bottom: 8px; }
-.resource-controls > * { min-width: 0; width: 100%; }
-.resource-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-.resource-list { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 2px; }
+.resource-meta, .hint, .site-note { color: var(--muted); font-size: 12px; line-height: 1.55; }
+.resource-list { position: relative; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .resource-spacer { position: relative; min-height: 100%; }
-.resource-item { position: absolute; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; display: grid; grid-template-rows: minmax(0, 1fr) 16px; align-items: center; justify-items: center; overflow: hidden; }
-.resource-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15,118,110,.18); }
-.resource-thumb { background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; align-self: start; }
-.resource-thumb.point-swatch { align-self: center; border-radius: 999px; background-image: none; background-color: transparent; border: 1px solid rgba(17, 24, 39, 0.16); }
-.resource-thumb.point-swatch.zero { border-radius: 6px; background: repeating-linear-gradient(135deg, #ffffff 0 5px, #e5e7eb 5px 10px); }
-.site-tools { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 6px; margin-bottom: 8px; }
-.site-tools > * { min-width: 0; width: 100%; }
-.site-note { color: var(--muted); font-size: 12px; margin-top: 6px; }
-.resource-label { width: 100%; font-size: 11px; color: var(--muted); line-height: 14px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.minimap-wrap { position: relative; border: 1px solid var(--line); background: #111; }
-#minimap { height: 150px; }
+.resource-item { position: absolute; display: grid; grid-template-rows: minmax(0, 1fr) 16px; align-items: center; justify-items: center; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 3px; }
+.resource-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15, 118, 110, .18); }
+.resource-thumb { align-self: start; background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; }
+.resource-thumb.point-swatch { align-self: center; border: 1px solid rgba(17, 24, 39, .16); border-radius: 999px; background-image: none; }
+.resource-thumb.point-swatch.zero { border-radius: 6px; background: repeating-linear-gradient(135deg, #fff 0 5px, #e5e7eb 5px 10px); }
+.resource-label { width: 100%; overflow: hidden; color: var(--muted); font-size: 11px; line-height: 14px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.composite-actions, .selection-actions, .site-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.composite-list { display: grid; gap: 6px; max-height: 112px; overflow: auto; margin-top: 8px; }
+.composite-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
+.canvas-hud { position: absolute; z-index: 2; left: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 8px; max-width: calc(100% - 248px); pointer-events: none; }
+.hud-pill { padding: 5px 8px; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; color: #fff; background: rgba(20, 20, 18, .72); font-size: 12px; }
+.minimap-float { position: absolute; z-index: 3; top: 12px; right: 12px; width: 210px; border: 1px solid rgba(255,255,255,.28); border-radius: 8px; background: rgba(20,20,18,.78); padding: 8px; }
+.minimap-title { margin-bottom: 6px; color: #fff; font-size: 12px; font-weight: 700; }
+#minimap { height: 128px; background: #111; }
+.inspector-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; padding: 8px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.inspector-tab { height: 30px; padding: 0 6px; font-size: 12px; }
+.inspector-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.inspector-body { min-height: 0; overflow: auto; padding: 12px; }
+.inspector-page { display: none; }
+.inspector-page.active { display: grid; gap: 12px; }
+.kv { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 6px 10px; font-size: 13px; }
+.kv .k { color: var(--muted); }
+.manager-list { display: grid; gap: 6px; }
+.manager-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
 .record-list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--soft); background: #fff; }
 .record-row:first-child { border-top: 0; }
 .record-row.dirty { background: #f3fbf9; box-shadow: inset 3px 0 0 rgba(15,118,110,.7); }
 .record-copy { min-width: 0; }
 .record-name { font-size: 13px; font-weight: 600; }
-.record-name span { color: var(--muted); font-weight: 400; }
-.record-note { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.record-note { margin-top: 1px; color: var(--muted); font-size: 12px; }
 .record-actions { display: flex; align-items: center; gap: 6px; }
 .record-actions input { width: 104px; }
-.record-readonly { min-width: 104px; text-align: right; font-family: Consolas, monospace; color: var(--muted); }
-.placeholder { color: var(--muted); font-size: 13px; padding: 8px 2px; }
-@media (max-width: 980px) {
-  #app { grid-template-columns: 1fr; grid-template-rows: auto 320px minmax(0, 1fr) 360px; }
-  .toolbar { grid-column: 1; flex-wrap: wrap; height: auto; }
-  .side { border: 0; border-top: 1px solid var(--line); }
-  .side-left { grid-row: 2; }
-  #viewport { grid-row: 3; }
-  .side-right { grid-row: 4; }
-  .resource-controls { grid-template-columns: minmax(0, 1fr) 88px 56px; }
+.validation-list { display: grid; gap: 6px; }
+.validation-item { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
+.validation-item.error { border-color: #ef9a9a; background: #fff5f5; color: var(--danger); }
+.validation-item.warn { border-color: #f2c46d; background: #fff9ea; color: #7c4a03; }
+.patch-section, .history-section { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.patch-list { min-height: 0; overflow: auto; color: #343434; font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; }
+.placeholder { padding: 8px 2px; color: var(--muted); font-size: 13px; }
+@media (max-width: 1100px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 240px minmax(0, 1fr) 360px 150px; grid-template-areas: "top" "left" "canvas" "right" "bottom"; }
+  .topbar { flex-wrap: wrap; height: auto; }
+  .bottom-dock { grid-template-columns: 1fr; overflow: auto; }
+  .minimap-float { width: 176px; }
 }
 </style>
 </head>
 <body>
-<div id="app">
-  <div class="toolbar">
-    <div class="title" id="stageTitle">关卡</div>
-    <label>关卡</label>
-    <select id="stagePicker"><option value="">当前</option></select>
-    <label>工具</label>
-    <select id="tool" title="查看用于选中格子，绘制会写入当前资源。右键拖动平移地图。"><option value="inspect">查看</option><option value="paint">绘制</option></select>
-    <input id="loadMFile" type="file" accept=".m" hidden>
-    <button id="openMFile">打开 .m</button>
-    <button id="resetView">重置视图</button>
-    <button id="undoEdit">撤销</button>
-    <button id="resetCell">重置当前图层</button>
-    <button id="resetAll">重置全部</button>
-    <button id="exportFiles" class="primary">导出 .m/.s/.x</button>
-    <button id="exportPatch" class="secondary">导出 patch</button>
+<div id="app" class="editor-v2">
+  <header class="topbar">
+    <div class="title" id="stageTitle">地图编辑器 2.0</div>
+    <div class="toolbar-group">
+      <label>关卡</label>
+      <select id="stagePicker"><option value="">当前</option></select>
+    </div>
+    <div class="toolbar-group">
+      <input id="loadMFile" type="file" accept=".m" hidden>
+      <button id="openMFile" title="读取单个 .m；完整工程建议使用导出的关卡页面。">导入</button>
+      <button id="exportFiles" class="primary">导出</button>
+      <button id="exportPatch" class="secondary">Patch</button>
+    </div>
+    <div class="toolbar-group">
+      <label>工具</label>
+      <select id="tool" title="查看用于选中格子，绘制会写入当前资源。右键拖动平移地图。">
+        <option value="inspect">选择</option>
+        <option value="paint">笔刷</option>
+      </select>
+      <button id="resetView">定位</button>
+      <button id="undoEdit">撤销</button>
+      <button id="resetCell">恢复图层</button>
+      <button id="resetAll">清空修改</button>
+    </div>
     <span class="status" id="status">正在加载</span>
-  </div>
-  <aside class="side side-left">
-    <div class="section">
-      <div class="section-title">Cell</div>
-      <div class="kv" id="cellInfo"></div>
-    </div>
-    <div class="section">
-      <div class="section-title">Record</div>
-      <div class="record-list" id="recordList"></div>
-    </div>
-    <div class="section patch-section">
-      <div class="section-title">修改</div>
-      <div class="field"><label>修改数量</label><input id="patchCount" value="0" readonly></div>
-      <div class="patch-list" id="patchList"></div>
-    </div>
-  </aside>
-  <div id="viewport"><canvas id="canvas"></canvas></div>
-  <aside class="side side-right">
-    <div class="section">
-      <div class="section-title">Minimap</div>
-      <div class="minimap-wrap"><canvas id="minimap"></canvas></div>
-    </div>
-    <div class="section">
-      <div class="section-title">Stage</div>
-      <div class="kv" id="stageInfo"></div>
-    </div>
-    <div class="section">
-      <div class="section-title">据点</div>
-      <div class="site-tools">
-        <select id="sitePicker"><option value="">未选据点</option></select>
-        <button id="clearSite" type="button">清除</button>
+  </header>
+
+  <aside class="resource-panel">
+    <section class="section">
+      <div class="section-title">图层控制</div>
+      <div class="field"><label>当前图层</label><select id="layer"></select></div>
+      <div class="layer-grid">
+        <button class="ghost" type="button" data-layer-shortcut="acwx">地表</button>
+        <button class="ghost" type="button" data-layer-shortcut="acwy">叠加</button>
+        <button class="ghost" type="button" data-layer-shortcut="acwz">物件</button>
+        <button class="ghost" type="button" data-layer-shortcut="byte09">阻挡</button>
       </div>
-      <div class="kv" id="siteInfo"></div>
-      <div class="site-note" id="siteNote"></div>
-    </div>
-    <div class="section resource-section">
-      <div class="section-title">Resources</div>
-      <div class="field"><label>图层</label><select id="layer"></select></div>
+    </section>
+    <section class="section resource-section">
+      <div class="section-title">资源库</div>
       <div class="resource-controls">
         <input id="resourceFilter" placeholder="按编号过滤">
         <select id="resourceSort"><option value="index">按编号</option><option value="used">按使用数</option></select>
@@ -148,8 +148,76 @@ canvas { width: 100%; height: 100%; display: block; }
       </div>
       <div class="resource-meta" id="resourceMeta"></div>
       <div class="resource-list" id="resourceList"><div class="resource-spacer" id="resourceSpacer"></div></div>
+    </section>
+    <section class="section">
+      <div class="section-title">合成物件 / 区域复制</div>
+      <div class="selection-actions">
+        <button id="setRegionAnchor" type="button">设起点</button>
+        <button id="copyRegion" type="button">复制区域</button>
+        <button id="pasteRegion" type="button">粘贴区域</button>
+        <button id="saveComposite" type="button">存为物件</button>
+      </div>
+      <div class="hint" id="selectionInfo">未设置区域。</div>
+      <div class="composite-list" id="compositeList"></div>
+    </section>
+  </aside>
+
+  <main class="canvas-zone" id="viewport">
+    <div class="canvas-hud">
+      <div class="hud-pill" id="hudTool">工具：选择</div>
+      <div class="hud-pill" id="hudLayer">图层：-</div>
+      <div class="hud-pill" id="hudSelection">格子：-</div>
+      <div class="hud-pill" id="hudSite">据点：-</div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div class="minimap-float">
+      <div class="minimap-title">小地图</div>
+      <canvas id="minimap"></canvas>
+    </div>
+  </main>
+
+  <aside class="inspector-panel">
+    <nav class="inspector-tabs" aria-label="属性面板">
+      <button class="inspector-tab active" data-tab="properties" type="button">属性</button>
+      <button class="inspector-tab" data-tab="forces" type="button">势力</button>
+      <button class="inspector-tab" data-tab="sites" type="button">据点</button>
+      <button class="inspector-tab" data-tab="entities" type="button">武将</button>
+      <button class="inspector-tab" data-tab="raw" type="button">Raw</button>
+      <button class="inspector-tab" data-tab="validation" type="button">校验</button>
+    </nav>
+    <div class="inspector-body">
+      <section class="inspector-page active" data-page="properties">
+        <div class="section"><div class="section-title">选中项</div><div class="kv" id="cellInfo"></div></div>
+        <div class="section"><div class="section-title">关卡</div><div class="kv" id="stageInfo"></div></div>
+      </section>
+      <section class="inspector-page" data-page="forces">
+        <div class="section"><div class="section-title">势力管理</div><div class="manager-list" id="forceList"></div></div>
+      </section>
+      <section class="inspector-page" data-page="sites">
+        <div class="section">
+          <div class="section-title">据点 / 城门</div>
+          <div class="site-tools"><select id="sitePicker"><option value="">未选据点</option></select><button id="clearSite" type="button">清除</button></div>
+          <div class="kv" id="siteInfo"></div>
+          <div class="site-note" id="siteNote"></div>
+        </div>
+      </section>
+      <section class="inspector-page" data-page="entities">
+        <div class="section"><div class="section-title">武将管理</div><div class="manager-list" id="entityList"></div></div>
+      </section>
+      <section class="inspector-page" data-page="raw">
+        <div class="section"><div class="section-title">字段级模型</div><div class="record-list" id="recordList"></div></div>
+      </section>
+      <section class="inspector-page" data-page="validation">
+        <div class="section"><div class="section-title">导出校验</div><div class="validation-list" id="validationList"></div></div>
+      </section>
     </div>
   </aside>
+
+  <footer class="bottom-dock">
+    <section class="section"><div class="section-title">当前工作</div><div class="hint">选择格子后可在 Raw 中精确改字段；选择区域后可复制全部层数据或保存为合成物件。</div></section>
+    <section class="history-section"><div class="section-title">修改记录</div><div class="patch-list" id="patchList"></div></section>
+    <section class="section"><div class="section-title">状态</div><div class="field"><label>修改数量</label><input id="patchCount" value="0" readonly></div><div class="hint">导出前会检查 .m 长度、字段范围、sidecar 参考和据点联动状态。</div></section>
+  </footer>
 </div>
 <script>
 const canvas = document.getElementById('canvas');
@@ -229,6 +297,7 @@ function cellKey(cell) { return `${cell.col},${cell.row}`; }
 function patchKey(cell, field) { return `${cellKey(cell)}:${canonicalFieldName(field)}`; }
 function cellToWorld(col, row) { const [ox, oy] = state.meta.origin; return { x: ox + col * 40 + (row & 1 ? 20 : 0), y: oy + row * 10 }; }
 function displayImage() { return state.renderCanvas || state.image; }
+function clampCell(cell) { return { col: Math.max(0, Math.min(state.meta.width - 1, cell.col)), row: Math.max(0, Math.min(state.meta.height - 1, cell.row)) }; }
 function canvasSizeForMeta(meta = state.meta) { return { width: meta.width * 40 + 20 + 128, height: meta.height * 10 + 20 + 128 }; }
 function worldToCell(x, y) {
   const [ox, oy] = state.meta.origin;
@@ -655,6 +724,184 @@ function drawMinimap() {
   miniCtx.strokeStyle = '#f59e0b'; miniCtx.lineWidth = 2; miniCtx.strokeRect(ox + view.x / image.width * w, oy + view.y / image.height * h, view.w / image.width * w, view.h / image.height * h);
 }
 function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = String(v); node.append(a, b); } }
+function switchInspectorTab(tabName) {
+  document.querySelectorAll('.inspector-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabName));
+  document.querySelectorAll('.inspector-page').forEach(page => page.classList.toggle('active', page.dataset.page === tabName));
+}
+function updateHud() {
+  const layer = currentLayerName();
+  const layerMeta = getFieldMeta(layer);
+  const site = activeSite();
+  els.hudTool.textContent = `工具：${els.tool.value === 'paint' ? '笔刷' : '选择'}`;
+  els.hudLayer.textContent = `图层：${layerMeta.label || layer}`;
+  els.hudSelection.textContent = state.selected ? `格子：${state.selected.col},${state.selected.row}` : '格子：-';
+  els.hudSite.textContent = site ? `据点：${site.cityName}` : `据点：${siteOverlayStatus()}`;
+}
+function currentRegionBounds() {
+  if (!state.selected || !state.regionAnchor) return null;
+  const left = Math.min(state.selected.col, state.regionAnchor.col);
+  const right = Math.max(state.selected.col, state.regionAnchor.col);
+  const top = Math.min(state.selected.row, state.regionAnchor.row);
+  const bottom = Math.max(state.selected.row, state.regionAnchor.row);
+  return { left, right, top, bottom, width: right - left + 1, height: bottom - top + 1 };
+}
+function describeRegion() {
+  const bounds = currentRegionBounds();
+  if (!state.regionAnchor) return '未设置区域。';
+  if (!bounds) return `起点：${state.regionAnchor.col},${state.regionAnchor.row}`;
+  return `区域：${bounds.left},${bounds.top} 到 ${bounds.right},${bounds.bottom}，${bounds.width} x ${bounds.height}`;
+}
+function captureRegionSnapshot(name = '区域复制') {
+  const bounds = currentRegionBounds();
+  if (!bounds) return null;
+  const rows = [];
+  for (let row = bounds.top; row <= bounds.bottom; row++) {
+    const line = [];
+    for (let col = bounds.left; col <= bounds.right; col++) {
+      line.push(recordAt({ col, row }).slice());
+    }
+    rows.push(line);
+  }
+  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, width: bounds.width, height: bounds.height, fields: state.meta.fields.slice(), rows };
+}
+function pasteRegionSnapshot(snapshot) {
+  if (!snapshot || !state.selected) return false;
+  const changes = [];
+  for (let row = 0; row < snapshot.height; row++) {
+    for (let col = 0; col < snapshot.width; col++) {
+      const target = { col: state.selected.col + col, row: state.selected.row + row };
+      if (target.col >= state.meta.width || target.row >= state.meta.height) continue;
+      const source = snapshot.rows[row][col];
+      for (const field of snapshot.fields) {
+        const sourceIndex = snapshot.fields.indexOf(field);
+        if (sourceIndex < 0) continue;
+        changes.push({ x: target.col, y: target.row, field, after: source[sourceIndex] });
+      }
+    }
+  }
+  return applyChangeSet(changes);
+}
+function refreshCompositeList() {
+  els.selectionInfo.textContent = `${describeRegion()}${state.regionClipboard ? `；剪贴板 ${state.regionClipboard.width} x ${state.regionClipboard.height}` : ''}`;
+  els.pasteRegion.disabled = !state.regionClipboard && !state.activeCompositeId;
+  els.copyRegion.disabled = !currentRegionBounds();
+  els.saveComposite.disabled = !currentRegionBounds();
+  els.compositeList.textContent = '';
+  if (!state.compositeObjects.length) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '还没有合成物件。';
+    els.compositeList.append(empty);
+    return;
+  }
+  for (const item of state.compositeObjects) {
+    const row = document.createElement('div');
+    row.className = 'composite-item';
+    const label = document.createElement('div');
+    label.textContent = `${item.name} · ${item.width}x${item.height}`;
+    const use = document.createElement('button');
+    use.type = 'button';
+    use.textContent = state.activeCompositeId === item.id ? '已选' : '选择';
+    use.addEventListener('click', () => {
+      state.activeCompositeId = item.id;
+      state.regionClipboard = item;
+      els.tool.value = 'paint';
+      refreshCompositeList();
+    });
+    row.append(label, use);
+    els.compositeList.append(row);
+  }
+}
+function renderManagerList(node, rows, emptyText) {
+  node.textContent = '';
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = emptyText;
+    node.append(empty);
+    return;
+  }
+  for (const rowData of rows) {
+    const row = document.createElement('div');
+    row.className = 'manager-row';
+    const label = document.createElement('div');
+    label.textContent = rowData.label;
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.textContent = rowData.actionLabel || '定位';
+    action.disabled = !rowData.onClick;
+    if (rowData.onClick) action.addEventListener('click', rowData.onClick);
+    row.append(label, action);
+    node.append(row);
+  }
+}
+function renderDomainManagers() {
+  const sites = state.siteIndex ? [...state.siteIndex.cityByKey.values()] : [];
+  const forceMap = new Map();
+  for (const site of sites) {
+    const key = site.forceName || `势力 ${site.forceIndex ?? '-'}`;
+    if (!forceMap.has(key)) forceMap.set(key, []);
+    forceMap.get(key).push(site);
+  }
+  renderManagerList(
+    els.forceList,
+    [...forceMap.entries()].map(([name, list]) => ({ label: `${name} · ${list.length} 据点`, onClick: () => setActiveSite(list[0].siteKey, { focus: true }) })),
+    '当前 bundle 未提供势力索引；请导入带 .stg 的关卡 bundle。',
+  );
+  renderManagerList(
+    els.entityList,
+    sites.slice(0, 80).map(site => ({ label: `${site.cityName} · ${site.forceName || '未标注势力'} · ${site.gateCount} 门`, onClick: () => setActiveSite(site.siteKey, { focus: true }) })),
+    '武将字段来自 .stg Entity；当前前端先提供据点定位入口，字段编辑在 Raw 中逐步开放。',
+  );
+}
+function validationIssues() {
+  const issues = [];
+  if (!state.meta) return issues;
+  if (state.meta.records.length !== state.meta.width * state.meta.height) issues.push({ level: 'error', text: `.m cell 数不一致：${state.meta.records.length} / ${state.meta.width * state.meta.height}` });
+  if (!state.meta.sidecars?.available) issues.push({ level: 'warn', text: state.meta.sidecars?.reason || '缺少 .s/.x 参考尾区，导出时将使用 0 填充尾区。' });
+  if (!state.meta.siteLinks?.available) issues.push({ level: 'warn', text: state.meta.siteLinks?.reason || '未加载 .dor/.stg 关联信息，据点和城门只能按 .m 数据层编辑。' });
+  if (!state.meta.scenarioFiles?.dor?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .dor 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
+  if (!state.meta.scenarioFiles?.stg?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .stg 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
+  for (const patch of state.patches.values()) {
+    const bounds = recordFieldBounds(patch.field);
+    if (patch.after < bounds.min || patch.after > bounds.max) issues.push({ level: 'error', text: `${patch.x},${patch.y} ${patch.field} 超出范围 ${bounds.min}..${bounds.max}` });
+  }
+  return issues;
+}
+function renderValidationPanel() {
+  const issues = validationIssues();
+  els.validationList.textContent = '';
+  if (!issues.length) {
+    const ok = document.createElement('div');
+    ok.className = 'validation-item';
+    ok.textContent = '当前没有发现导出阻断问题。';
+    els.validationList.append(ok);
+    return;
+  }
+  for (const issue of issues) {
+    const item = document.createElement('div');
+    item.className = `validation-item ${issue.level}`;
+    item.textContent = `${issue.level === 'error' ? '错误' : '警告'}：${issue.text}`;
+    els.validationList.append(item);
+  }
+}
+function drawRegionOverlay() {
+  const bounds = currentRegionBounds();
+  if (!bounds) return;
+  const scale = state.transform.scale || 1;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillStyle = 'rgba(15,118,110,0.12)';
+  ctx.lineWidth = 1.4 / scale;
+  for (let row = bounds.top; row <= bounds.bottom; row++) {
+    for (let col = bounds.left; col <= bounds.right; col++) {
+      diamondPath(col, row);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
 function layerStats(layer) {
   const stats = state.layerStats[layer];
   if (!stats) return '-';
@@ -1111,6 +1358,10 @@ function resetEditState(meta) {
   state.patches.clear();
   state.undoStack = [];
   state.selected = null;
+  state.regionAnchor = null;
+  state.regionClipboard = null;
+  state.activeCompositeId = null;
+  state.compositeObjects = [];
   state.transform = { x: 24, y: 24, scale: 0.8 };
   els.title.textContent = state.meta.stage;
   for (const layer of PAINT_LAYER_OPTIONS) state.selectedResource[layer] = null;
@@ -1129,13 +1380,13 @@ function resetEditState(meta) {
 }
 function parseStageM(buffer, name = 'local.m') {
   const view = new DataView(buffer);
-  if (buffer.byteLength < 16) throw new Error('?????????? .m');
+  if (buffer.byteLength < 16) throw new Error('文件长度不足，无法解析 .m');
   const width = view.getUint32(0, true);
   const height = view.getUint32(4, true);
   const magic = new TextDecoder('ascii').decode(new Uint8Array(buffer, 8, 8));
-  if (magic !== 'Hello1.0') throw new Error('??? Hello1.0 .m ??');
+  if (magic !== 'Hello1.0') throw new Error('不是 Hello1.0 .m 文件');
   const expected = 16 + width * height * 16;
-  if (buffer.byteLength < expected) throw new Error(`.m ????????? ${expected} ????? ${buffer.byteLength}`);
+  if (buffer.byteLength < expected) throw new Error('.m 长度不足，需要 ' + expected + ' 字节，实际 ' + buffer.byteLength + ' 字节');
   const records = [];
   for (let i = 0; i < width * height; i++) {
     const off = 16 + i * 16;
@@ -1284,7 +1535,14 @@ function buildSidecarBytes(suffix) {
   merged.set(tailBytes, activeBytes.length);
   return { bytes: merged, usedFallbackTail: !tailEntry?.tailBase64 };
 }
-function buildExportArtifacts() {
+async function appendScenarioReference(files, key, suffix) {
+  const entry = state.meta.scenarioFiles?.[key];
+  if (!entry?.path) return;
+  const response = await fetch(entry.path, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`无法读取 ${entry.path}`);
+  files.push({ name: `${state.meta.stage}.${suffix}`, bytes: new Uint8Array(await response.arrayBuffer()) });
+}
+async function buildExportArtifacts() {
   const stageName = state.meta.stage;
   const files = [{ name: `${stageName}.m`, bytes: buildStageBytes() }];
   const sidecarFlags = [];
@@ -1293,6 +1551,9 @@ function buildExportArtifacts() {
     files.push({ name: `${stageName}.${suffix}`, bytes: built.bytes });
     sidecarFlags.push(built.usedFallbackTail);
   }
+  await appendScenarioReference(files, 'dor', 'dor');
+  await appendScenarioReference(files, 'stg', 'stg');
+  await appendScenarioReference(files, 'heads', 'heads.dat');
   return { files, usedFallbackTail: sidecarFlags.some(Boolean) };
 }
 async function writeFilesToDirectory(dirHandle, files) {
@@ -1313,12 +1574,12 @@ function triggerDownload(name, bytes) {
 }
 async function exportEditedArtifacts() {
   try {
-    const artifacts = buildExportArtifacts();
+    const artifacts = await buildExportArtifacts();
     if (typeof window.showDirectoryPicker === 'function') {
       try {
         const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
         await writeFilesToDirectory(dirHandle, artifacts.files);
-        els.status.textContent = artifacts.usedFallbackTail ? '已导出 .m/.s/.x，缺失 sidecar 尾区时已用 0 填充。' : '已导出 .m/.s/.x';
+        els.status.textContent = artifacts.usedFallbackTail ? '已导出可写文件，缺失 sidecar 尾区时已用 0 填充。' : '已导出可写文件';
         return;
       } catch (err) {
         if (err?.name === 'AbortError') {
@@ -1330,7 +1591,7 @@ async function exportEditedArtifacts() {
     for (const [index, file] of artifacts.files.entries()) {
       window.setTimeout(() => triggerDownload(file.name, file.bytes), index * 180);
     }
-    els.status.textContent = artifacts.usedFallbackTail ? '已开始下载 .m/.s/.x，缺失 sidecar 尾区时已用 0 填充。' : '已开始下载 .m/.s/.x';
+    els.status.textContent = artifacts.usedFallbackTail ? '已开始下载可写文件，缺失 sidecar 尾区时已用 0 填充。' : '已开始下载可写文件';
   } catch (err) {
     els.status.textContent = String(err.message || err);
   }
@@ -1366,6 +1627,13 @@ canvas.addEventListener('lostpointercapture', ev => { stopDrag(ev); });
 canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; scheduleDraw(); }, { passive: false });
 mini.addEventListener('pointerdown', ev => { const image = displayImage(); if (!image) return; const source = state.minimap || image; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / source.width, rect.height / source.height); const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * image.width; const y = (ev.clientY - rect.top - oy) / h * image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; scheduleDraw(); });
 els.openMFile.addEventListener('click', () => { els.loadMFile.click(); });
+document.querySelectorAll('.inspector-tab').forEach(tab => { tab.addEventListener('click', () => switchInspectorTab(tab.dataset.tab)); });
+document.querySelectorAll('[data-layer-shortcut]').forEach(button => { button.addEventListener('click', () => { els.layer.value = button.dataset.layerShortcut; ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); scheduleDraw(); }); });
+els.tool.addEventListener('change', () => { updateHud(); });
+els.setRegionAnchor.addEventListener('click', () => { if (!state.selected) return; state.regionAnchor = { ...state.selected }; refreshCompositeList(); scheduleDraw(); });
+els.copyRegion.addEventListener('click', () => { const snapshot = captureRegionSnapshot('区域复制'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已复制区域 ' + snapshot.width + ' x ' + snapshot.height; });
+els.pasteRegion.addEventListener('click', () => { const snapshot = state.regionClipboard || state.compositeObjects.find(item => item.id === state.activeCompositeId); if (!snapshot || !state.selected) return; if (pasteRegionSnapshot(snapshot)) els.status.textContent = '已粘贴 ' + snapshot.name; });
+els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成物件 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
 els.loadMFile.addEventListener('change', () => { loadLocalMFile(els.loadMFile.files?.[0]); els.loadMFile.value = ''; });
 els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
 document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; scheduleDraw(); });
@@ -1441,7 +1709,7 @@ async function boot() {
   resetEditState(state.meta);
   await loadStagePicker();
 }
-window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, setActiveSite, activeSite };
+window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, pasteRegionSnapshot, validationIssues };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>

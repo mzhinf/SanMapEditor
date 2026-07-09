@@ -10,13 +10,31 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from san_tools.analysis.stage_site_links import build_stage_site_links
-from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
-from render_m_cel_map import canvas_size, make_diamond_tile, make_object, parse_counted_cel, render_stage
 
 try:
-    from palette import PAINT_RGB_FLAG_PALETTE
+    from .extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
+    from .render_m_cel_map import canvas_size, make_diamond_tile, make_object, parse_counted_cel, render_stage
 except ImportError:
-    from san_tools.map.palette import PAINT_RGB_FLAG_PALETTE
+    from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
+    from render_m_cel_map import canvas_size, make_diamond_tile, make_object, parse_counted_cel, render_stage
+
+try:
+    from .palette import PAINT_RGB_PALETTE_HEX
+except ImportError:
+    try:
+        from .palette import PAINT_RGB_FLAG_PALETTE as PAINT_RGB_PALETTE_HEX
+    except ImportError:
+        try:
+            from palette import PAINT_RGB_PALETTE_HEX
+        except ImportError:
+            try:
+                from palette import PAINT_RGB_FLAG_PALETTE as PAINT_RGB_PALETTE_HEX
+            except ImportError:
+                try:
+                    from .palette import SAN_RGB_PALETTE
+                except ImportError:
+                    from palette import SAN_RGB_PALETTE
+                PAINT_RGB_PALETTE_HEX = [f"#{red:02x}{green:02x}{blue:02x}" for red, green, blue in SAN_RGB_PALETTE[:256]]
 
 try:
     from minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
@@ -97,6 +115,7 @@ def write_stage_json(
     sidecar_meta: dict,
     point_palette: list[str],
     site_links: dict[str, object],
+    scenario_files: dict[str, object],
 ) -> None:
     data = {
         "format": "san-editor-stage-v1",
@@ -115,6 +134,7 @@ def write_stage_json(
         "palette": palette_source,
         "pointPalette": point_palette,
         "siteLinks": site_links,
+        "scenarioFiles": scenario_files,
         "image": image_name,
         "minimap": {"image": minimap_name, "source": "rendered-map", "sync": "derived-from-m-records"},
         "sidecars": sidecar_meta,
@@ -256,6 +276,23 @@ def export_resource_catalog(blocks: dict, palette: list[int], stage_dir: Path, r
     return catalog
 
 
+
+def copy_scenario_reference_files(game_dir: Path, stage_dir: Path, stage_name: str) -> dict[str, object]:
+    """复制编辑器导出时需要原样保留的剧本侧参考文件。"""
+
+    references: dict[str, object] = {}
+    for key, source_name, out_name in (
+        ("dor", f"{stage_name}.dor", f"{stage_name}.dor"),
+        ("stg", f"{stage_name}.stg", f"{stage_name}.stg"),
+        ("heads", "heads.dat", "heads.dat"),
+    ):
+        source = game_dir / source_name
+        if not source.exists():
+            references[key] = {"available": False, "reason": f"缺少 {source_name}"}
+            continue
+        shutil.copyfile(source, stage_dir / out_name)
+        references[key] = {"available": True, "path": out_name, "bytes": source.stat().st_size}
+    return references
 def export_minimap(map_path: Path, out_path: Path, max_width: int = 280) -> None:
     image = Image.open(map_path).convert("RGB")
     scale = max_width / image.width
@@ -311,6 +348,24 @@ def resolve_editor_template(root: Path) -> Path:
     raise FileNotFoundError(f"找不到编辑器模板：{candidate}")
 
 
+
+def build_editor_site_links(root: Path, stage: str) -> dict[str, object]:
+    """生成据点/城门联动信息，缺少辅助文本时允许编辑器降级运行。"""
+
+    try:
+        return build_stage_site_links(root, stage)
+    except (FileNotFoundError, ValueError) as exc:
+        return {
+            "available": False,
+            "reason": f"无法生成据点/城门联动：{exc}",
+            "cityCount": 0,
+            "gateCount": 0,
+            "matchedGateCount": 0,
+            "unmatchedGateCount": 0,
+            "cities": [],
+            "gates": [],
+            "sources": {},
+        }
 def write_editor_index(out_dir: Path, stages: list[dict]) -> None:
     options = "\n".join(
         f'<option value="{entry["path"]}">{entry["stage"]} ({entry["width"]}x{entry["height"]})</option>'
@@ -348,7 +403,8 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     render_meta = render_stage(stage_path, blocks, palette, map_path, layout, layers, None)
     render_meta["source_output_size"] = [source_w, source_h]
     sidecar_meta = build_sidecar_export_meta(game_dir, stage, GRID_SIZE, ACTIVE_ROWS)
-    site_links = build_stage_site_links(root, stage)
+    site_links = build_editor_site_links(root, stage)
+    scenario_files = copy_scenario_reference_files(game_dir, stage_dir, stage)
 
     export_resource_catalog(blocks, palette, stage_dir, records)
     export_minimap(map_path, stage_dir / "minimap.png")
@@ -365,8 +421,9 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
         render_meta,
         palette_source,
         sidecar_meta,
-        PAINT_RGB_FLAG_PALETTE,
+        PAINT_RGB_PALETTE_HEX,
         site_links,
+        scenario_files,
     )
     template = resolve_editor_template(root)
     shutil.copyfile(template, stage_dir / "editor.html")
