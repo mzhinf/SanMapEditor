@@ -1,509 +1,440 @@
-# 三国霸业地图编辑器 UI 2.0 设计文档
+# 《三国霸业》地图编辑器 2.0 设计文档
 
-## 1. 背景
+## 1. 设计定位
 
-当前编辑器已经具备地图浏览、资源绘制、原始字段修改、patch 导出、`.m/.s/.x` 导出，以及据点与城门高亮联动能力。但它的信息组织方式仍然偏向“工程调试页”：
+地图编辑器 2.0 面向完整的关卡编辑工作流，而不是单纯的二进制字段查看页。它以 `.m/.dor/.stg` 字段级模型为底层真值，围绕地图绘制、据点管理、城门管理、势力管理、武将管理和安全导出建立统一界面。
 
-- 原始 `Cell / Record / 修改` 长期占据左侧主栏
-- `Minimap / Stage / 据点 / Resources` 长期占据右侧主栏
-- 语义对象、底层字段、资源挑选与修改历史同时暴露
+当前已经明确的数据模型来自 `src/san_tools/map/editor_model.py`：
 
-这适合逆向阶段，却不利于长期扩展成真正的地图编辑器。
+- `.m`：`MFile`、`MMapCell`，提供地图尺寸与每个 cell 的字段级数据。
+- `.dor`：`DorFile`、`DorGroup`、`DorRecord`，提供城门分组、城门坐标、朝向和关联据点坐标。
+- `.stg`：`StgFile`、`Force`、`Site`、`Entity` 及其 block/payload，提供剧本、势力、据点、实体和尾区保留数据。
+- `heads.dat`：作为武将头像资源输入纳入导入流程和武将管理界面；在字段级解析模型补齐前，只做只读资源索引和展示适配。
 
-本次 UI 2.0 的目标，不是单纯换一层皮，而是把页面从“按字段分布”改成“按编辑任务组织”。
+设计原则是：用户面对的是“地图、据点、势力、武将”等编辑对象，系统内部始终保留 `.m/.dor/.stg` 原字段、顺序和未命名保留区，不猜测、不清零、不丢失。
 
-## 2. 设计目标
+## 2. 核心目标
 
-### 2.1 目标
+1. 可视化编辑地图格子数据，支持地表层、叠加层、物件层和数据层。
+2. 支持 `.m`、同名 `.dor`、同名 `.stg`、`heads.dat` 的导入，并支持 `.m/.dor/.stg` 的导出。
+3. 支持阻挡标记、据点势力范围、据点核心区域等数据层修改。
+4. 支持合成物件，将多个 cell 的所有层数据保存为可复用模板。
+5. 支持区域复制，复制多个 cell 的所有层字段。
+6. 支持势力、据点、城门、武将的增删改查和地图定位。
+7. 所有写回必须通过校验，避免生成异常二进制文件导致游戏崩溃。
 
-1. 让用户一眼看懂“我正在编辑什么、在哪里、怎么改、改了什么”。
-2. 保留底层字段可控性，但把 `Raw` 能力下沉到二级视图。
-3. 让据点、城门、资源与图层具备更自然的工作流组织。
-4. 保留当前 bundle 数据结构，尽量以前端重组为主，降低回归风险。
+## 3. 总体布局
 
-### 2.2 非目标
-
-1. 本轮不改 `.m/.s/.x` 写回协议。
-2. 本轮不新建复杂的据点编辑模型写回链路。
-3. 本轮不引入 Electron 或桌面壳层，只重写前端页面。
-
-## 3. 设计原则
-
-### 3.1 任务优先
-
-页面优先回答四个问题：
-
-- 我在编辑什么
-- 它在地图哪里
-- 它有哪些属性
-- 我刚刚改了什么
-
-### 3.2 渐进披露
-
-- 高频内容放在一线：画布、模式、资源、据点导航
-- 低频但关键内容保留在二线：`Raw`、patch、sidecar 说明
-
-### 3.3 语义层与原始层并存
-
-- 语义层：据点、图层、资源、当前模式、当前目标
-- 原始层：`records`、字段值、恢复、patch
-
-### 3.4 维持已有数据契约
-
-UI 2.0 仍以 `stage.json`、`resources.json`、导出的图片资源和 `siteLinks` 为主，不依赖游戏目录实时读盘。
-
-## 4. 信息架构
-
-## 4.1 总体布局
-
-新版布局采用四区结构：
-
-1. 顶部：菜单带 + 主工具栏
-2. 左侧：导航区
-3. 中央：地图画布区
-4. 右侧：Inspector
-5. 底部：历史与说明抽屉
-6. 底边：状态栏
-
-## 4.2 左侧导航区
-
-左侧不再只是“关卡摘要 + 资源列表”，而是明确承担两条主线导航：
-
-### A. 剧本主线
-
-- 剧本摘要：当前关卡、格子规模、修改数、联动状态
-- 领域骨架：剧本 / 势力 / 城池 / 城门 / 地图 的统计与入口
-- 城池导航：按名称、势力、坐标检索据点，并联动城门高亮
-
-### B. 资源主线
-
-- 当前编辑图层
-- 资源过滤与排序
-- 资源缩略图列表
-- 点位层色板列表
-
-这样左侧会从“面板堆叠”升级为“剧本对象导航 + 资源入口”的双主线结构，和游戏设计本身的层级更一致。
-
-## 4.3 中央画布区
-
-中央区域仍然是主地图，但增强三类视觉提示：
-
-1. 顶部浮动模式条
-2. 画布角标信息
-3. 右上角悬浮 minimap
-
-### 画布角标信息
-
-用于持续显示：
-
-- 当前工具：查看 / 绘制
-- 当前图层
-- 当前资源编号
-- 当前据点状态
-
-### 浮动 minimap
-
-minimap 改为悬浮卡片，不再挤占固定侧栏高度。点击 minimap 仍然支持快速跳转。
-
-## 4.4 右侧 Inspector
-
-Inspector 统一为上下文面板，并拆为 4 个视图：
-
-1. `选中项`
-2. `关卡`
-3. `Raw`
-4. `修改`
-
-### 选中项
-
-显示当前选中格子的语义摘要：
-
-- 选中坐标与索引
-- 附近资源信息
-- 当前归属据点
-- 当前据点的门坐标概览
-
-### 关卡
-
-显示关卡级元数据：
-
-- 尺寸、布局、调色板
-- sidecar 导出策略
-- 当前资源层统计
-
-### Raw
-
-显示 Record 字段编辑器：
-
-- 字段名
-- 别名
-- 中文语义
-- 数值输入
-- 单字段恢复
-
-### 修改
-
-显示：
-
-- 修改数量
-- 最近 patch 列表
-- 变更摘要说明
-
-## 4.5 底部抽屉
-
-底部抽屉负责承载“时间线型信息”，本轮先落两类内容：
-
-1. 最近修改记录
-2. 当前工作说明与快捷提示
-
-后续可扩展：
-
-- 校验结果
-- 批量操作记录
-- 导出日志
-
-## 5. 数据架构
-
-## 5.1 架构目标
-
-新版编辑器需要先建立一套“能长期扩展”的领域模型，再把当前 `.m/.dor/.stg` 与资源 bundle 映射进去。核心原则如下：
-
-1. 领域层优先表达“剧本对象”和“资源对象”，而不是直接把页面绑定到 `records`。
-2. 原始字段层继续保留，作为可校验、可回写、可导出 patch 的底层真值。
-3. 当前尚未完全逆向出的数据，先保留结构位，不用猜测字段填充假数据。
-4. 所有运行时视图都由领域模型派生，避免各个组件直接拼装零散字段。
-
-## 5.2 剧本数据树
-
-剧本数据是编辑器的主语义树，来源于 `.m/.dor/.stg` 及后续可接入的剧本侧文件：
-
-- 剧本
-- 势力列表
-- 城池列表
-- 城池基本信息
-- 城池门信息
-- 城池内将领、士兵信息
-- 地图记录数据
-
-建议的可扩展结构如下：
+编辑器采用固定的五区布局：
 
 ```text
-剧本 ScriptData
-├─ scriptMeta
-│  ├─ stageId
-│  ├─ sources(.m/.dor/.stg/...)
-│  ├─ width / height / layout / origin
-│  └─ patchState
-├─ forces[]
-│  ├─ forceId
-│  ├─ forceName
-│  ├─ cityIds[]
-│  └─ ext
-├─ cities[]
-│  ├─ cityId
-│  ├─ cityName
-│  ├─ forceId
-│  ├─ basic
-│  │  ├─ mapPoint
-│  │  ├─ coreAreaCells[]
-│  │  ├─ influenceAreaCells[]
-│  │  ├─ economy / defense / reserve ext
-│  │  └─ ext
-│  ├─ gates[]
-│  │  ├─ gateId
-│  │  ├─ mapPoint
-│  │  ├─ direction
-│  │  └─ ext
-│  ├─ roster
-│  │  ├─ officers[]
-│  │  └─ troops[]
-│  └─ sourceRefs
-│     ├─ stgRecordIndex
-│     └─ dorGateIndices[]
-└─ map
-   ├─ records[]
-   ├─ fieldMeta[]
-   ├─ editableLayers[]
-   ├─ pointLayers[]
-   └─ sidecars
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 顶部菜单栏 / 工具栏                                                          │
+│ 文件导入 | 导出 | 撤销 | 重做 | 选择 | 笔刷 | 填充 | 合成物件 | 区域复制       │
+├───────────────┬──────────────────────────────────────────────┬───────────────┤
+│ 左侧资源库     │ 中央地图画布                                  │ 右侧属性/管理区 │
+│ Resource       │ Map Canvas                                    │ Inspector     │
+│               │                                                │               │
+│ 地形资源       │  等距地图渲染                                  │ 属性           │
+│ 物件资源       │  当前选中格子                                  │ 势力管理       │
+│ 合成物件       │  小地图                                       │ 据点管理       │
+│ 图层控制       │                                                │ 武将管理       │
+├───────────────┴──────────────────────────────────────────────┴───────────────┤
+│ 底部面板：历史记录 / 操作说明 / 修改记录 / 状态栏                            │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-其中：
+### 3.1 顶部菜单栏 / 工具栏
 
-- `.m` 当前提供地图记录真值与图层可写内容。
-- `.stg` 当前提供城池坐标、名称、势力等主锚点。
-- `.dor` 当前提供城门坐标、分组、方向与归属联动。
-- 将领、士兵、内政参数等未完全接入的数据，先保留 `roster` 与 `basic.ext` 结构位。
+顶部承载全局命令和当前工具：
 
-## 5.3 资源数据树
+| 区域 | 功能 |
+| --- | --- |
+| 文件 | 导入 `.m`，自动匹配同名 `.dor/.stg`，选择或复用 `heads.dat`；导出 `.m/.dor/.stg`。 |
+| 编辑 | 撤销、重做、复制、粘贴、删除、校验。 |
+| 工具 | 选择、笔刷、填充、吸管、合成物件、区域复制。 |
+| 图层 | 地表层、叠加层、物件层、数据层的快速切换。 |
+| 状态 | 当前文件、修改数、校验状态、导出状态。 |
 
-资源数据是编辑器的第二条主线，来源于 `resources.json`、`kingdom.cel` 及后续人物资源：
+### 3.2 左侧资源库
+
+左侧是“可放到地图上的东西”和“当前可编辑图层”的入口。
+
+| 面板 | 内容 |
+| --- | --- |
+| 图层控制 | 地表层、叠加层、物件层、数据层的可见、锁定、当前编辑状态。 |
+| 地形资源 | `.m` 的 `acwx` 候选资源，对应基础地形 tile。 |
+| 叠加资源 | `.m` 的 `acwy` 候选资源，对应过渡、道路、水体等叠加 tile。 |
+| 物件资源 | `.m` 的 `acwz` 候选资源，对应建筑、树木、城墙等物件 tile。 |
+| 数据层色板 | `terrain_tag`、`blocked`、`site_trigger`、`site_area`、`minimap_color` 的可视化色板。 |
+| 合成物件 | 由多个 cell 的所有层字段组成的模板库。 |
+
+### 3.3 中央地图画布
+
+画布是第一工作区，默认显示等距地图。
+
+必须支持：
+
+- 平移、缩放、坐标定位。
+- 鼠标悬停显示 cell 坐标和字段摘要。
+- 单格选择、多格框选、区域选择。
+- 图层叠加显示与透明度控制。
+- 据点、城门、势力范围、核心区域高亮。
+- 小地图定位和视口框显示。
+
+### 3.4 右侧属性 / 管理区
+
+右侧使用标签页组织不同编辑对象。
+
+| 标签页 | 目标 |
+| --- | --- |
+| 属性 | 显示当前选中 cell、资源、据点或武将的上下文属性。 |
+| 势力管理 | 管理 `.stg` 中的 `Force` 列表。 |
+| 据点管理 | 管理 `.stg` 中的 `Site`，并联动 `.dor` 城门。 |
+| 武将管理 | 管理 `.stg` 中的 `Entity`，并展示 `heads.dat` 头像资源。 |
+| Raw | 字段级查看与受控编辑，直接对应 `.m/.dor/.stg` 模型字段。 |
+| 校验 | 显示导出前结构校验、引用校验和越界风险。 |
+
+### 3.5 底部面板
+
+底部面板承载时间线和反馈信息：
+
+- 历史记录：撤销/重做栈。
+- 操作说明：当前工具的简短提示。
+- 修改记录：按文件和对象列出变更。
+- 状态栏：导入、校验、导出、错误信息。
+
+## 4. 文件导入与导出
+
+### 4.1 导入流程
+
+1. 用户选择 `.m` 文件。
+2. 编辑器读取 `MFile`，得到 `width`、`height`、`cells`。
+3. 编辑器自动查找同名 `.dor` 和 `.stg`。
+4. 如果存在 `.dor`，读取 `DorFile`，建立城门分组索引。
+5. 如果存在 `.stg`，读取 `StgFile`，建立势力、据点、实体索引。
+6. 用户选择或复用 `heads.dat`，建立头像资源索引。
+7. 生成运行时工程状态，进入可编辑界面。
+
+导入不应修改任何源文件。
+
+### 4.2 导出流程
+
+导出目标分为三个层级：
+
+| 文件 | 写回范围 |
+| --- | --- |
+| `.m` | cell 字段：`acwx/acwy/acwz/terrain_tag/blocked/site_trigger/site_area/minimap_color`。 |
+| `.dor` | 城门记录：`door_x/door_y/door_ori/site_x/site_y` 与保留字段原样保持。 |
+| `.stg` | 势力、据点、实体中已开放编辑字段；未开放字段和尾区原样保持。 |
+
+导出前必须执行校验。校验失败时只允许另存为调试文件，不允许覆盖源文件。
+
+## 5. 数据模型映射
+
+### 5.1 地图 cell 模型
+
+`.m` 是地图编辑的核心写回对象。
+
+| UI 概念 | 模型字段 | 说明 |
+| --- | --- | --- |
+| 地表层 | `MMapCell.acwx` | 基础地形 tile 索引。 |
+| 叠加层 | `MMapCell.acwy` | 叠加/过渡 tile 索引，`-1` 表示空层。 |
+| 物件层 | `MMapCell.acwz` | 建筑/物件 tile 索引，`-1` 表示空层。 |
+| 地形标记 | `MMapCell.terrain_tag` | 数据层字段。 |
+| 阻挡标记 | `MMapCell.blocked` | 数据层字段，用于通行控制。 |
+| 据点势力范围 | `MMapCell.site_trigger` | 数据层字段，用于据点范围。 |
+| 据点核心区域 | `MMapCell.site_area` | 数据层字段，用于据点核心。 |
+| 小地图颜色 | `MMapCell.minimap_color` | 小地图颜色索引。 |
+
+`reserved0/reserved1/reserved2` 不进入普通编辑界面，只在 Raw 中显示，并在写回时保持 KSY 规定的固定值。
+
+### 5.2 城门模型
+
+`.dor` 负责城门和据点坐标关联。
+
+| UI 概念 | 模型字段 | 说明 |
+| --- | --- | --- |
+| 城门分组 | `DorGroup` | 一组城门记录。 |
+| 城门坐标 | `DorRecord.door_x/door_y` | 用于画布定位和编辑。 |
+| 城门朝向 | `DorRecord.door_ori` | `0` 朝右，`1` 朝左。 |
+| 归属据点坐标 | `DorRecord.site_x/site_y` | 与 `.stg` 据点坐标建立关联。 |
+| 保留字段 | `reserved0/reserved1` | Raw 可见，默认原样保持。 |
+
+### 5.3 剧本模型
+
+`.stg` 负责剧本、势力、据点和实体。
+
+| UI 概念 | 模型字段 | 说明 |
+| --- | --- | --- |
+| 剧本信息 | `StgFile.present_or_version`、`root_part1`、`root_part2` | 标题、年份、剧本编号、模式字段。 |
+| 势力 | `Force`、`ForcePart1Payload`、`ForcePart2Payload` | 势力名称、君主候选、AI/策略、据点数量。 |
+| 据点 | `Site`、`SitePart1Payload`、`SitePart2Payload` | 据点名、坐标、人口、金粮、内政、运行态字段。 |
+| 武将/实体 | `Entity`、`EntityPart1Payload`、`EntityPart2Payload` | 名称、人物编号、头像编号、能力、技能、兵数。 |
+| 可选实体 | `optional_entity_27c` 等字段 | 由 `site_part2` 的可选实体 flag 控制。 |
+| 尾区 | `AfterForcesTail` | 未完全命名数据，按 u32 words 原样保留。 |
+
+## 6. 编辑功能设计
+
+### 6.1 地图编辑
+
+地图编辑按图层工作：
+
+| 图层 | 可编辑字段 | 工具 |
+| --- | --- | --- |
+| 地表层 | `acwx` | 笔刷、填充、吸管、区域复制。 |
+| 叠加层 | `acwy` | 笔刷、清除、吸管、区域复制。 |
+| 物件层 | `acwz` | 笔刷、清除、合成物件、区域复制。 |
+| 数据层 | `terrain_tag/blocked/site_trigger/site_area/minimap_color` | 色板笔刷、填充、批量替换。 |
+
+每次修改都记录为 cell 级 patch：
 
 ```text
-资源 ResourceData
-├─ resourceMeta
-│  ├─ bundlePath
-│  ├─ atlasVersion
-│  └─ ext
-├─ map
-│  ├─ terrainLayers[]
-│  ├─ overlayLayers[]
-│  ├─ objectLayers[]
-│  ├─ pointLayers[]
-│  └─ objectGroups[]
-└─ characters
-   ├─ models[]
-   ├─ skills[]
-   └─ ext
+修改记录
+├─ 文件：.m
+├─ cell_index
+├─ 坐标 x/y
+├─ 字段名
+├─ old_value
+└─ new_value
 ```
 
-字段分工建议：
+### 6.2 合成物件
 
-- `terrainLayers`：承载基础地表资源与规则。
-- `overlayLayers`：承载叠加地表、边缘、道路、水体覆盖等。
-- `objectLayers`：承载建筑、树木、特效、城墙、桥梁等对象资源。
-- `pointLayers`：承载 `byte08~byte11` 这类取值型图层与色板映射。
-- `objectGroups`：承载“多个对象按固定阵列组成一个可复用模板”的资源组合。
-- `characters`：承载人物模型、技能表现、战场特效挂点等后续可扩展内容。
+合成物件用于保存一片区域内所有 cell 的字段组合。
 
-## 5.4 运行时领域模型
+合成物件包含：
 
-前端运行时不应只维护 `meta + resources + selected`，而应显式维护三层模型：
+- 模板名称。
+- 模板宽高。
+- 锚点位置。
+- 每个 cell 的 `acwx/acwy/acwz`。
+- 每个 cell 的 `terrain_tag/blocked/site_trigger/site_area/minimap_color`。
+- 是否覆盖空层的粘贴策略。
 
-1. 原始层
-   - `stageMeta`
-   - `records`
-   - `fieldMeta`
-   - `resourcesRaw`
-2. 领域层
-   - `scenarioDomain`
-   - `resourceDomain`
-3. 视图层
-   - `siteIndex`
-   - `layerStats`
-   - `selectionSummary`
-   - `resourceListModel`
+合成物件只能来自当前地图选区，不从外部猜测结构。
 
-建议的运行时结构示意：
+### 6.3 区域复制
 
-```js
-{
-  raw: {
-    stageMeta,
-    records,
-    fieldMeta,
-    resourcesRaw,
-  },
-  domain: {
-    script: {
-      meta,
-      forces,
-      cities,
-      map,
-    },
-    resources: {
-      meta,
-      map,
-      characters,
-    },
-  },
-  view: {
-    activeSiteKey,
-    selectedCell,
-    selectedResource,
-    siteIndex,
-    layerStats,
-    patches,
-  },
-}
+区域复制和合成物件共用底层数据结构，但区域复制是临时剪贴板。
+
+复制范围必须包含：
+
+- 地表层。
+- 叠加层。
+- 物件层。
+- 数据层。
+
+粘贴时提供三种策略：
+
+| 策略 | 说明 |
+| --- | --- |
+| 全量覆盖 | 所有字段覆盖目标区域。 |
+| 只覆盖当前图层 | 只覆盖当前激活图层字段。 |
+| 跳过空层 | `acwy/acwz = -1` 时不覆盖目标对应字段。 |
+
+## 7. 信息管理设计
+
+### 7.1 势力管理
+
+势力管理直接面向 `.stg` 的 `Force`。
+
+必须支持：
+
+1. 新增势力。
+2. 编辑势力信息。
+3. 删除势力。
+4. 查看势力拥有的据点。
+5. 从势力定位到据点。
+
+首轮开放字段：
+
+- 势力名：`force_part1.body.force_name`。
+- 君主候选：`force_lord_person_id`。
+- 势力策略/AI 候选字段：以 Raw + 受控表单方式开放。
+- 据点数：由 `force_part2.body.site_count` 和实际 `sites` 列表一致性派生，不允许单独手填。
+
+新增和删除势力会改变 `.stg` 对象流结构，必须作为高风险操作，需要二次确认和导出前完整校验。
+
+### 7.2 据点管理
+
+据点管理以 `.stg` 的 `Site` 为主，以 `.dor` 的城门记录为辅助。
+
+必须支持：
+
+1. 新增据点。
+2. 编辑据点基本信息。
+3. 修改据点所属势力。
+4. 增删改查据点门。
+5. 删除据点。
+6. 据点和城门定位。
+
+首轮开放字段：
+
+- 据点名：`site_part1.body.site_name`。
+- 据点坐标：`coord_x/coord_y`。
+- 人口、金、粮、待命士兵。
+- 开发、商业、治安及上限。
+- 太守、武将数量候选字段。
+- 所属势力：通过父 `Force.sites` 归属调整。
+
+城门列表来自 `.dor`：
+
+- `door_x/door_y` 在画布定位。
+- `door_ori` 提供朝向编辑。
+- `site_x/site_y` 与据点坐标保持一致。
+
+### 7.3 武将管理
+
+武将管理以 `.stg` 的 `Entity` 为主，头像显示来自 `heads.dat`。
+
+必须支持：
+
+1. 新增武将。
+2. 编辑武将信息。
+3. 删除武将。
+4. 加载 `heads.dat` 并显示头像。
+5. 从武将定位到所在据点。
+
+首轮开放字段：
+
+- 名称：`entity_part2.body.entity_name`。
+- 人物编号：`person_id`。
+- 头像编号：`portrait_id`。
+- 所属君主候选：`static_owner_id`。
+- 所在地候选：`static_location_id`。
+- 统御、等级、带兵数、武力、智力、忠诚、经验。
+- 技能字段：`skill_*`。
+- 兵种号：`soldier_type_id`。
+
+`heads.dat` 不参与 `.stg` 字节流写回，只负责通过 `portrait_id` 提供头像预览。
+
+## 8. Raw 字段编辑
+
+Raw 视图是安全阀，不是主工作流。
+
+Raw 必须支持：
+
+- 按文件查看：`.m`、`.dor`、`.stg`。
+- 按对象查看：cell、door record、force、site、entity、tail。
+- 显示字段名、类型、偏移、当前值、说明。
+- 对开放字段提供输入控件。
+- 对保留字段提供只读显示。
+- 单字段恢复。
+- 查看原始十六进制片段。
+
+Raw 的字段顺序必须与 KSY 和 `editor_model.py` 顺序一致。
+
+## 9. 校验与安全写回
+
+导出前校验分为四类：
+
+| 类型 | 校验内容 |
+| --- | --- |
+| 结构校验 | `.m` 长度等于 `16 + width * height * 16`；`.dor` record size 合法；`.stg` block size 与 payload 一致。 |
+| 引用校验 | 据点坐标、城门归属、势力据点数量、实体归属引用不冲突。 |
+| 范围校验 | cell 坐标、资源索引、头像编号、人物编号、数值字段范围。 |
+| 保留区校验 | 固定 `contents` 字段不被修改；未命名尾区保持原值。 |
+
+校验结果显示在右侧 `校验` 标签和底部状态栏。错误阻止覆盖导出，警告允许另存并要求用户确认。
+
+## 10. 运行时状态设计
+
+运行时状态分三层：
+
+```text
+EditorState
+├─ files
+│  ├─ m_path / dor_path / stg_path / heads_path
+│  └─ dirty_files
+├─ raw
+│  ├─ m: MFile
+│  ├─ dor: DorFile | null
+│  └─ stg: StgFile | null
+├─ domain
+│  ├─ map_cells
+│  ├─ forces
+│  ├─ sites
+│  ├─ doors
+│  ├─ entities
+│  └─ portraits
+├─ view
+│  ├─ active_tool
+│  ├─ active_layer
+│  ├─ selection
+│  ├─ active_resource
+│  ├─ active_force
+│  ├─ active_site
+│  └─ active_entity
+└─ history
+   ├─ undo_stack
+   ├─ redo_stack
+   └─ change_log
 ```
 
-## 5.5 首轮编码建议落地范围与预留位
+领域层是从原始模型派生出来的索引和视图模型，不替代原始模型。写回时必须把变更落回原字段。
 
-进入后续 UI 2.0 编码阶段时，建议优先落地以下范围：
+## 11. 组件拆分
 
-- 已落地
-- `script.meta`
-- `script.cities`
-- `script.forces` 的基础聚合
-- `script.map`
-- `cities[].gates`
-- `resources.map` 下的图层资源聚合
+| 组件 | 职责 |
+| --- | --- |
+| `EditorShell` | 顶层布局、文件状态、全局快捷键。 |
+| `FileToolbar` | 导入、导出、撤销、重做、校验。 |
+| `LayerPanel` | 图层可见性、锁定、当前编辑层。 |
+| `ResourceLibrary` | 地形、叠加、物件、数据层色板和合成物件。 |
+| `MapCanvas` | 等距地图渲染、选择、绘制、定位。 |
+| `MiniMap` | 缩略导航和视口同步。 |
+| `InspectorPanel` | 右侧属性和管理标签。 |
+| `ForceManager` | 势力列表与势力编辑。 |
+| `SiteManager` | 据点列表、据点字段、城门联动。 |
+| `EntityManager` | 武将/实体字段和头像预览。 |
+| `RawFieldViewer` | 字段级查看和受控编辑。 |
+| `ValidationPanel` | 校验结果和导出阻断原因。 |
+| `HistoryDock` | 历史、修改记录、状态消息。 |
 
-- 预留位
-- `cities[].basic.coreAreaCells`
-- `cities[].basic.influenceAreaCells`
-- `cities[].roster.officers`
-- `cities[].roster.troops`
-- `resources.map.objectGroups`
-- `resources.characters.models`
-- `resources.characters.skills`
+## 12. 首轮实施范围
 
-预留位的意义是：现在先把接口和层级定住，未来补数据源时，只需要填充节点，不需要再重做 UI 语义。
+第一阶段优先完成“可安全编辑 `.m`，可查看并定位 `.dor/.stg`”：
 
-## 5.6 派生视图模型
+1. 导入 `.m/.dor/.stg/heads.dat`。
+2. 地图画布和四类图层显示。
+3. `.m` 的地表层、叠加层、物件层、数据层编辑。
+4. 区域复制和合成物件。
+5. 势力、据点、武将只读列表与定位。
+6. Raw 字段查看。
+7. `.m` 导出和校验。
 
-在领域层之上，本轮继续保留并强化以下派生模型：
+第二阶段开放 `.dor` 与 `.stg` 的受控写回：
 
-1. `siteIndex`
-   - 从 `siteLinks` 构建据点 -> 城门、格子 -> 据点的双向索引
-2. `layerStats`
-   - 提供图层占用、资源使用次数与当前图层摘要
-3. `resourceListModel`
-   - 支撑资源虚拟列表与后续资源分组
-4. `selectionSummary`
-   - 把当前格子、当前城池、当前城门归属整理成可直接渲染的摘要
-5. `domainSummary`
-   - 负责把“势力 / 城池 / 城门 / 资源条目 / 预留位”压缩成 UI 总览
+1. 城门增删改查和 `.dor` 导出。
+2. 势力基础字段编辑。
+3. 据点基础字段编辑。
+4. 武将基础字段编辑。
+5. `.stg` 对象流结构变更校验。
 
-## 5.7 数据结构与游戏文件一一对应表
+第三阶段补齐高级工作流：
 
-说明：
+1. 新增/删除势力、据点、武将。
+2. 跨关卡合成物件库。
+3. heads.dat 字段级模型和头像编辑。
+4. 批量校验报告和导出审计。
 
-- 表中的“主来源游戏文件”表示当前结构的首要真值来源。
-- 如果一个结构需要多个游戏文件协同恢复，会按“主来源 + 辅助来源”的顺序并列列出。
-- “转换脚本”指从游戏文件转成编辑器或分析结构的脚本；“回写脚本”指把结构再落回游戏文件的脚本。
+## 13. 非目标与约束
 
-| 数据结构 | 主来源游戏文件 | 当前转换脚本 | 回写脚本 | 说明 |
-| --- | --- | --- | --- | --- |
-| `raw.stageMeta`、`raw.records`、`raw.fieldMeta` | `stageNN.m` | `src/san_tools/map/export_editor_bundle.py` | `src/san_tools/map/apply_editor_patch.py` | 对应 `.m` 文件头与每个 cell 的 16 字节记录，是编辑器最底层真值。 |
-| `raw.resourcesRaw`、`domain.resources.map.terrainLayers / overlayLayers / objectLayers` | `kingdom.cel` + `kingdom.atr` | `src/san_tools/map/export_editor_bundle.py`、`src/san_tools/map/render_m_cel_map.py` | 暂无稳定回写链路 | 负责地图 tile、叠加层与物件层资源目录。 |
-| `domain.resources.map.pointLayers` | `stageNN.m` 的 `byte08~byte11` + `src/san_tools/map/palette.py` | `src/san_tools/map/export_editor_bundle.py` | `src/san_tools/map/apply_editor_patch.py` | 点位层本质仍是 `.m` 记录字段，只是以色板和统计列表形式投影到资源侧。 |
-| `domain.script.forces[]`、`domain.script.cities[]` | `stageNN.stg` | `src/san_tools/pipelines/export_stg_raw_chain.py`、`src/san_tools/pipelines/export_stg_hierarchy.py`、`src/san_tools/pipelines/export_stg_city_troop_analysis.py` | `src/san_tools/pipelines/import_stg_workbook.py` | 势力、城池、城池状态等语义对象当前以 `.stg` 为主锚点恢复。 |
-| `domain.script.cities[].gates[]`、`view.siteIndex` | `stageNN.dor` + `stageNN.stg` | `src/san_tools/analysis/analyze_dor.py`、`src/san_tools/analysis/stage_site_links.py` | 暂无独立 `.dor` 回写脚本 | `.dor` 提供城门，`.stg` 提供据点坐标，两者共同构成“城门 -> 据点”归属表。 |
-| `domain.script.map.sidecars`、`raw.sidecars` | `stageNN.s` + `stageNN.x` | `src/san_tools/map/export_editor_bundle.py` | `src/san_tools/map/build_minimap_sidecars.py`、`src/san_tools/map/apply_editor_patch.py` | 当前采用“上 128 行由 `.m` 的 `byte13` 派生、下 32 行保留原始尾区”的保守策略。 |
-| `stage.json` | `stageNN.m` + `stageNN.dor` + `stageNN.stg` + `stageNN.s/.x` | `src/san_tools/map/export_editor_bundle.py` | 编辑器内导出后由 `src/san_tools/map/apply_editor_patch.py` 写回 `.m/.s/.x` | 这是编辑器的主 bundle 契约，承载原始层、领域层输入与 sidecar 参考。 |
-| `resources.json` | `kingdom.cel` + `kingdom.atr` + `stageNN.m` 使用统计 | `src/san_tools/map/export_editor_bundle.py` | 暂无直接回写 | 这是编辑器的资源 bundle 契约，既包含 atlas，也包含按当前关卡统计出的资源使用次数。 |
+1. 不在没有字段模型的情况下猜测 `heads.dat` 写回结构。
+2. 不把保留字段作为普通表单字段暴露给用户。
+3. 不允许 UI 直接绕过字段级模型写二进制。
+4. 不允许导出时重排 `.stg` 未修改对象流。
+5. 不允许清空 `.stg` 尾区或 `.dor` 保留字段。
 
-## 5.8 仓库级转换脚本总表
+## 14. 交付标准
 
-| 游戏文件 | 结构化产物 / 中间数据 | 转换脚本 | 回写脚本 | 说明 |
-| --- | --- | --- | --- | --- |
-| `stageNN.m` | `stage.json`、`map.png`、`minimap.png`、字段分析报告 | `src/san_tools/map/export_editor_bundle.py`、`src/san_tools/map/render_m_cel_map.py`、`src/san_tools/analysis/analyze_m_byte_fields.py` | `src/san_tools/map/apply_editor_patch.py` | `.m` 既是渲染输入，也是地图编辑闭环的主写回目标。 |
-| `stageNN.s` / `stageNN.x` | `sidecar_build_report.json`、预览图、`stage.json.sidecars` | `src/san_tools/analysis/analyze_minimap_sidecars.py`、`src/san_tools/map/build_minimap_sidecars.py`、`src/san_tools/map/export_editor_bundle.py` | `src/san_tools/map/build_minimap_sidecars.py`、`src/san_tools/map/apply_editor_patch.py` | 小地图 sidecar 当前已经纳入编辑器导出闭环。 |
-| `stageNN.stg` | `stg_raw_chain.json/csv`、`stg_hierarchy.json/csv`、`city_state`、`stageNN_stg.xlsx` | `src/san_tools/pipelines/export_stg_raw_chain.py`、`src/san_tools/pipelines/export_stg_hierarchy.py`、`src/san_tools/pipelines/export_stg_city_troop_analysis.py`、`src/san_tools/pipelines/export_stg_workbook.py` | `src/san_tools/pipelines/import_stg_workbook.py` | `.stg` 当前同时支持原始链、层级树、工作簿与已确认字段的安全回写。 |
-| `stageNN.dor` | `derived/dor_analysis/*.json`、`site_links` | `src/san_tools/analysis/analyze_dor.py`、`src/san_tools/analysis/stage_site_links.py` | 暂无 | `.dor` 当前定位是城门 sidecar，重点产出为分组门数据与据点归属表。 |
-| `stageNN.evt` | `evt_resource_linkage.json` | `src/san_tools/analysis/analyze_evt_resources.py` | 暂无 | 目前仍是研究态，稳定产物以分析报告为主。 |
-| `kingdom.cel` / `kingdom.atr` | `resources.json`、资源 atlas、地图渲染图、图层导出图 | `src/san_tools/map/render_m_cel_map.py`、`src/san_tools/map/export_editor_bundle.py`、`src/san_tools/map/export_m_layers.py`、`src/san_tools/map/export_map_previews.py` | 暂无 | 资源容器目前只读，承担地图与资源目录生成。 |
-| `stage.ini` | `stage_ini_tables.json`、`stage_ini_linked_tables.xlsx`、`stage_ini_conversion_tables.xlsx` | `src/san_tools/pipelines/export_stage_ini_tables.py`、`src/san_tools/pipelines/export_stage_ini_txt_workbook.py`、`src/san_tools/codecs/stage_ini_txt_linkage.py` | `src/san_tools/pipelines/build_stage_ini.py`、`src/san_tools/pipelines/build_stage_ini_from_txt_workbook.py` | `stage.ini` 的直接文本映射当前稳定对应 `general.txt`、`castle.txt`、`magic.txt`、`soldier.txt`。 |
+地图编辑器 2.0 达到可用状态时，应满足：
 
-## 6. 组件架构
-
-## 6.1 页面壳层
-
-- `AppShell`
-- `MenuBar`
-- `ActionBar`
-- `StatusBar`
-
-## 6.2 编辑工作区
-
-- `NavigatorPanel`
-- `CanvasStage`
-- `InspectorPanel`
-- `BottomDock`
-
-## 6.3 关键子组件
-
-- `SiteList`
-- `ResourceLibrary`
-- `ContextSummary`
-- `RawRecordEditor`
-- `PatchTimeline`
-- `FloatingMiniMap`
-
-## 7. 交互流程
-
-## 7.1 查看流程
-
-1. 左侧选择据点或图层
-2. 中央定位到画布区域
-3. 右侧查看语义摘要或关卡信息
-4. 需要字段级确认时切到 `Raw`
-
-## 7.2 绘制流程
-
-1. 选择图层
-2. 在资源库选择资源编号
-3. 工具切到 `绘制`
-4. 在画布点击目标格
-5. 底部与右侧同步显示修改记录
-
-## 7.3 据点检查流程
-
-1. 左侧结构区选择据点
-2. 画布高亮据点与城门
-3. 右侧 `选中项` 查看归属、门数和门坐标
-4. 需要底层核对时切 `Raw`
-
-## 7.4 导出流程
-
-1. 在顶部工具栏执行导出
-2. 状态栏反馈导出状态
-3. sidecar 缺失时在 `关卡` 面板与状态栏都给出说明
-
-## 8. 视觉与样式方向
-
-## 8.1 风格关键词
-
-- 桌面编辑器
-- 温暖纸面感
-- 青绿色主强调
-- 清晰边框分区
-- 非全黑开发者工具风
-
-## 8.2 色彩策略
-
-- 背景：暖灰与纸面色
-- 强调：青绿
-- 高亮：金色/琥珀
-- 辅助：石墨灰
-
-## 8.3 字体策略
-
-- 中文主字体：`"Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif`
-- 标题可使用更有辨识度的宋黑混合风格，但不能影响可读性
-
-## 9. 实施方案
-
-## 9.1 第一阶段：文档与计划
-
-- 更新 `task_plan.md`
-- 更新 `findings.md`
-- 更新 `progress.md`
-- 新增本设计文档
-
-## 9.2 第二阶段：前端重构
-
-优先改造：
-
-1. HTML 结构
-2. CSS 变量与布局系统
-3. Inspector 标签切换
-4. 左侧据点导航与资源库重排
-5. 底部历史抽屉
-
-尽量复用：
-
-1. 画布绘制逻辑
-2. minimap 点击跳转
-3. 资源虚拟列表
-4. patch 与 undo 机制
-
-## 9.3 第三阶段：验证
-
-- Node 语法检查
-- bundle 页面基础启动验证
-- Git 分两次提交，确保可以独立回滚
-
-## 10. 后续扩展位
-
-本次 UI 2.0 完成后，可在现有架构上继续追加：
-
-- 图层树与可见性/锁定开关
-- 校验器抽屉
-- 批量选区与复制/剪切
-- 据点/城门模板
-- 事件与触发对象面板
-
-这样可以保证编辑器后续增长时，不需要再次大规模推翻布局。
+1. 用户可以从 `.m` 一键导入同名 `.dor/.stg` 和头像资源。
+2. 用户可以在画布上完成基础地图绘制、区域复制、合成物件粘贴。
+3. 用户可以查看并定位势力、据点、城门、武将。
+4. 用户可以通过 Raw 视图核对字段级数据。
+5. 用户可以导出经过校验的 `.m/.dor/.stg`。
+6. 单元测试覆盖字段模型、导入、变更记录和导出校验。
+7. README 与格式文档同步说明当前支持范围。
