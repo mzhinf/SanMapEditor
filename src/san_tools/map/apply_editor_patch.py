@@ -21,6 +21,14 @@ FIELD_LAYOUT: dict[str, tuple[int, str, int, int]] = {
     "acwx": (0x00, "h", -32768, 32767),
     "acwy": (0x02, "h", -32768, 32767),
     "acwz": (0x04, "h", -32768, 32767),
+    "reserved0": (0x06, "h", -32768, 32767),
+    "terrain_tag": (0x08, "B", 0, 255),
+    "blocked": (0x09, "B", 0, 255),
+    "site_trigger": (0x0A, "B", 0, 255),
+    "site_area": (0x0B, "B", 0, 255),
+    "reserved1": (0x0C, "B", 0, 255),
+    "minimap_color": (0x0D, "B", 0, 255),
+    "reserved2": (0x0E, "H", 0, 65535),
     "flags": (0x06, "h", -32768, 32767),
     "word06": (0x06, "h", -32768, 32767),
     "byte08": (0x08, "B", 0, 255),
@@ -33,7 +41,6 @@ FIELD_LAYOUT: dict[str, tuple[int, str, int, int]] = {
     "byte14": (0x0E, "B", 0, 255),
     "byte15": (0x0F, "B", 0, 255),
 }
-
 
 def read_stage_header(blob: bytes, path: Path) -> tuple[int, int]:
     if len(blob) < 16:
@@ -50,12 +57,16 @@ def read_stage_header(blob: bytes, path: Path) -> tuple[int, int]:
 def read_field(blob: bytes | bytearray, offset: int, fmt: str) -> int:
     if fmt == "h":
         return struct.unpack_from("<h", blob, offset)[0]
+    if fmt == "H":
+        return struct.unpack_from("<H", blob, offset)[0]
     return blob[offset]
 
 
 def write_field(blob: bytearray, offset: int, fmt: str, value: int) -> None:
     if fmt == "h":
         struct.pack_into("<h", blob, offset, value)
+    elif fmt == "H":
+        struct.pack_into("<H", blob, offset, value)
     else:
         blob[offset] = value
 

@@ -28,6 +28,9 @@ class TestEditorAppV2Template(unittest.TestCase):
             'data-tab="raw"',
             'id="resourceList"',
             'id="canvas"',
+            'terrain_tag',
+            'minimap_color',
+            'id="layerVisibilityList"',
         ):
             self.assertIn(marker, html)
 
@@ -74,6 +77,13 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertFalse(referenced_names - registered_names)
         self.assertFalse(registered_ids - html_ids)
 
+    def test_editor_app_uses_ksy_m_field_names(self) -> None:
+        """验证 UI 字段口径使用 m.ksy 的变量名。"""
+        html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
+        self.assertIn('terrain_tag', html)
+        self.assertIn('minimap_color', html)
+        self.assertNotIn('land_water_hint', html)
+
 class TestEditorBundleScenarioFiles(unittest.TestCase):
     """验证编辑器 bundle 会携带剧本侧参考文件信息。"""
 
@@ -102,7 +112,7 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
                 'stage99',
                 1,
                 1,
-                [[1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+                [[1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0]],
                 'stagger',
                 (64, 64),
                 'map.png',
@@ -118,6 +128,9 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
             self.assertEqual(payload['scenarioFiles']['dor']['path'], 'stage99.dor')
             self.assertEqual(payload['scenarioFiles']['stg']['path'], 'stage99.stg')
             self.assertEqual(payload['scenarioFiles']['heads']['path'], 'heads.dat')
+            self.assertIn('blocked', payload['editableLayers'])
+            self.assertIn('terrain_tag', payload['editableLayers'])
+            self.assertEqual(payload['resourceLayers'], ['acwx', 'acwy', 'acwz'])
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

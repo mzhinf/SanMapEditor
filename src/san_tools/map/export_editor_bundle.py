@@ -45,32 +45,30 @@ FIELD_NAMES = [
     "acwx",
     "acwy",
     "acwz",
-    "word06",
-    "byte08",
-    "byte09",
-    "byte10",
-    "byte11",
-    "byte12",
-    "byte13",
-    "byte14",
-    "byte15",
+    "reserved0",
+    "terrain_tag",
+    "blocked",
+    "site_trigger",
+    "site_area",
+    "reserved1",
+    "minimap_color",
+    "reserved2",
 ]
 
 EDITABLE_LAYERS = ("acwx", "acwy", "acwz")
-POINT_LAYER_FIELDS = ("byte08", "byte09", "byte10", "byte11")
+POINT_LAYER_FIELDS = ("terrain_tag", "blocked", "site_trigger", "site_area")
 FIELD_META = [
     {"name": "acwx", "alias": "terrain_base", "label": "底层地表", "editable": True, "reserved": False},
     {"name": "acwy", "alias": "terrain_overlay", "label": "叠加地表", "editable": True, "reserved": False},
     {"name": "acwz", "alias": "object_overlay", "label": "物件层", "editable": True, "reserved": False},
-    {"name": "word06", "alias": "", "label": "保留字段", "editable": False, "reserved": True},
-    {"name": "byte08", "alias": "land_water_hint", "label": "水陆切换提示", "editable": True, "reserved": False},
-    {"name": "byte09", "alias": "blocked", "label": "阻挡标记", "editable": True, "reserved": False},
-    {"name": "byte10", "alias": "site_trigger", "label": "据点触发", "editable": True, "reserved": False},
-    {"name": "byte11", "alias": "site_area", "label": "据点区域", "editable": True, "reserved": False},
-    {"name": "byte12", "alias": "reserved1", "label": "保留字段 1", "editable": False, "reserved": True},
-    {"name": "byte13", "alias": "minimap_color", "label": "小地图颜色", "editable": True, "reserved": False, "sidecarSource": True},
-    {"name": "byte14", "alias": "reserved2", "label": "保留字段 2", "editable": False, "reserved": True},
-    {"name": "byte15", "alias": "reserved3", "label": "保留字段 3", "editable": False, "reserved": True},
+    {"name": "reserved0", "alias": "", "label": "保留字段 0", "editable": False, "reserved": True},
+    {"name": "terrain_tag", "alias": "", "label": "地形标记", "editable": True, "reserved": False},
+    {"name": "blocked", "alias": "", "label": "阻挡标记", "editable": True, "reserved": False},
+    {"name": "site_trigger", "alias": "", "label": "据点势力范围", "editable": True, "reserved": False},
+    {"name": "site_area", "alias": "", "label": "据点核心区域", "editable": True, "reserved": False},
+    {"name": "reserved1", "alias": "", "label": "保留字段 1", "editable": False, "reserved": True},
+    {"name": "minimap_color", "alias": "", "label": "小地图颜色", "editable": True, "reserved": False, "sidecarSource": True},
+    {"name": "reserved2", "alias": "", "label": "保留字段 2", "editable": False, "reserved": True},
 ]
 EDITABLE_RECORD_FIELDS = [entry["name"] for entry in FIELD_META if entry.get("editable")]
 
@@ -94,8 +92,7 @@ def read_stage_records(stage_path: Path) -> tuple[int, int, list[list[int]]]:
             blob[off + 11],
             blob[off + 12],
             blob[off + 13],
-            blob[off + 14],
-            blob[off + 15],
+            struct.unpack_from("<H", blob, off + 14)[0],
         ])
     return width, height, records
 
@@ -127,7 +124,7 @@ def write_stage_json(
         "tile": {"width": 40, "height": 20, "row_step": 10, "odd_row_x": 20},
         "fields": FIELD_NAMES,
         "fieldMeta": FIELD_META,
-        "editableLayers": list(EDITABLE_LAYERS),
+        "editableLayers": EDITABLE_RECORD_FIELDS,
         "resourceLayers": list(EDITABLE_LAYERS),
         "pointLayers": list(POINT_LAYER_FIELDS),
         "editableRecordFields": EDITABLE_RECORD_FIELDS,

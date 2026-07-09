@@ -44,7 +44,10 @@ canvas { display: block; width: 100%; height: 100%; }
 .section { min-width: 0; }
 .section + .section { border-top: 1px solid var(--soft); padding-top: 12px; }
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0; }
-.layer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.layer-list { display: grid; gap: 6px; }
+.layer-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.layer-row.active { border-color: var(--accent); background: #ecfeff; }
+.layer-row button { text-align: left; }
 .field { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 8px; }
 .field label { color: var(--muted); font-size: 12px; }
 .resource-section { min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
@@ -132,12 +135,7 @@ canvas { display: block; width: 100%; height: 100%; }
     <section class="section">
       <div class="section-title">图层控制</div>
       <div class="field"><label>当前图层</label><select id="layer"></select></div>
-      <div class="layer-grid">
-        <button class="ghost" type="button" data-layer-shortcut="acwx">地表</button>
-        <button class="ghost" type="button" data-layer-shortcut="acwy">叠加</button>
-        <button class="ghost" type="button" data-layer-shortcut="acwz">物件</button>
-        <button class="ghost" type="button" data-layer-shortcut="byte09">阻挡</button>
-      </div>
+      <div class="layer-list" id="layerVisibilityList"></div>
     </section>
     <section class="section resource-section">
       <div class="section-title">资源库</div>
@@ -224,24 +222,23 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const mini = document.getElementById('minimap');
 const miniCtx = mini.getContext('2d');
-const LEGACY_FIELD_ALIASES = { flags: 'word06', final_palette: 'byte13' };
+const LEGACY_FIELD_ALIASES = { flags: 'reserved0', word06: 'reserved0', byte08: 'terrain_tag', byte09: 'blocked', byte10: 'site_trigger', byte11: 'site_area', byte12: 'reserved1', byte13: 'minimap_color', final_palette: 'minimap_color', byte14: 'reserved2', byte15: 'reserved2' };
 const DEFAULT_FIELD_META = [
   { name: 'acwx', alias: 'terrain_base', label: '底层地表', editable: true, reserved: false },
   { name: 'acwy', alias: 'terrain_overlay', label: '叠加地表', editable: true, reserved: false },
   { name: 'acwz', alias: 'object_overlay', label: '物件层', editable: true, reserved: false },
-  { name: 'word06', alias: '', label: '保留字段', editable: false, reserved: true },
-  { name: 'byte08', alias: 'land_water_hint', label: '水陆切换提示', editable: true, reserved: false },
-  { name: 'byte09', alias: 'blocked', label: '阻挡标记', editable: true, reserved: false },
-  { name: 'byte10', alias: 'site_trigger', label: '据点触发', editable: true, reserved: false },
-  { name: 'byte11', alias: 'site_area', label: '据点区域', editable: true, reserved: false },
-  { name: 'byte12', alias: 'reserved1', label: '保留字段 1', editable: false, reserved: true },
-  { name: 'byte13', alias: 'minimap_color', label: '小地图颜色', editable: true, reserved: false, sidecarSource: true },
-  { name: 'byte14', alias: 'reserved2', label: '保留字段 2', editable: false, reserved: true },
-  { name: 'byte15', alias: 'reserved3', label: '保留字段 3', editable: false, reserved: true },
+  { name: 'reserved0', alias: '', label: '保留字段 0', editable: false, reserved: true },
+  { name: 'terrain_tag', alias: '', label: '地形标记', editable: true, reserved: false },
+  { name: 'blocked', alias: '', label: '阻挡标记', editable: true, reserved: false },
+  { name: 'site_trigger', alias: '', label: '据点势力范围', editable: true, reserved: false },
+  { name: 'site_area', alias: '', label: '据点核心区域', editable: true, reserved: false },
+  { name: 'reserved1', alias: '', label: '保留字段 1', editable: false, reserved: true },
+  { name: 'minimap_color', alias: '', label: '小地图颜色', editable: true, reserved: false, sidecarSource: true },
+  { name: 'reserved2', alias: '', label: '保留字段 2', editable: false, reserved: true },
 ];
 const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
 const RESOURCE_LAYER_OPTIONS = ['acwx', 'acwy', 'acwz'];
-const POINT_LAYER_OPTIONS = ['byte08', 'byte09', 'byte10', 'byte11'];
+const POINT_LAYER_OPTIONS = ['terrain_tag', 'blocked', 'site_trigger', 'site_area'];
 const PAINT_LAYER_OPTIONS = [...RESOURCE_LAYER_OPTIONS, ...POINT_LAYER_OPTIONS];
 const MAX_BASE_IMAGE_EDGE = 8192;
 const MAX_BASE_IMAGE_PIXELS = 100000000;
@@ -257,6 +254,7 @@ const state = {
   resourceByIndex: {},
   drawImages: {},
   layerStats: {},
+  layerVisibility: Object.fromEntries(PAINT_LAYER_OPTIONS.map(layer => [layer, true])),
   image: null,
   renderCanvas: null,
   renderCtx: null,
@@ -282,7 +280,7 @@ const state = {
 const els = {
   status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
   cellInfo: document.getElementById('cellInfo'), recordList: document.getElementById('recordList'), tool: document.getElementById('tool'),
-  layer: document.getElementById('layer'), patchCount: document.getElementById('patchCount'),
+  layer: document.getElementById('layer'), layerVisibilityList: document.getElementById('layerVisibilityList'), patchCount: document.getElementById('patchCount'),
   patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceSpacer: document.getElementById('resourceSpacer'), resourceMeta: document.getElementById('resourceMeta'), resourceFilter: document.getElementById('resourceFilter'),
   resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
@@ -453,8 +451,9 @@ function isPointLayer(name) {
 function currentLayerName() { return canonicalFieldName(els.layer.value); }
 function visiblePointLayer() {
   const layer = currentLayerName();
-  return isPointLayer(layer) ? layer : null;
+  return isPointLayer(layer) && state.layerVisibility[layer] !== false ? layer : null;
 }
+function hasHiddenResourceLayers() { return RESOURCE_LAYER_OPTIONS.some(layer => state.layerVisibility[layer] === false); }
 function buildSiteIndex(siteLinks) {
   if (!siteLinks?.available) return null;
   const cityByKey = new Map();
@@ -628,7 +627,8 @@ function ensureSelectedResource(layer) {
 }
 function recordFieldBounds(name) {
   const field = canonicalFieldName(name);
-  if (field === 'acwx' || field === 'acwy' || field === 'acwz' || field === 'word06') return { min: -32768, max: 32767 };
+  if (field === 'acwx' || field === 'acwy' || field === 'acwz' || field === 'reserved0') return { min: -32768, max: 32767 };
+  if (field === 'reserved2') return { min: 0, max: 65535 };
   return { min: 0, max: 255 };
 }
 function formatFieldName(meta) { return meta.alias ? `${meta.name} · ${meta.alias}` : meta.name; }
@@ -637,7 +637,7 @@ function layerOptionLabel(name) {
   return `${meta.label}(${canonicalFieldName(name)})`;
 }
 function renderLayerOptions() {
-  const options = [...(state.meta?.resourceLayers || RESOURCE_LAYER_OPTIONS), ...(state.meta?.pointLayers || POINT_LAYER_OPTIONS)];
+  const options = state.meta?.editableLayers || PAINT_LAYER_OPTIONS;
   const current = canonicalFieldName(els.layer.value || options[0] || 'acwx');
   els.layer.textContent = '';
   for (const name of options) {
@@ -646,6 +646,40 @@ function renderLayerOptions() {
     option.textContent = layerOptionLabel(name);
     if (name === current) option.selected = true;
     els.layer.append(option);
+  }
+  renderLayerVisibilityList();
+}
+function renderLayerVisibilityList() {
+  if (!els.layerVisibilityList) return;
+  const options = state.meta?.editableLayers || PAINT_LAYER_OPTIONS;
+  els.layerVisibilityList.textContent = '';
+  for (const name of options) {
+    const row = document.createElement('div');
+    row.className = 'layer-row' + (name === currentLayerName() ? ' active' : '');
+    const visible = document.createElement('input');
+    visible.type = 'checkbox';
+    visible.checked = state.layerVisibility[name] !== false;
+    visible.title = '显示 / 隐藏图层';
+    visible.addEventListener('change', () => {
+      state.layerVisibility[name] = visible.checked;
+      scheduleDraw();
+      renderLayerVisibilityList();
+    });
+    const select = document.createElement('button');
+    select.type = 'button';
+    select.className = 'ghost';
+    select.textContent = layerOptionLabel(name);
+    select.addEventListener('click', () => {
+      els.layer.value = name;
+      ensureSelectedResource(currentLayerName());
+      renderResourceList();
+      refreshSide();
+      refreshPatches();
+      renderLayerVisibilityList();
+      scheduleDraw();
+    });
+    row.append(visible, select);
+    els.layerVisibilityList.append(row);
   }
 }
 function moveSelected(dx, dy) {
@@ -744,7 +778,7 @@ function drawVisibleMapResources(viewWidth, viewHeight) {
   if (!range) return;
   for (const layer of RESOURCE_LAYER_OPTIONS) {
     const fi = fieldIndex(layer);
-    if (fi < 0 || !state.drawImages[layer]) continue;
+    if (fi < 0 || !state.drawImages[layer] || state.layerVisibility[layer] === false) continue;
     for (let row = range.minRow; row <= range.maxRow; row++) {
       const rowStartX = range.originX + (row & 1 ? 20 : 0);
       const minCol = Math.max(0, Math.floor((range.left - rowStartX - range.padLeft) / 40) - 1);
@@ -755,14 +789,15 @@ function drawVisibleMapResources(viewWidth, viewHeight) {
 }
 function draw() {
   const image = displayImage();
-  if (!image && (!state.resources || !state.meta)) return;
+  const useCompositedImage = image && !hasHiddenResourceLayers();
+  if (!useCompositedImage && (!state.resources || !state.meta)) return;
   const rect = canvas.getBoundingClientRect();
   ctx.save();
   ctx.clearRect(0, 0, rect.width, rect.height);
   ctx.translate(state.transform.x, state.transform.y);
   ctx.scale(state.transform.scale, state.transform.scale);
   ctx.imageSmoothingEnabled = false;
-  if (image) ctx.drawImage(image, 0, 0);
+  if (useCompositedImage) ctx.drawImage(image, 0, 0);
   else drawVisibleMapResources(rect.width, rect.height);
   drawVisiblePointOverlay(rect.width, rect.height);
   drawActiveSiteOverlay();
@@ -1467,7 +1502,7 @@ function parseStageM(buffer, name = 'local.m') {
     records.push([
       view.getInt16(off, true), view.getInt16(off + 2, true), view.getInt16(off + 4, true), view.getInt16(off + 6, true),
       view.getUint8(off + 8), view.getUint8(off + 9), view.getUint8(off + 10), view.getUint8(off + 11),
-      view.getUint8(off + 12), view.getUint8(off + 13), view.getUint8(off + 14), view.getUint8(off + 15),
+      view.getUint8(off + 12), view.getUint8(off + 13), view.getUint16(off + 14, true),
     ]);
   }
   const stageName = name.replace(/\.m$/i, '');
@@ -1475,7 +1510,7 @@ function parseStageM(buffer, name = 'local.m') {
   const inheritedSiteLinks = state.meta?.stage === stageName
     ? state.meta.siteLinks
     : { available: false, cities: [], gates: [], reason: '仅加载单个 .m 文件时，浏览器无法直接读取同目录 .dor / .stg；请优先使用已导出的关卡页面。' };
-  // 仅加载 .m 时没有 bundle 图片 / 资源统计，仍然保留 byte08~11 的统一字段语义
+  // 仅加载 .m 时没有 bundle 图片 / 资源统计，按 ksy 字段名保留 terrain_tag/blocked/site_trigger/site_area 的统一语义
   return normalizeMeta({
     format: 'san-editor-stage-v1', stage: stageName, width, height, layout: 'stagger', origin: [64, 64],
     tile: { width: 40, height: 20, row_step: 10, odd_row_x: 20 },
@@ -1561,15 +1596,14 @@ function buildStageBytes() {
     view.setInt16(off, recordValue(record, 'acwx'), true);
     view.setInt16(off + 2, recordValue(record, 'acwy'), true);
     view.setInt16(off + 4, recordValue(record, 'acwz'), true);
-    view.setInt16(off + 6, recordValue(record, 'word06'), true);
-    view.setUint8(off + 8, recordValue(record, 'byte08'));
-    view.setUint8(off + 9, recordValue(record, 'byte09'));
-    view.setUint8(off + 10, recordValue(record, 'byte10'));
-    view.setUint8(off + 11, recordValue(record, 'byte11'));
-    view.setUint8(off + 12, recordValue(record, 'byte12'));
-    view.setUint8(off + 13, recordValue(record, 'byte13'));
-    view.setUint8(off + 14, recordValue(record, 'byte14'));
-    view.setUint8(off + 15, recordValue(record, 'byte15'));
+    view.setInt16(off + 6, recordValue(record, 'reserved0'), true);
+    view.setUint8(off + 8, recordValue(record, 'terrain_tag'));
+    view.setUint8(off + 9, recordValue(record, 'blocked'));
+    view.setUint8(off + 10, recordValue(record, 'site_trigger'));
+    view.setUint8(off + 11, recordValue(record, 'site_area'));
+    view.setUint8(off + 12, recordValue(record, 'reserved1'));
+    view.setUint8(off + 13, recordValue(record, 'minimap_color'));
+    view.setUint16(off + 14, recordValue(record, 'reserved2'), true);
   }
   return new Uint8Array(buffer);
 }
@@ -1579,8 +1613,8 @@ function nearestSampleIndex(sourceSize, targetIndex, targetSize) {
 function buildActiveSidecarBytes() {
   const gridSize = state.meta.sidecars.gridSize || 160;
   const activeRows = state.meta.sidecars.activeRows || 128;
-  const fi = fieldIndex('byte13');
-  if (fi < 0) throw new Error('当前关卡缺少 byte13/minimap_color 字段。');
+  const fi = fieldIndex('minimap_color');
+  if (fi < 0) throw new Error('当前关卡缺少 minimap_color 字段。');
   const output = new Uint8Array(gridSize * activeRows);
   for (let targetRow = 0; targetRow < activeRows; targetRow++) {
     const sourceRow = nearestSampleIndex(state.meta.height, targetRow, activeRows);
@@ -1718,7 +1752,6 @@ mini.addEventListener('pointerdown', ev => {
 });
 els.openMFile.addEventListener('click', () => { els.loadMFile.click(); });
 document.querySelectorAll('.inspector-tab').forEach(tab => { tab.addEventListener('click', () => switchInspectorTab(tab.dataset.tab)); });
-document.querySelectorAll('[data-layer-shortcut]').forEach(button => { button.addEventListener('click', () => { els.layer.value = button.dataset.layerShortcut; ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); scheduleDraw(); }); });
 els.tool.addEventListener('change', () => { updateHud(); });
 els.setRegionAnchor.addEventListener('click', () => { if (!state.selected) return; state.regionAnchor = { ...state.selected }; refreshCompositeList(); scheduleDraw(); });
 els.copyRegion.addEventListener('click', () => { const snapshot = captureRegionSnapshot('区域复制'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已复制区域 ' + snapshot.width + ' x ' + snapshot.height; });
@@ -1735,7 +1768,7 @@ els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
 els.sitePicker.addEventListener('change', () => { setActiveSite(els.sitePicker.value, { focus: !!els.sitePicker.value }); });
 els.clearSite.addEventListener('click', () => { setActiveSite('', { skipDraw: false }); });
-els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); refreshPatches(); scheduleDraw(); });
+els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); refreshPatches(); renderLayerVisibilityList(); scheduleDraw(); });
 els.resourceFilter.addEventListener('input', () => { renderResourceList(); });
 els.resourceSort.addEventListener('change', () => { renderResourceList(); });
 els.resourceList.addEventListener('scroll', scheduleResourceListRender);

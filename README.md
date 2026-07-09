@@ -74,7 +74,7 @@
 - `src/san_tools/map/editor_model.py` 统一承载严格对齐 `src/san_tools/ksy/m.ksy`、`dor.ksy`、`stg.ksy` 的字段级数据模型，只保留 `.m/.dor/.stg` 本身的结构与顺序解析器，不再混入 stage JSON、patch JSON 或多文件上下文抽象。
 - 地图编辑器页面升级为 2.0 五区布局：顶部工具栏、左侧资源库、中央地图画布、右侧 Inspector、底部历史与状态面板。
 - 左侧资源库支持地表层、叠加层、物件层、数据层色板切换，并保留资源窗口化渲染，避免一次性挂载全部 DOM。
-- `.m` 记录字段按 `acwx/acwy/acwz/word06/byte08..byte15` 统一口径展示；Raw 面板仅开放非保留字段的受控编辑。
+- `.m` 记录字段按 `m.ksy` 的 `acwx/acwy/acwz/reserved0/terrain_tag/blocked/site_trigger/site_area/reserved1/minimap_color/reserved2` 统一口径展示；旧 `byte08..byte15` 仅作为兼容别名处理。
 - 页面支持区域复制和合成物件，复制内容包含当前选区内每个 cell 的所有层字段。
 - 右侧 Inspector 提供属性、势力、据点、武将、Raw、校验 6 个视图；据点视图会按 `.dor/.stg` 联动高亮城门。
 - bundle 导出时会复制同名 `.dor/.stg` 与可选 `heads.dat` 到关卡目录，浏览器导出会把这些参考文件随 `.m/.s/.x` 一起下载。
@@ -159,7 +159,7 @@
 - 38 个 `.evt` 都能对上对应 `TalkNN.txt`，其中 `stage17.txt` 是可读脚本原型，`stage01.txt` 是二进制 blob。
 - `.evt` 中目前最稳定的 ASCII 命令 token 是 `talk`、`VIEW`、`MAP`、`MAPALL`、`MOVE`、`TIME`、`TIMEOVER`。
 - `.dor` 现已确认结构为：`Door    Data` 文件头 + `0x3C` 记录长度 + 多个 `count + records` 分组，遇到 `count=0` 结束；`analyze_dor.py` 可稳定导出 `door_x/door_y/dir/site_x/site_y/raw`。
-- `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `byte13 / minimap_color` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
+- `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `minimap_color` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
 - `tools/apply_editor_patch.py` 现在会在写回 `.m` 后默认同步生成同名 `.s/.x`；编辑器导出的 bundle 也会内嵌 sidecar 尾区参考，支持页面内一键导出 `.m/.s/.x`。
 - 在 33 个关卡里，`.x` 的有效区始终比 `.s` 更接近 `.m` 派生结果，平均匹配率分别为 `0.620744 / 0.47098`；保留尾区后，生成结果的尾区匹配率恒为 `1.0`。
 ### stage.ini 结构化导出与回写
