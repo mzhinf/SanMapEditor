@@ -3,92 +3,46 @@ from __future__ import annotations
 import struct
 import unittest
 
-from san_tools.map.editor_model import (
-    EDITABLE_RECORD_FIELDS,
-    FIELD_NAMES,
-    KSY_SCHEMA_PATH,
-    MapCell,
-    MapEditChange,
-    MapEditPatchModel,
-    StageMapModel,
-    canonical_field_name,
-    field_meta,
-)
+from san_tools.map.editor_model import MFile, MMapCell
 
 
-class TestMapEditorModel(unittest.TestCase):
-    """验证基于 `m.ksy` 的地图编辑数据模型。"""
+class TestMModel(unittest.TestCase):
+    """验证 m.ksy 对应的字段级模型。"""
 
-    def make_stage_blob(self) -> bytes:
-        """构造一个最小 `.m` 样本。"""
+    def test_map_cell_reads_every_field(self) -> None:
+        cell = MMapCell.from_bytes(struct.pack("<hhh2sBBBB1sB2s", 1, 2, -3, b"\x00\x00", 4, 5, 6, 7, b"\x00", 8, b"\x00\x00"))
 
-        records = [
-            struct.pack("<hhhh8B", 1, 2, -1, 0, 3, 4, 5, 6, 0, 10, 0, 0),
-            struct.pack("<hhhh8B", 7, 8, 9, 0, 11, 12, 13, 14, 0, 20, 0, 0),
-        ]
-        return struct.pack("<II8s", 2, 1, b"Hello1.0") + b"".join(records)
+        self.assertEqual(cell.acwx, 1)
+        self.assertEqual(cell.acwy, 2)
+        self.assertEqual(cell.acwz, -3)
+        self.assertEqual(cell.reserved0, b"\x00\x00")
+        self.assertEqual(cell.terrain_tag, 4)
+        self.assertEqual(cell.blocked, 5)
+        self.assertEqual(cell.site_trigger, 6)
+        self.assertEqual(cell.site_area, 7)
+        self.assertEqual(cell.reserved1, b"\x00")
+        self.assertEqual(cell.minimap_color, 8)
+        self.assertEqual(cell.reserved2, b"\x00\x00")
 
-    def test_stage_model_reads_m_cells_and_exports_editor_records(self) -> None:
-        model = StageMapModel.from_m_bytes(self.make_stage_blob(), stage="stage_test", source="memory")
+    def test_m_file_reads_header_and_cells(self) -> None:
+        cell0 = struct.pack("<hhh2sBBBB1sB2s", 1, 2, -1, b"\x00\x00", 3, 4, 5, 6, b"\x00", 7, b"\x00\x00")
+        cell1 = struct.pack("<hhh2sBBBB1sB2s", 8, 9, 10, b"\x00\x00", 11, 12, 13, 14, b"\x00", 15, b"\x00\x00")
+        blob = struct.pack("<II8s", 2, 1, b"Hello1.0") + cell0 + cell1
+
+        model = MFile.from_bytes(blob)
 
         self.assertEqual(model.width, 2)
         self.assertEqual(model.height, 1)
-        self.assertEqual(model.cell_at(0, 0).acwx, 1)
-        self.assertEqual(model.cell_at(0, 0).acwz, -1)
-        self.assertEqual(model.editor_records()[1], [7, 8, 9, 0, 11, 12, 13, 14, 0, 20, 0, 0])
-        self.assertEqual(model.minimap_color_bytes(), bytes([10, 20]))
+        self.assertEqual(model.magic_bytes, b"Hello1.0")
+        self.assertEqual(model.cell_size, 2)
+        self.assertEqual(model.cells[0].site_area, 6)
+        self.assertEqual(model.cells[1].minimap_color, 15)
 
-    def test_editor_stage_dict_contains_ksy_field_metadata(self) -> None:
-        model = StageMapModel.from_m_bytes(self.make_stage_blob(), stage="stage_test")
-        payload = model.to_editor_stage_dict({"layout": "stagger"})
-        meta_by_name = {row["name"]: row for row in payload["fieldMeta"]}
-
-        self.assertEqual(payload["format"], "san-editor-stage-v1")
-        self.assertEqual(payload["fields"], list(FIELD_NAMES))
-        self.assertEqual(payload["ksy"], str(KSY_SCHEMA_PATH))
-        self.assertEqual(payload["layout"], "stagger")
-        self.assertEqual(meta_by_name["byte13"]["ksyId"], "minimap_color")
-        self.assertTrue(meta_by_name["byte13"]["sidecarSource"])
-        self.assertIn("byte13", EDITABLE_RECORD_FIELDS)
-
-    def test_field_aliases_are_canonicalized(self) -> None:
-        self.assertEqual(canonical_field_name("flags"), "word06")
-        self.assertEqual(canonical_field_name("final_palette"), "byte13")
-
-        change = MapEditChange(x=1, y=0, field="final_palette", before=20, after=21)
-        self.assertEqual(change.field, "byte13")
-        self.assertEqual(change.as_json_dict()["field"], "byte13")
-
-    def test_cell_from_editor_record_validates_shape_and_range(self) -> None:
-        cell = MapCell.from_editor_record([1, 2, -1, 0, 3, 4, 5, 6, 0, 10, 0, 0])
-        self.assertEqual(cell.value_of("final_palette"), 10)
+    def test_m_file_rejects_invalid_magic(self) -> None:
+        blob = struct.pack("<II8s", 1, 1, b"BadMagic") + struct.pack("<hhh2sBBBB1sB2s", 0, 0, 0, b"\x00\x00", 0, 0, 0, 0, b"\x00", 0, b"\x00\x00")
 
         with self.assertRaises(ValueError):
-            MapCell.from_editor_record([1, 2])
-        with self.assertRaises(ValueError):
-            MapCell.from_editor_record([1, 2, -1, 0, 3, 4, 5, 6, 0, 300, 0, 0])
-
-    def test_patch_model_exports_json_payload(self) -> None:
-        patch = MapEditPatchModel(
-            stage="stage_test",
-            changes=[MapEditChange(0, 0, "byte09", 4, 5)],
-            minimap_dirty_cells=[(0, 0)],
-        )
-
-        payload = patch.to_patch_dict()
-
-        self.assertEqual(payload["format"], "san-editor-patch-v1")
-        self.assertEqual(payload["changes"][0], {"x": 0, "y": 0, "field": "byte09", "before": 4, "after": 5})
-        self.assertEqual(payload["minimap"]["dirtyCells"], [[0, 0]])
-
-
-class TestFieldMetaFunction(unittest.TestCase):
-    """验证字段元数据可独立生成。"""
-
-    def test_field_meta_contains_every_field_once(self) -> None:
-        rows = field_meta()
-        self.assertEqual([row["name"] for row in rows], list(FIELD_NAMES))
-        self.assertEqual(len({row["name"] for row in rows}), len(FIELD_NAMES))
+            MFile.from_bytes(blob)
 
 
 if __name__ == "__main__":

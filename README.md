@@ -70,7 +70,7 @@
 
 导出的编辑页现在支持：
 
-- `src/san_tools/map/editor_model.py` 统一承载基于 `src/san_tools/ksy/m.ksy`、`dor.ksy`、`stg.ksy` 的地图编辑数据模型，可保存 `.m` cell、`.dor` 城门分组、`.stg` 势力/据点/实体摘要，以及编辑器 stage JSON、patch JSON 和多文件上下文关联。
+- `src/san_tools/map/editor_model.py` 统一承载严格对齐 `src/san_tools/ksy/m.ksy`、`dor.ksy`、`stg.ksy` 的字段级数据模型，只保留 `.m/.dor/.stg` 本身的结构与顺序解析器，不再混入 stage JSON、patch JSON 或多文件上下文抽象。
 - `.m` 记录字段按 `word06 / byte08..byte15` 统一口径展示，页面不再显示旧的 `flags` 描述。
 - 页面改为左右双栏：左侧 `Cell -> Record -> 修改`，右侧 `Minimap -> Stage -> Resources`。
 - `Record` 区仅展示并编辑所有非 `reserved` 数值字段，保留字段不再出现在列表中。

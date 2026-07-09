@@ -1,347 +1,257 @@
 from __future__ import annotations
 
-import json
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
 
-STAGE_FORMAT = "san-editor-stage-v1"
-PATCH_FORMAT = "san-editor-patch-v1"
+KSY_ROOT = Path(__file__).resolve().parents[1] / "ksy"
+M_KSY_PATH = KSY_ROOT / "m.ksy"
+DOR_KSY_PATH = KSY_ROOT / "dor.ksy"
+STG_KSY_PATH = KSY_ROOT / "stg.ksy"
+
 M_MAGIC = b"Hello1.0"
-M_HEADER_SIZE = 16
-M_CELL_SIZE = 16
-
-KSY_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "ksy" / "m.ksy"
-
-@dataclass(frozen=True)
-class MapFieldSpec:
-    """描述 `.m` 单个 cell 字段在 KSY 与编辑器 JSON 之间的映射。"""
-
-    name: str
-    ksy_id: str
-    offset: int
-    fmt: str
-    min_value: int
-    max_value: int
-    alias: str
-    label: str
-    editable: bool
-    reserved: bool
-    sidecar_source: bool = False
-    legacy_names: tuple[str, ...] = ()
-
-    @property
-    def struct_format(self) -> str:
-        """返回用于 `struct` 读写的 little-endian 格式。"""
-
-        return f"<{self.fmt}"
-
-    def read_from(self, record: bytes | bytearray) -> int:
-        """从 16 字节 cell 记录中读取当前字段。"""
-
-        if self.fmt == "B":
-            return int(record[self.offset])
-        return int(struct.unpack_from(self.struct_format, record, self.offset)[0])
-
-    def validate_value(self, value: int) -> None:
-        """校验字段值是否落在二进制格式允许范围内。"""
-
-        if not isinstance(value, int):
-            raise TypeError(f"{self.name} 必须是整数。")
-        if not (self.min_value <= value <= self.max_value):
-            raise ValueError(f"{self.name}={value} 超出范围 {self.min_value}..{self.max_value}。")
+DOR_MAGIC = b"Door    Data"
+BIG5_ENCODING = "big5"
 
 
-FIELD_SPECS: tuple[MapFieldSpec, ...] = (
-    MapFieldSpec("acwx", "acwx", 0x00, "h", -32768, 32767, "terrain_base", "底层地表", True, False),
-    MapFieldSpec("acwy", "acwy", 0x02, "h", -32768, 32767, "terrain_overlay", "叠加地表", True, False),
-    MapFieldSpec("acwz", "acwz", 0x04, "h", -32768, 32767, "object_overlay", "物件层", True, False),
-    MapFieldSpec("word06", "reserved0", 0x06, "h", -32768, 32767, "", "保留字段", False, True, legacy_names=("flags",)),
-    MapFieldSpec("byte08", "terrain_tag", 0x08, "B", 0, 255, "land_water_hint", "水陆切换提示", True, False),
-    MapFieldSpec("byte09", "blocked", 0x09, "B", 0, 255, "blocked", "阻挡标记", True, False),
-    MapFieldSpec("byte10", "site_trigger", 0x0A, "B", 0, 255, "site_trigger", "据点触发", True, False),
-    MapFieldSpec("byte11", "site_area", 0x0B, "B", 0, 255, "site_area", "据点区域", True, False),
-    MapFieldSpec("byte12", "reserved1", 0x0C, "B", 0, 255, "reserved1", "保留字段 1", False, True),
-    MapFieldSpec("byte13", "minimap_color", 0x0D, "B", 0, 255, "minimap_color", "小地图颜色", True, False, True, ("final_palette",)),
-    MapFieldSpec("byte14", "reserved2", 0x0E, "B", 0, 255, "reserved2", "保留字段 2", False, True),
-    MapFieldSpec("byte15", "reserved2", 0x0F, "B", 0, 255, "reserved3", "保留字段 3", False, True),
-)
+def _ensure_range(blob: bytes, offset: int, size: int, label: str) -> None:
+    """检查读取区间是否落在二进制范围内。"""
 
-FIELD_NAMES: tuple[str, ...] = tuple(spec.name for spec in FIELD_SPECS)
-EDITABLE_LAYERS: tuple[str, ...] = ("acwx", "acwy", "acwz")
-POINT_LAYER_FIELDS: tuple[str, ...] = ("byte08", "byte09", "byte10", "byte11")
-EDITABLE_RECORD_FIELDS: tuple[str, ...] = tuple(spec.name for spec in FIELD_SPECS if spec.editable)
-FIELD_BY_NAME: dict[str, MapFieldSpec] = {spec.name: spec for spec in FIELD_SPECS}
-for _spec in FIELD_SPECS:
-    for _legacy_name in _spec.legacy_names:
-        FIELD_BY_NAME[_legacy_name] = _spec
+    if offset < 0 or size < 0 or offset + size > len(blob):
+        raise ValueError(f"{label} 越界：offset={offset:#x} size={size} total={len(blob)}")
 
 
-def canonical_field_name(name: str) -> str:
-    """把旧字段名转换为当前编辑器字段名。"""
+def _read_exact(blob: bytes, offset: int, size: int, label: str) -> bytes:
+    """读取固定长度字节片段。"""
 
-    try:
-        return FIELD_BY_NAME[name].name
-    except KeyError as exc:
-        raise ValueError(f"不支持的地图字段：{name!r}") from exc
+    _ensure_range(blob, offset, size, label)
+    return blob[offset : offset + size]
 
 
-def field_meta() -> list[dict[str, object]]:
-    """生成编辑器 stage JSON 使用的字段元数据。"""
+def _read_u4(blob: bytes, offset: int, label: str) -> int:
+    """读取 little-endian u4。"""
 
-    rows: list[dict[str, object]] = []
-    for spec in FIELD_SPECS:
-        row: dict[str, object] = {
-            "name": spec.name,
-            "alias": spec.alias,
-            "label": spec.label,
-            "editable": spec.editable,
-            "reserved": spec.reserved,
-            "ksyId": spec.ksy_id,
-            "offset": spec.offset,
-        }
-        if spec.sidecar_source:
-            row["sidecarSource"] = True
-        if spec.legacy_names:
-            row["legacyNames"] = list(spec.legacy_names)
-        rows.append(row)
-    return rows
+    return int(struct.unpack("<I", _read_exact(blob, offset, 4, label))[0])
+
+
+def _read_s4(blob: bytes, offset: int, label: str) -> int:
+    """读取 little-endian s4。"""
+
+    return int(struct.unpack("<i", _read_exact(blob, offset, 4, label))[0])
+
+
+def _read_s2(blob: bytes, offset: int, label: str) -> int:
+    """读取 little-endian s2。"""
+
+    return int(struct.unpack("<h", _read_exact(blob, offset, 2, label))[0])
+
+
+def _read_u1(blob: bytes, offset: int, label: str) -> int:
+    """读取 u1。"""
+
+    return int(_read_exact(blob, offset, 1, label)[0])
+
+
+def _decode_big5(raw: bytes) -> str:
+    """按 KSY 的 Big5 定长字符串规则解码。"""
+
+    return raw.split(b"\x00", 1)[0].decode(BIG5_ENCODING, errors="replace")
+
+
+def _expect_bytes(blob: bytes, offset: int, expected: bytes, label: str) -> bytes:
+    """读取并校验 contents 固定字节。"""
+
+    raw = _read_exact(blob, offset, len(expected), label)
+    if raw != expected:
+        raise ValueError(f"{label} 不匹配：expected={expected!r} actual={raw!r}")
+    return raw
 
 
 @dataclass(frozen=True)
-class MapCell:
-    """保存 `.m` 文件中一个地图 cell 的全部 16 字节可解释字段。"""
+class U4Words:
+    """对应 u4_words，用于保存未命名但按 4 字节对齐的原始字数组。"""
+
+    words: tuple[int, ...]
+
+    @classmethod
+    def from_bytes(cls, blob: bytes, label: str) -> "U4Words":
+        """把整段字节按 u4 数组解析。"""
+
+        if len(blob) % 4 != 0:
+            raise ValueError(f"{label} 长度必须是 4 的倍数，实际为 {len(blob)}")
+        return cls(words=tuple(struct.unpack(f"<{len(blob) // 4}I", blob)) if blob else ())
+
+
+class _SeqReader:
+    """顺序读取器，用于把 KSY 中的 seq 按声明顺序稳定映射到模型字段。"""
+
+    def __init__(self, blob: bytes, label: str) -> None:
+        self._blob = blob
+        self._label = label
+        self._offset = 0
+
+    def remaining(self) -> int:
+        """返回剩余未消费字节数。"""
+
+        return len(self._blob) - self._offset
+
+    def u4(self, field_name: str) -> int:
+        """顺序读取一个 u4 字段。"""
+
+        value = _read_u4(self._blob, self._offset, f"{self._label}.{field_name}")
+        self._offset += 4
+        return value
+
+    def s4(self, field_name: str) -> int:
+        """顺序读取一个 s4 字段。"""
+
+        value = _read_s4(self._blob, self._offset, f"{self._label}.{field_name}")
+        self._offset += 4
+        return value
+
+    def s2(self, field_name: str) -> int:
+        """顺序读取一个 s2 字段。"""
+
+        value = _read_s2(self._blob, self._offset, f"{self._label}.{field_name}")
+        self._offset += 2
+        return value
+
+    def u1(self, field_name: str) -> int:
+        """顺序读取一个 u1 字段。"""
+
+        value = _read_u1(self._blob, self._offset, f"{self._label}.{field_name}")
+        self._offset += 1
+        return value
+
+    def exact(self, size: int, expected: bytes, field_name: str) -> bytes:
+        """顺序读取一个 contents 固定字节字段。"""
+
+        raw = _expect_bytes(self._blob, self._offset, expected, f"{self._label}.{field_name}")
+        self._offset += size
+        return raw
+
+    def big5(self, size: int, field_name: str) -> str:
+        """顺序读取一个 Big5 定长字符串字段。"""
+
+        raw = _read_exact(self._blob, self._offset, size, f"{self._label}.{field_name}")
+        self._offset += size
+        return _decode_big5(raw)
+
+    def u4_tuple(self, count: int, field_name: str) -> tuple[int, ...]:
+        """顺序读取定长 u4 数组。"""
+
+        size = count * 4
+        raw = _read_exact(self._blob, self._offset, size, f"{self._label}.{field_name}")
+        self._offset += size
+        return tuple(struct.unpack(f"<{count}I", raw))
+
+    def u4_words_to_end(self, field_name: str) -> U4Words:
+        """把剩余字节全部按 u4_words 解析。"""
+
+        raw = self._blob[self._offset :]
+        self._offset = len(self._blob)
+        return U4Words.from_bytes(raw, f"{self._label}.{field_name}")
+
+    def finish(self) -> None:
+        """确保当前结构没有剩余未消费字节。"""
+
+        if self._offset != len(self._blob):
+            raise ValueError(
+                f"{self._label} 仍有未解析数据：parsed={self._offset} total={len(self._blob)}"
+            )
+
+
+def _read_sized_block(blob: bytes, offset: int, label: str) -> tuple[int, bytes, int]:
+    """读取 KSY 中反复出现的 u32 size + payload 块。"""
+
+    size = _read_u4(blob, offset, f"{label}.size")
+    payload_offset = offset + 4
+    payload = _read_exact(blob, payload_offset, size, f"{label}.body")
+    return size, payload, payload_offset + size
+
+
+@dataclass(frozen=True)
+class MMapCell:
+    """对应 m.ksy.types.map_cell。"""
 
     acwx: int
     acwy: int
     acwz: int
-    word06: int
-    byte08: int
-    byte09: int
-    byte10: int
-    byte11: int
-    byte12: int
-    byte13: int
-    byte14: int
-    byte15: int
+    reserved0: bytes
+    terrain_tag: int
+    blocked: int
+    site_trigger: int
+    site_area: int
+    reserved1: bytes
+    minimap_color: int
+    reserved2: bytes
 
     @classmethod
-    def from_record(cls, record: bytes | bytearray) -> "MapCell":
-        """从单条 16 字节 cell 记录构造模型。"""
+    def from_bytes(cls, blob: bytes) -> "MMapCell":
+        """按 map_cell.seq 顺序解析单个地图单元。"""
 
-        if len(record) != M_CELL_SIZE:
-            raise ValueError(f"cell 记录长度应为 {M_CELL_SIZE} 字节，实际 {len(record)} 字节。")
-        values = {spec.name: spec.read_from(record) for spec in FIELD_SPECS}
-        return cls(**values)
-
-    @classmethod
-    def from_editor_record(cls, values: Iterable[int]) -> "MapCell":
-        """从编辑器 JSON 的数组记录构造模型。"""
-
-        row = list(values)
-        if len(row) != len(FIELD_SPECS):
-            raise ValueError(f"编辑器记录字段数应为 {len(FIELD_SPECS)}，实际 {len(row)}。")
-        for spec, value in zip(FIELD_SPECS, row):
-            spec.validate_value(value)
-        return cls(**dict(zip(FIELD_NAMES, row)))
-
-    def as_editor_record(self) -> list[int]:
-        """按编辑器 JSON 字段顺序输出数组记录。"""
-
-        return [int(getattr(self, spec.name)) for spec in FIELD_SPECS]
-
-    def value_of(self, field_name: str) -> int:
-        """读取指定字段值，兼容历史字段名。"""
-
-        return int(getattr(self, canonical_field_name(field_name)))
+        if len(blob) != 16:
+            raise ValueError(f"map_cell 长度必须为 16，实际为 {len(blob)}")
+        reader = _SeqReader(blob, "map_cell")
+        model = cls(
+            acwx=reader.s2("acwx"),
+            acwy=reader.s2("acwy"),
+            acwz=reader.s2("acwz"),
+            reserved0=reader.exact(2, b"\x00\x00", "reserved0"),
+            terrain_tag=reader.u1("terrain_tag"),
+            blocked=reader.u1("blocked"),
+            site_trigger=reader.u1("site_trigger"),
+            site_area=reader.u1("site_area"),
+            reserved1=reader.exact(1, b"\x00", "reserved1"),
+            minimap_color=reader.u1("minimap_color"),
+            reserved2=reader.exact(2, b"\x00\x00", "reserved2"),
+        )
+        reader.finish()
+        return model
 
 
-@dataclass
-class StageMapModel:
-    """保存一个关卡 `.m` 地图的可编辑模型。"""
+@dataclass(frozen=True)
+class MFile:
+    """对应 m.ksy 顶层结构。"""
 
-    stage: str
     width: int
     height: int
-    cells: list[MapCell]
-    source: str | None = None
+    magic_bytes: bytes
+    cells: tuple[MMapCell, ...]
+
+    @property
+    def cell_size(self) -> int:
+        """对应 instances.cell_size。"""
+
+        return self.width * self.height
 
     @classmethod
-    def from_m_bytes(cls, blob: bytes, stage: str = "", source: str | None = None) -> "StageMapModel":
-        """从 `.m` 原始字节构造地图模型。"""
+    def from_bytes(cls, blob: bytes) -> "MFile":
+        """按 m.ksy 解析整个 .m 文件。"""
 
-        if len(blob) < M_HEADER_SIZE:
-            raise ValueError("数据过小，不是合法的 .m 文件。")
-        width, height = struct.unpack_from("<II", blob, 0)
-        if blob[8:16] != M_MAGIC:
-            raise ValueError("不是 Hello1.0 地图文件。")
-        expected_size = M_HEADER_SIZE + width * height * M_CELL_SIZE
-        if len(blob) < expected_size:
-            raise ValueError(f".m 数据长度不足，期望至少 {expected_size} 字节，实际 {len(blob)} 字节。")
-        cells = [
-            MapCell.from_record(blob[M_HEADER_SIZE + index * M_CELL_SIZE : M_HEADER_SIZE + (index + 1) * M_CELL_SIZE])
+        reader = _SeqReader(blob, "m")
+        width = reader.u4("width")
+        height = reader.u4("height")
+        magic_bytes = reader.exact(8, M_MAGIC, "magic_bytes")
+        cells = tuple(
+            MMapCell.from_bytes(_read_exact(blob, 16 + index * 16, 16, f"cells[{index}]"))
             for index in range(width * height)
-        ]
-        return cls(stage=stage, width=width, height=height, cells=cells, source=source)
+        )
+        if len(blob) != 16 + len(cells) * 16:
+            raise ValueError(".m 文件长度与 width * height * 16 + header 不一致")
+        return cls(width=width, height=height, magic_bytes=magic_bytes, cells=cells)
 
     @classmethod
-    def from_m_file(cls, path: Path, stage: str | None = None) -> "StageMapModel":
-        """读取 `.m` 文件并构造地图模型。"""
+    def from_file(cls, path: Path) -> "MFile":
+        """从文件系统读取 .m 文件。"""
 
-        return cls.from_m_bytes(path.read_bytes(), stage=stage or path.stem, source=str(path))
-
-    def __post_init__(self) -> None:
-        """确保模型尺寸与 cell 数量一致。"""
-
-        if self.width <= 0 or self.height <= 0:
-            raise ValueError("地图宽高必须为正数。")
-        expected_cells = self.width * self.height
-        if len(self.cells) != expected_cells:
-            raise ValueError(f"cell 数量应为 {expected_cells}，实际 {len(self.cells)}。")
-
-    def cell_index(self, x: int, y: int) -> int:
-        """把二维坐标转换为记录下标。"""
-
-        if not (0 <= x < self.width and 0 <= y < self.height):
-            raise ValueError(f"cell 坐标越界：{x},{y}，地图尺寸 {self.width}x{self.height}。")
-        return y * self.width + x
-
-    def cell_at(self, x: int, y: int) -> MapCell:
-        """读取指定坐标的 cell。"""
-
-        return self.cells[self.cell_index(x, y)]
-
-    def editor_records(self) -> list[list[int]]:
-        """输出编辑器 stage JSON 使用的二维记录数组。"""
-
-        return [cell.as_editor_record() for cell in self.cells]
-
-    def minimap_color_bytes(self) -> bytes:
-        """返回 `.s/.x` 有效区派生所需的小地图颜色字节。"""
-
-        return bytes(cell.byte13 for cell in self.cells)
-
-    def to_editor_stage_dict(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        """输出可持久化的地图编辑器 stage JSON。"""
-
-        payload: dict[str, Any] = {
-            "format": STAGE_FORMAT,
-            "stage": self.stage,
-            "width": self.width,
-            "height": self.height,
-            "ksy": str(KSY_SCHEMA_PATH),
-            "fields": list(FIELD_NAMES),
-            "fieldMeta": field_meta(),
-            "editableLayers": list(EDITABLE_LAYERS),
-            "resourceLayers": list(EDITABLE_LAYERS),
-            "pointLayers": list(POINT_LAYER_FIELDS),
-            "editableRecordFields": list(EDITABLE_RECORD_FIELDS),
-            "records": self.editor_records(),
-        }
-        if self.source is not None:
-            payload["source"] = self.source
-        if extra:
-            payload.update(extra)
-        return payload
-
-    def write_editor_stage_json(self, path: Path, extra: dict[str, Any] | None = None, indent: int | None = None) -> None:
-        """把地图编辑模型写成 stage JSON 文件。"""
-
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_editor_stage_dict(extra), ensure_ascii=False, indent=indent), encoding="utf-8")
+        return cls.from_bytes(path.read_bytes())
 
 
 @dataclass(frozen=True)
-class MapEditChange:
-    """保存单个 cell 字段修改。"""
+class DorRecord:
+    """对应 dor.ksy.types.dor_record。"""
 
-    x: int
-    y: int
-    field: str
-    before: int
-    after: int
-
-    def __post_init__(self) -> None:
-        """规范化字段名，并校验修改前后的值范围。"""
-
-        spec = FIELD_BY_NAME[canonical_field_name(self.field)]
-        spec.validate_value(self.before)
-        spec.validate_value(self.after)
-        object.__setattr__(self, "field", spec.name)
-
-    def as_json_dict(self) -> dict[str, int | str]:
-        """输出编辑器 patch JSON 中的 change 对象。"""
-
-        return {"x": self.x, "y": self.y, "field": self.field, "before": self.before, "after": self.after}
-
-
-@dataclass
-class MapEditPatchModel:
-    """保存一次地图编辑操作产生的 patch。"""
-
-    stage: str
-    changes: list[MapEditChange] = field(default_factory=list)
-    minimap_dirty_cells: list[tuple[int, int]] = field(default_factory=list)
-    fields: tuple[str, ...] = FIELD_NAMES
-
-    def to_patch_dict(self) -> dict[str, Any]:
-        """输出可由 `apply_editor_patch.py` 消费的 patch JSON。"""
-
-        return {
-            "format": PATCH_FORMAT,
-            "stage": self.stage,
-            "fields": list(self.fields),
-            "minimap": {"dirtyCells": [list(cell) for cell in self.minimap_dirty_cells]},
-            "changes": [change.as_json_dict() for change in self.changes],
-        }
-
-    def write_patch_json(self, path: Path, indent: int = 2) -> None:
-        """把 patch 模型写入 JSON 文件。"""
-
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_patch_dict(), ensure_ascii=False, indent=indent), encoding="utf-8")
-
-DOR_MAGIC = b"Door    Data"
-STG_ENCODING = "big5"
-
-KSY_ROOT = Path(__file__).resolve().parents[1] / "ksy"
-M_KSY_SCHEMA_PATH = KSY_ROOT / "m.ksy"
-DOR_KSY_SCHEMA_PATH = KSY_ROOT / "dor.ksy"
-STG_KSY_SCHEMA_PATH = KSY_ROOT / "stg.ksy"
-
-
-def read_u32(blob: bytes | bytearray, offset: int) -> int:
-    """读取 little-endian u32。"""
-
-    return int(struct.unpack_from("<I", blob, offset)[0])
-
-
-def read_s32(blob: bytes | bytearray, offset: int) -> int:
-    """读取 little-endian s32。"""
-
-    return int(struct.unpack_from("<i", blob, offset)[0])
-
-
-def decode_big5(raw: bytes) -> str:
-    """按 Big5 定长字符串规则解码，遇到 0 截断。"""
-
-    return raw.split(b"\x00", 1)[0].decode(STG_ENCODING, errors="replace")
-
-
-def ensure_range(offset: int, size: int, total: int, label: str) -> None:
-    """检查即将读取的字节区间是否越界。"""
-
-    if offset < 0 or size < 0 or offset + size > total:
-        raise ValueError(f"{label} 越界：offset={offset:#x}, size={size}, total={total}")
-
-
-@dataclass(frozen=True)
-class DorRecordModel:
-    """保存 `.dor` 中一条城门记录。"""
-
-    group_index: int
-    record_index: int
     door_x: int
     door_y: int
     door_ori: int
@@ -349,579 +259,953 @@ class DorRecordModel:
     site_x: int
     site_y: int
     reserved1: int
-    raw_words: tuple[int, ...]
 
     @classmethod
-    def from_words(cls, group_index: int, record_index: int, words: tuple[int, ...]) -> "DorRecordModel":
-        """从 15 个 u32 字段构造城门记录。"""
+    def from_bytes(cls, blob: bytes) -> "DorRecord":
+        """按单条 15 个 u4 记录解析城门记录。"""
 
-        if len(words) != 15:
-            raise ValueError(f".dor 记录应包含 15 个 u32，实际 {len(words)}。")
-        return cls(
-            group_index=group_index,
-            record_index=record_index,
-            door_x=words[0],
-            door_y=words[1],
-            door_ori=words[2],
-            reserved0=tuple(words[3:12]),
-            site_x=words[12],
-            site_y=words[13],
-            reserved1=words[14],
-            raw_words=words,
+        if len(blob) != 60:
+            raise ValueError(f"dor_record 长度必须为 60，实际为 {len(blob)}")
+        reader = _SeqReader(blob, "dor_record")
+        model = cls(
+            door_x=reader.u4("door_x"),
+            door_y=reader.u4("door_y"),
+            door_ori=reader.u4("door_ori"),
+            reserved0=reader.u4_tuple(9, "reserved0"),
+            site_x=reader.u4("site_x"),
+            site_y=reader.u4("site_y"),
+            reserved1=reader.u4("reserved1"),
         )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class DorGroup:
+    """对应 dor.ksy.types.dor_group。"""
+
+    record_count: int
+    records: tuple[DorRecord, ...]
+
+
+@dataclass(frozen=True)
+class DorFile:
+    """对应 dor.ksy 顶层结构。"""
+
+    magic_bytes: bytes
+    record_size: int
+    dor_groups: tuple[DorGroup, ...]
 
     @property
-    def site_key(self) -> str:
-        """返回可与 `.stg` 据点坐标关联的键。"""
+    def record_size_bytes(self) -> int:
+        """对应 instances.record_size_bytes。"""
 
-        return f"{self.site_x},{self.site_y}"
-
-    def to_dict(self) -> dict[str, object]:
-        """输出编辑器可直接消费的城门记录。"""
-
-        return {
-            "groupIndex": self.group_index,
-            "recordIndex": self.record_index,
-            "doorX": self.door_x,
-            "doorY": self.door_y,
-            "doorOri": self.door_ori,
-            "siteX": self.site_x,
-            "siteY": self.site_y,
-            "siteKey": self.site_key,
-            "reserved0": list(self.reserved0),
-            "reserved1": self.reserved1,
-            "rawWords": list(self.raw_words),
-        }
-
-
-@dataclass(frozen=True)
-class DorGroupModel:
-    """保存 `.dor` 中一组城门记录。"""
-
-    group_index: int
-    records: tuple[DorRecordModel, ...]
-
-    def to_dict(self) -> dict[str, object]:
-        """输出城门分组 JSON。"""
-
-        return {
-            "groupIndex": self.group_index,
-            "recordCount": len(self.records),
-            "records": [record.to_dict() for record in self.records],
-        }
-
-
-@dataclass(frozen=True)
-class DorModel:
-    """保存一个 `.dor` 城门文件的数据模型。"""
-
-    stage: str
-    record_size_words: int
-    groups: tuple[DorGroupModel, ...]
-    source: str | None = None
-    has_zero_count_terminator: bool = False
+        return self.record_size * 4
 
     @classmethod
-    def from_dor_bytes(cls, blob: bytes, stage: str = "", source: str | None = None) -> "DorModel":
-        """从 `.dor` 原始字节构造城门模型。"""
+    def from_bytes(cls, blob: bytes) -> "DorFile":
+        """按 dor.ksy 解析整个 .dor 文件。"""
 
-        if len(blob) < 16:
-            raise ValueError("数据过小，不是合法的 .dor 文件。")
-        if blob[:12] != DOR_MAGIC:
-            raise ValueError("不是 Door    Data 城门文件。")
-        record_size_words = read_u32(blob, 0x0C)
-        if record_size_words != 15:
-            raise ValueError(f"当前仅支持 15 u32 的 .dor 记录，实际 record_size={record_size_words}。")
-        offset = 0x10
-        groups: list[DorGroupModel] = []
-        has_zero_count_terminator = False
+        reader = _SeqReader(blob, "dor")
+        magic_bytes = reader.exact(12, DOR_MAGIC, "magic_bytes")
+        record_size = reader.u4("record_size")
+        offset = 16
+        groups: list[DorGroup] = []
         group_index = 0
         while offset < len(blob):
-            ensure_range(offset, 4, len(blob), ".dor group count")
-            record_count = read_u32(blob, offset)
+            record_count = _read_u4(blob, offset, f"dor_groups[{group_index}].record_count")
             offset += 4
-            if record_count == 0 and offset == len(blob):
-                has_zero_count_terminator = True
-                break
-            records: list[DorRecordModel] = []
+            records: list[DorRecord] = []
             for record_index in range(record_count):
-                record_size_bytes = record_size_words * 4
-                ensure_range(offset, record_size_bytes, len(blob), ".dor record")
-                words = struct.unpack_from("<15I", blob, offset)
-                records.append(DorRecordModel.from_words(group_index, record_index, tuple(int(word) for word in words)))
-                offset += record_size_bytes
-            groups.append(DorGroupModel(group_index, tuple(records)))
+                record_blob = _read_exact(
+                    blob,
+                    offset,
+                    60,
+                    f"dor_groups[{group_index}].records[{record_index}]",
+                )
+                records.append(DorRecord.from_bytes(record_blob))
+                offset += 60
+            groups.append(DorGroup(record_count=record_count, records=tuple(records)))
             group_index += 1
-        return cls(stage=stage, record_size_words=record_size_words, groups=tuple(groups), source=source, has_zero_count_terminator=has_zero_count_terminator)
+        return cls(magic_bytes=magic_bytes, record_size=record_size, dor_groups=tuple(groups))
 
     @classmethod
-    def from_dor_file(cls, path: Path, stage: str | None = None) -> "DorModel":
-        """读取 `.dor` 文件并构造城门模型。"""
+    def from_file(cls, path: Path) -> "DorFile":
+        """从文件系统读取 .dor 文件。"""
 
-        return cls.from_dor_bytes(path.read_bytes(), stage=stage or path.stem, source=str(path))
-
-    @property
-    def records(self) -> tuple[DorRecordModel, ...]:
-        """展开所有城门记录。"""
-
-        return tuple(record for group in self.groups for record in group.records)
-
-    def to_dict(self) -> dict[str, object]:
-        """输出 `.dor` 模型 JSON。"""
-
-        payload: dict[str, object] = {
-            "format": "san-editor-dor-v1",
-            "stage": self.stage,
-            "ksy": str(DOR_KSY_SCHEMA_PATH),
-            "recordSizeWords": self.record_size_words,
-            "groupCount": len(self.groups),
-            "recordCount": len(self.records),
-            "hasZeroCountTerminator": self.has_zero_count_terminator,
-            "groups": [group.to_dict() for group in self.groups],
-        }
-        if self.source:
-            payload["source"] = self.source
-        return payload
+        return cls.from_bytes(path.read_bytes())
 
 
 @dataclass(frozen=True)
-class StgBlockModel:
-    """保存 `.stg` 中一个 `u32 size + payload` 块。"""
+class RootPart1Payload:
+    """对应 stg.ksy.types.root_part1_payload。"""
 
-    name: str
-    offset: int
+    scenario_title: str
+    root1_special_mode_or_title_tail_10: int
+    reserved_zero_14: int
+    reserved_zero_18: int
+    scenario_year_start: int
+    scenario_year_end: int
+    scenario_mode_flag_a: int
+    reserved_zero_28: int
+    scenario_mode_flag_b: int
+    scenario_id: int
+    scenario_id_or_duplicate: int
+    root1_variant_38: int
+    root1_variant_3c: int
+    reserved_zero_40: int
+    root1_scenario_type_44: int
+    reserved_zero_48: int | None
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "RootPart1Payload":
+        """按 root_part1_payload.seq 解析。"""
+
+        reader = _SeqReader(blob, "root_part1_payload")
+        model = cls(
+            scenario_title=reader.big5(16, "scenario_title"),
+            root1_special_mode_or_title_tail_10=reader.u4("root1_special_mode_or_title_tail_10"),
+            reserved_zero_14=reader.u4("reserved_zero_14"),
+            reserved_zero_18=reader.u4("reserved_zero_18"),
+            scenario_year_start=reader.u4("scenario_year_start"),
+            scenario_year_end=reader.u4("scenario_year_end"),
+            scenario_mode_flag_a=reader.u4("scenario_mode_flag_a"),
+            reserved_zero_28=reader.u4("reserved_zero_28"),
+            scenario_mode_flag_b=reader.u4("scenario_mode_flag_b"),
+            scenario_id=reader.u4("scenario_id"),
+            scenario_id_or_duplicate=reader.u4("scenario_id_or_duplicate"),
+            root1_variant_38=reader.u4("root1_variant_38"),
+            root1_variant_3c=reader.u4("root1_variant_3c"),
+            reserved_zero_40=reader.u4("reserved_zero_40"),
+            root1_scenario_type_44=reader.u4("root1_scenario_type_44"),
+            reserved_zero_48=reader.u4("reserved_zero_48") if reader.remaining() >= 4 else None,
+        )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class RootPart2Payload:
+    """对应 stg.ksy.types.root_part2_payload。"""
+
+    root2_mode_00: int
+    root2_mode_04: int
+    root2_value_08: int
+    root2_value_0c: int
+    root2_pointer_or_mode_10: int
+    force_count_mirror_candidate: int
+    reserved_zero_18: int
+    root2_mode_1c: int
+    reserved_zero_20: int
+    root2_pointer_or_mode_24: int
+    root2_mode_28: int
+    reserved_zero_2c: int
+    root2_mode_30: int
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "RootPart2Payload":
+        """按 root_part2_payload.seq 解析。"""
+
+        reader = _SeqReader(blob, "root_part2_payload")
+        model = cls(
+            root2_mode_00=reader.u4("root2_mode_00"),
+            root2_mode_04=reader.u4("root2_mode_04"),
+            root2_value_08=reader.u4("root2_value_08"),
+            root2_value_0c=reader.u4("root2_value_0c"),
+            root2_pointer_or_mode_10=reader.u4("root2_pointer_or_mode_10"),
+            force_count_mirror_candidate=reader.u4("force_count_mirror_candidate"),
+            reserved_zero_18=reader.u4("reserved_zero_18"),
+            root2_mode_1c=reader.u4("root2_mode_1c"),
+            reserved_zero_20=reader.u4("reserved_zero_20"),
+            root2_pointer_or_mode_24=reader.u4("root2_pointer_or_mode_24"),
+            root2_mode_28=reader.u4("root2_mode_28"),
+            reserved_zero_2c=reader.u4("reserved_zero_2c"),
+            root2_mode_30=reader.u4("root2_mode_30"),
+        )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class ForcePart1Payload:
+    """对应 stg.ksy.types.force_part1_payload。"""
+
+    force_name: str
+    force_slot_or_index_14: int
+    force_lord_person_id: int
+    force_ai_or_diplomacy_mode_1c: int
+    force_flag_20: int
+    force_level_or_group_24: int
+    force_policy_28: int
+    force_policy_2c: int
+    reserved_zero_30: int
+    reserved_zero_34: int
+    force_timer_or_score_38: int
+    force_timer_or_score_3c: int
+    force_flag_40: int
+    reserved_zero_44: int
+    force_rare_flag_48: int
+    force_ai_mode_4c: int
+    force_rare_flag_50: int
+    force_rare_value_54: int
+    force_budget_or_delay_58: int
+    force_ai_mode_5c: int
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "ForcePart1Payload":
+        """按 force_part1_payload.seq 解析。"""
+
+        reader = _SeqReader(blob, "force_part1_payload")
+        model = cls(
+            force_name=reader.big5(20, "force_name"),
+            force_slot_or_index_14=reader.u4("force_slot_or_index_14"),
+            force_lord_person_id=reader.u4("force_lord_person_id"),
+            force_ai_or_diplomacy_mode_1c=reader.u4("force_ai_or_diplomacy_mode_1c"),
+            force_flag_20=reader.u4("force_flag_20"),
+            force_level_or_group_24=reader.u4("force_level_or_group_24"),
+            force_policy_28=reader.u4("force_policy_28"),
+            force_policy_2c=reader.u4("force_policy_2c"),
+            reserved_zero_30=reader.u4("reserved_zero_30"),
+            reserved_zero_34=reader.u4("reserved_zero_34"),
+            force_timer_or_score_38=reader.u4("force_timer_or_score_38"),
+            force_timer_or_score_3c=reader.u4("force_timer_or_score_3c"),
+            force_flag_40=reader.u4("force_flag_40"),
+            reserved_zero_44=reader.u4("reserved_zero_44"),
+            force_rare_flag_48=reader.u4("force_rare_flag_48"),
+            force_ai_mode_4c=reader.u4("force_ai_mode_4c"),
+            force_rare_flag_50=reader.u4("force_rare_flag_50"),
+            force_rare_value_54=reader.u4("force_rare_value_54"),
+            force_budget_or_delay_58=reader.u4("force_budget_or_delay_58"),
+            force_ai_mode_5c=reader.u4("force_ai_mode_5c"),
+        )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class ForcePart2Payload:
+    """对应 stg.ksy.types.force_part2_payload。"""
+
+    site_count: int
+    force_index_1based: int
+    force_lord_person_id_or_ref: int
+    reserved_zero_0c: int
+    force_runtime_ref_10: int
+    force_runtime_ref_14: int
+    reserved_zero_18: int
+    reserved_zero_1c: int
+    reserved_zero_20: int
+    resource_slots_24_48: tuple[int, ...]
+    ai_relation_flags_4c_74: tuple[int, ...]
+    force_strategy_budget_78: int
+    reserved_zero_7c: int | None
+    reserved_zero_80: int | None
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "ForcePart2Payload":
+        """按 force_part2_payload.seq 解析。"""
+
+        reader = _SeqReader(blob, "force_part2_payload")
+        model = cls(
+            site_count=reader.u4("site_count"),
+            force_index_1based=reader.u4("force_index_1based"),
+            force_lord_person_id_or_ref=reader.u4("force_lord_person_id_or_ref"),
+            reserved_zero_0c=reader.u4("reserved_zero_0c"),
+            force_runtime_ref_10=reader.u4("force_runtime_ref_10"),
+            force_runtime_ref_14=reader.u4("force_runtime_ref_14"),
+            reserved_zero_18=reader.u4("reserved_zero_18"),
+            reserved_zero_1c=reader.u4("reserved_zero_1c"),
+            reserved_zero_20=reader.u4("reserved_zero_20"),
+            resource_slots_24_48=reader.u4_tuple(10, "resource_slots_24_48"),
+            ai_relation_flags_4c_74=reader.u4_tuple(11, "ai_relation_flags_4c_74"),
+            force_strategy_budget_78=reader.u4("force_strategy_budget_78"),
+            reserved_zero_7c=reader.u4("reserved_zero_7c") if reader.remaining() >= 4 else None,
+            reserved_zero_80=reader.u4("reserved_zero_80") if reader.remaining() >= 4 else None,
+        )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class SitePart1Payload:
+    """对应 stg.ksy.types.site_part1_payload。"""
+
+    site_name: str
+    city_index: int
+    house_attr: int
+    castle_scale: int
+    population: int
+    gold: int
+    food: int
+    standby_soldier: int
+    develop: int
+    commerce: int
+    security: int
+    develop_limit: int
+    commerce_limit: int
+    security_limit: int
+    coord_x: int
+    coord_y: int
+    governor: int
+    general_count_or_slot: int
+    site_part1_extra_words: U4Words
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "SitePart1Payload":
+        """按 site_part1_payload.seq 解析。"""
+
+        reader = _SeqReader(blob, "site_part1_payload")
+        model = cls(
+            site_name=reader.big5(20, "site_name"),
+            city_index=reader.s4("city_index"),
+            house_attr=reader.s4("house_attr"),
+            castle_scale=reader.s4("castle_scale"),
+            population=reader.s4("population"),
+            gold=reader.s4("gold"),
+            food=reader.s4("food"),
+            standby_soldier=reader.s4("standby_soldier"),
+            develop=reader.s4("develop"),
+            commerce=reader.s4("commerce"),
+            security=reader.s4("security"),
+            develop_limit=reader.s4("develop_limit"),
+            commerce_limit=reader.s4("commerce_limit"),
+            security_limit=reader.s4("security_limit"),
+            coord_x=reader.s4("coord_x"),
+            coord_y=reader.s4("coord_y"),
+            governor=reader.s4("governor"),
+            general_count_or_slot=reader.s4("general_count_or_slot"),
+            site_part1_extra_words=reader.u4_words_to_end("site_part1_extra_words"),
+        )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class SitePart2Payload:
+    """对应 stg.ksy.types.site_part2_payload。"""
+
+    reserved_zero_000: int
+    runtime_coord_or_spawn_x_004: int
+    runtime_coord_or_spawn_y_008: int
+    site_kind_or_force_group_00c: int
+    site_serial_010: int
+    site_flag_014: int
+    reserved_zero_018: int
+    site_small_counter_01c: int
+    reserved_zero_020: int
+    sentinel_minus_one_024: int
+    reserved_zero_028: int
+    reserved_zero_02c: int
+    site_flag_030: int
+    reserved_zero_034: int
+    reserved_zero_038: int
+    site_flag_03c: int
+    reserved_zero_040_054: tuple[int, ...]
+    ai_template_params_058_130: tuple[int, ...]
+    reserved_zero_134_20c: tuple[int, ...]
+    runtime_tail_words_210_278: tuple[int, ...]
+    optional_entity_flag_27c: int
+    optional_entity_flag_280: int
+    optional_entity_flag_284: int
+    optional_entity_flag_288: int
+    optional_entity_flag_28c: int
+    reserved_zero_290: int
+    runtime_rare_flag_294: int
+    runtime_budget_298: int
+    runtime_bitfield_29c: int
+    runtime_mode_2a0: int
+    reserved_zero_2a4: int
+    reserved_zero_2a8: int
+    reserved_zero_2ac: int
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "SitePart2Payload":
+        """按 site_part2_payload.seq 解析。"""
+
+        reader = _SeqReader(blob, "site_part2_payload")
+        model = cls(
+            reserved_zero_000=reader.u4("reserved_zero_000"),
+            runtime_coord_or_spawn_x_004=reader.s4("runtime_coord_or_spawn_x_004"),
+            runtime_coord_or_spawn_y_008=reader.s4("runtime_coord_or_spawn_y_008"),
+            site_kind_or_force_group_00c=reader.u4("site_kind_or_force_group_00c"),
+            site_serial_010=reader.u4("site_serial_010"),
+            site_flag_014=reader.u4("site_flag_014"),
+            reserved_zero_018=reader.u4("reserved_zero_018"),
+            site_small_counter_01c=reader.u4("site_small_counter_01c"),
+            reserved_zero_020=reader.u4("reserved_zero_020"),
+            sentinel_minus_one_024=reader.u4("sentinel_minus_one_024"),
+            reserved_zero_028=reader.u4("reserved_zero_028"),
+            reserved_zero_02c=reader.u4("reserved_zero_02c"),
+            site_flag_030=reader.u4("site_flag_030"),
+            reserved_zero_034=reader.u4("reserved_zero_034"),
+            reserved_zero_038=reader.u4("reserved_zero_038"),
+            site_flag_03c=reader.u4("site_flag_03c"),
+            reserved_zero_040_054=reader.u4_tuple(6, "reserved_zero_040_054"),
+            ai_template_params_058_130=reader.u4_tuple(55, "ai_template_params_058_130"),
+            reserved_zero_134_20c=reader.u4_tuple(55, "reserved_zero_134_20c"),
+            runtime_tail_words_210_278=reader.u4_tuple(27, "runtime_tail_words_210_278"),
+            optional_entity_flag_27c=reader.u4("optional_entity_flag_27c"),
+            optional_entity_flag_280=reader.u4("optional_entity_flag_280"),
+            optional_entity_flag_284=reader.u4("optional_entity_flag_284"),
+            optional_entity_flag_288=reader.u4("optional_entity_flag_288"),
+            optional_entity_flag_28c=reader.u4("optional_entity_flag_28c"),
+            reserved_zero_290=reader.u4("reserved_zero_290"),
+            runtime_rare_flag_294=reader.u4("runtime_rare_flag_294"),
+            runtime_budget_298=reader.u4("runtime_budget_298"),
+            runtime_bitfield_29c=reader.u4("runtime_bitfield_29c"),
+            runtime_mode_2a0=reader.u4("runtime_mode_2a0"),
+            reserved_zero_2a4=reader.u4("reserved_zero_2a4"),
+            reserved_zero_2a8=reader.u4("reserved_zero_2a8"),
+            reserved_zero_2ac=reader.u4("reserved_zero_2ac"),
+        )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class EntityPart1Payload:
+    """对应 stg.ksy.types.entity_part1_payload。"""
+
+    reserved_zero_00_20: tuple[int, ...]
+    runtime_value_24: int
+    runtime_ref_28: int
+    runtime_float_or_state_2c: int
+    runtime_force_or_ai_side_30: int | None
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "EntityPart1Payload":
+        """按 entity_part1_payload.seq 解析。"""
+
+        reader = _SeqReader(blob, "entity_part1_payload")
+        model = cls(
+            reserved_zero_00_20=reader.u4_tuple(9, "reserved_zero_00_20"),
+            runtime_value_24=reader.u4("runtime_value_24"),
+            runtime_ref_28=reader.u4("runtime_ref_28"),
+            runtime_float_or_state_2c=reader.u4("runtime_float_or_state_2c"),
+            runtime_force_or_ai_side_30=reader.u4("runtime_force_or_ai_side_30")
+            if reader.remaining() >= 4
+            else None,
+        )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class EntityPart2Payload:
+    """对应 stg.ksy.types.entity_part2_payload。"""
+
+    entity_name: str
+    person_id: int
+    portrait_id: int
+    static_owner_id: int
+    static_location_id: int
+    command: int
+    soldier_type_id: int
+    level: int
+    troop_count: int
+    martial_force: int
+    intellect: int
+    loyalty: int
+    experience: int
+    skill_fire_1: int
+    skill_fire_2: int
+    skill_fire_3: int
+    skill_stone_1: int
+    skill_stone_2: int
+    skill_stone_3: int
+    skill_thunder_1: int
+    skill_thunder_2: int
+    skill_thunder_3: int
+    skill_slash_1: int
+    skill_slash_2: int
+    skill_slash_3: int
+    skill_spear_1: int
+    skill_spear_2: int
+    skill_spear_3: int
+    skill_arrow_1: int
+    skill_arrow_2: int
+    skill_arrow_3: int
+    skill_persuade: int
+    skill_inspire: int
+    skill_shout: int
+    skill_confuse: int
+    special_skill: int
+    action_state: int
+    imprisoned_flag: int
+    loaded_flag: int
+    attribute: int
+    self_ref: int
+    alert_ai: int
+    chase_ai: int
+    retreat_ai: int
+    action_policy: int
+    ambush_field: int
+    betrayal_force_id: int
+    max_troop_count: int
+    max_martial_force: int
+    max_intellect: int
+    reserved_d8: int
+    reserved_dc: int
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "EntityPart2Payload":
+        """按 entity_part2_payload.seq 解析。"""
+
+        reader = _SeqReader(blob, "entity_part2_payload")
+        model = cls(
+            entity_name=reader.big5(20, "entity_name"),
+            person_id=reader.s4("person_id"),
+            portrait_id=reader.s4("portrait_id"),
+            static_owner_id=reader.s4("static_owner_id"),
+            static_location_id=reader.s4("static_location_id"),
+            command=reader.s4("command"),
+            soldier_type_id=reader.s4("soldier_type_id"),
+            level=reader.s4("level"),
+            troop_count=reader.s4("troop_count"),
+            martial_force=reader.s4("martial_force"),
+            intellect=reader.s4("intellect"),
+            loyalty=reader.s4("loyalty"),
+            experience=reader.s4("experience"),
+            skill_fire_1=reader.s4("skill_fire_1"),
+            skill_fire_2=reader.s4("skill_fire_2"),
+            skill_fire_3=reader.s4("skill_fire_3"),
+            skill_stone_1=reader.s4("skill_stone_1"),
+            skill_stone_2=reader.s4("skill_stone_2"),
+            skill_stone_3=reader.s4("skill_stone_3"),
+            skill_thunder_1=reader.s4("skill_thunder_1"),
+            skill_thunder_2=reader.s4("skill_thunder_2"),
+            skill_thunder_3=reader.s4("skill_thunder_3"),
+            skill_slash_1=reader.s4("skill_slash_1"),
+            skill_slash_2=reader.s4("skill_slash_2"),
+            skill_slash_3=reader.s4("skill_slash_3"),
+            skill_spear_1=reader.s4("skill_spear_1"),
+            skill_spear_2=reader.s4("skill_spear_2"),
+            skill_spear_3=reader.s4("skill_spear_3"),
+            skill_arrow_1=reader.s4("skill_arrow_1"),
+            skill_arrow_2=reader.s4("skill_arrow_2"),
+            skill_arrow_3=reader.s4("skill_arrow_3"),
+            skill_persuade=reader.s4("skill_persuade"),
+            skill_inspire=reader.s4("skill_inspire"),
+            skill_shout=reader.s4("skill_shout"),
+            skill_confuse=reader.s4("skill_confuse"),
+            special_skill=reader.s4("special_skill"),
+            action_state=reader.s4("action_state"),
+            imprisoned_flag=reader.s4("imprisoned_flag"),
+            loaded_flag=reader.s4("loaded_flag"),
+            attribute=reader.s4("attribute"),
+            self_ref=reader.s4("self_ref"),
+            alert_ai=reader.s4("alert_ai"),
+            chase_ai=reader.s4("chase_ai"),
+            retreat_ai=reader.s4("retreat_ai"),
+            action_policy=reader.s4("action_policy"),
+            ambush_field=reader.s4("ambush_field"),
+            betrayal_force_id=reader.s4("betrayal_force_id"),
+            max_troop_count=reader.s4("max_troop_count"),
+            max_martial_force=reader.s4("max_martial_force"),
+            max_intellect=reader.s4("max_intellect"),
+            reserved_d8=reader.s4("reserved_d8"),
+            reserved_dc=reader.s4("reserved_dc"),
+        )
+        reader.finish()
+        return model
+
+
+@dataclass(frozen=True)
+class RootPart1Block:
+    """对应 stg.ksy.types.root_part1_block。"""
+
     size: int
-    payload: bytes
+    body: RootPart1Payload
 
     @classmethod
-    def read_from(cls, blob: bytes, offset: int, name: str) -> "StgBlockModel":
-        """读取一个 STG 块，并保留原始 payload。"""
+    def read_from(cls, blob: bytes, offset: int) -> tuple["RootPart1Block", int]:
+        """读取 root_part1_block。"""
 
-        ensure_range(offset, 4, len(blob), f"{name}.size")
-        size = read_u32(blob, offset)
-        payload_offset = offset + 4
-        ensure_range(payload_offset, size, len(blob), name)
-        return cls(name=name, offset=offset, size=size, payload=blob[payload_offset : payload_offset + size])
-
-    @property
-    def end_offset(self) -> int:
-        """返回块结束偏移。"""
-
-        return self.offset + 4 + self.size
-
-    def u32(self, offset: int, default: int = 0) -> int:
-        """读取 payload 内的 u32，越界时返回默认值。"""
-
-        if offset + 4 > len(self.payload):
-            return default
-        return read_u32(self.payload, offset)
-
-    def s32(self, offset: int, default: int = 0) -> int:
-        """读取 payload 内的 s32，越界时返回默认值。"""
-
-        if offset + 4 > len(self.payload):
-            return default
-        return read_s32(self.payload, offset)
-
-    def text(self, offset: int, size: int) -> str:
-        """读取 payload 内的 Big5 文本。"""
-
-        if offset >= len(self.payload):
-            return ""
-        return decode_big5(self.payload[offset : min(len(self.payload), offset + size)])
-
-    def to_dict(self) -> dict[str, object]:
-        """输出块的可持久化表示。"""
-
-        return {
-            "name": self.name,
-            "offset": self.offset,
-            "offsetHex": f"0x{self.offset:X}",
-            "size": self.size,
-            "payloadHex": self.payload.hex(),
-        }
+        size, payload, end_offset = _read_sized_block(blob, offset, "root_part1")
+        return cls(size=size, body=RootPart1Payload.from_bytes(payload)), end_offset
 
 
 @dataclass(frozen=True)
-class StgEntityModel:
-    """保存 `.stg` 中一个实体对象。"""
+class RootPart2Block:
+    """对应 stg.ksy.types.root_part2_block。"""
 
-    index: int
-    part1: StgBlockModel
-    part2: StgBlockModel
-    optional_slot: str | None = None
+    size: int
+    body: RootPart2Payload
 
     @classmethod
-    def read_from(cls, blob: bytes, offset: int, index: int, optional_slot: str | None = None) -> tuple["StgEntityModel", int]:
-        """从对象流读取实体对象。"""
+    def read_from(cls, blob: bytes, offset: int) -> tuple["RootPart2Block", int]:
+        """读取 root_part2_block。"""
 
-        part1 = StgBlockModel.read_from(blob, offset, "entity_part1")
-        part2 = StgBlockModel.read_from(blob, part1.end_offset, "entity_part2")
-        return cls(index=index, part1=part1, part2=part2, optional_slot=optional_slot), part2.end_offset
+        size, payload, end_offset = _read_sized_block(blob, offset, "root_part2")
+        return cls(size=size, body=RootPart2Payload.from_bytes(payload)), end_offset
+
+
+@dataclass(frozen=True)
+class ForcePart1Block:
+    """对应 stg.ksy.types.force_part1_block。"""
+
+    size: int
+    body: ForcePart1Payload
+
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["ForcePart1Block", int]:
+        """读取 force_part1_block。"""
+
+        size, payload, end_offset = _read_sized_block(blob, offset, "force_part1")
+        return cls(size=size, body=ForcePart1Payload.from_bytes(payload)), end_offset
+
+
+@dataclass(frozen=True)
+class ForcePart2Block:
+    """对应 stg.ksy.types.force_part2_block。"""
+
+    size: int
+    body: ForcePart2Payload
+
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["ForcePart2Block", int]:
+        """读取 force_part2_block。"""
+
+        size, payload, end_offset = _read_sized_block(blob, offset, "force_part2")
+        return cls(size=size, body=ForcePart2Payload.from_bytes(payload)), end_offset
+
+
+@dataclass(frozen=True)
+class SitePart1Block:
+    """对应 stg.ksy.types.site_part1_block。"""
+
+    size: int
+    body: SitePart1Payload
+
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["SitePart1Block", int]:
+        """读取 site_part1_block。"""
+
+        size, payload, end_offset = _read_sized_block(blob, offset, "site_part1")
+        return cls(size=size, body=SitePart1Payload.from_bytes(payload)), end_offset
+
+
+@dataclass(frozen=True)
+class SitePart2Block:
+    """对应 stg.ksy.types.site_part2_block。"""
+
+    size: int
+    body: SitePart2Payload
+
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["SitePart2Block", int]:
+        """读取 site_part2_block。"""
+
+        size, payload, end_offset = _read_sized_block(blob, offset, "site_part2")
+        return cls(size=size, body=SitePart2Payload.from_bytes(payload)), end_offset
+
+
+@dataclass(frozen=True)
+class EntityPart1Block:
+    """对应 stg.ksy.types.entity_part1_block。"""
+
+    size: int
+    body: EntityPart1Payload
+
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["EntityPart1Block", int]:
+        """读取 entity_part1_block。"""
+
+        size, payload, end_offset = _read_sized_block(blob, offset, "entity_part1")
+        return cls(size=size, body=EntityPart1Payload.from_bytes(payload)), end_offset
+
+
+@dataclass(frozen=True)
+class EntityPart2Block:
+    """对应 stg.ksy.types.entity_part2_block。"""
+
+    size: int
+    body: EntityPart2Payload
+
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["EntityPart2Block", int]:
+        """读取 entity_part2_block。"""
+
+        size, payload, end_offset = _read_sized_block(blob, offset, "entity_part2")
+        return cls(size=size, body=EntityPart2Payload.from_bytes(payload)), end_offset
+
+
+@dataclass(frozen=True)
+class Entity:
+    """对应 stg.ksy.types.entity。"""
+
+    part1: EntityPart1Block
+    part2: EntityPart2Block
 
     @property
-    def name(self) -> str:
-        """实体名称。"""
+    def entity_name(self) -> str:
+        """对应 instances.entity_name。"""
 
-        return self.part2.text(0x00, 20)
+        return self.part2.body.entity_name
 
     @property
     def person_id(self) -> int:
-        """人物编号候选。"""
+        """对应 instances.person_id。"""
 
-        return self.part2.s32(0x14)
+        return self.part2.body.person_id
 
     @property
     def troop_count(self) -> int:
-        """带兵数候选。"""
+        """对应 instances.troop_count。"""
 
-        return self.part2.s32(0x30)
+        return self.part2.body.troop_count
 
-    def to_summary_dict(self) -> dict[str, object]:
-        """输出实体摘要。"""
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["Entity", int]:
+        """读取 entity 对象。"""
 
-        return {
-            "index": self.index,
-            "name": self.name,
-            "personId": self.person_id,
-            "troopCount": self.troop_count,
-            "optionalSlot": self.optional_slot,
-            "part1": self.part1.to_dict(),
-            "part2": self.part2.to_dict(),
-        }
+        part1, next_offset = EntityPart1Block.read_from(blob, offset)
+        part2, next_offset = EntityPart2Block.read_from(blob, next_offset)
+        return cls(part1=part1, part2=part2), next_offset
 
 
 @dataclass(frozen=True)
-class StgSiteModel:
-    """保存 `.stg` 中一个据点对象。"""
+class Site:
+    """对应 stg.ksy.types.site。"""
 
-    index: int
-    part1: StgBlockModel
-    part2: StgBlockModel
+    part1: SitePart1Block
+    part2: SitePart2Block
     primary_entity_count: int
-    entities: tuple[StgEntityModel, ...]
-    optional_entities: tuple[StgEntityModel, ...]
-
-    @classmethod
-    def read_from(cls, blob: bytes, offset: int, index: int) -> tuple["StgSiteModel", int]:
-        """从对象流读取据点对象及其实体列表。"""
-
-        part1 = StgBlockModel.read_from(blob, offset, "site_part1")
-        part2 = StgBlockModel.read_from(blob, part1.end_offset, "site_part2")
-        ensure_range(part2.end_offset, 4, len(blob), "primary_entity_count")
-        primary_entity_count = read_u32(blob, part2.end_offset)
-        cursor = part2.end_offset + 4
-        entities: list[StgEntityModel] = []
-        for entity_index in range(primary_entity_count):
-            entity, cursor = StgEntityModel.read_from(blob, cursor, entity_index)
-            entities.append(entity)
-
-        optional_entities: list[StgEntityModel] = []
-        for flag_offset in (0x27C, 0x280, 0x284, 0x288, 0x28C):
-            if part2.u32(flag_offset) == 0:
-                continue
-            optional_slot = f"0x{flag_offset:X}"
-            entity, cursor = StgEntityModel.read_from(blob, cursor, len(optional_entities), optional_slot)
-            optional_entities.append(entity)
-
-        return cls(index=index, part1=part1, part2=part2, primary_entity_count=primary_entity_count, entities=tuple(entities), optional_entities=tuple(optional_entities)), cursor
+    entities: tuple[Entity, ...]
+    optional_entity_27c: Entity | None
+    optional_entity_280: Entity | None
+    optional_entity_284: Entity | None
+    optional_entity_288: Entity | None
+    optional_entity_28c: Entity | None
 
     @property
-    def name(self) -> str:
-        """据点名称。"""
+    def site_name(self) -> str:
+        """对应 instances.site_name。"""
 
-        return self.part1.text(0x00, 20)
+        return self.part1.body.site_name
 
     @property
     def city_index(self) -> int:
-        """castle.txt 都市索引候选。"""
+        """对应 instances.city_index。"""
 
-        return self.part1.s32(0x14)
+        return self.part1.body.city_index
 
     @property
     def map_x(self) -> int:
-        """据点地图 X 坐标。"""
+        """对应 instances.map_x。"""
 
-        return self.part1.s32(0x48)
+        return self.part1.body.coord_x
 
     @property
     def map_y(self) -> int:
-        """据点地图 Y 坐标。"""
+        """对应 instances.map_y。"""
 
-        return self.part1.s32(0x4C)
+        return self.part1.body.coord_y
 
-    @property
-    def site_key(self) -> str:
-        """返回可与 `.dor` 城门关联的坐标键。"""
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["Site", int]:
+        """读取 site 对象及其主实体、可选实体。"""
 
-        return f"{self.map_x},{self.map_y}"
+        part1, next_offset = SitePart1Block.read_from(blob, offset)
+        part2, next_offset = SitePart2Block.read_from(blob, next_offset)
+        primary_entity_count = _read_u4(blob, next_offset, "site.primary_entity_count")
+        next_offset += 4
+        entities: list[Entity] = []
+        for _ in range(primary_entity_count):
+            entity, next_offset = Entity.read_from(blob, next_offset)
+            entities.append(entity)
 
-    @property
-    def all_entities(self) -> tuple[StgEntityModel, ...]:
-        """返回主实体与可选实体。"""
-
-        return self.entities + self.optional_entities
-
-    def to_summary_dict(self) -> dict[str, object]:
-        """输出据点摘要。"""
-
-        return {
-            "index": self.index,
-            "name": self.name,
-            "cityIndex": self.city_index,
-            "mapX": self.map_x,
-            "mapY": self.map_y,
-            "siteKey": self.site_key,
-            "primaryEntityCount": self.primary_entity_count,
-            "optionalEntityCount": len(self.optional_entities),
-            "part1": self.part1.to_dict(),
-            "part2": self.part2.to_dict(),
-            "entities": [entity.to_summary_dict() for entity in self.entities],
-            "optionalEntities": [entity.to_summary_dict() for entity in self.optional_entities],
+        optional_entities: dict[str, Entity | None] = {
+            "27c": None,
+            "280": None,
+            "284": None,
+            "288": None,
+            "28c": None,
         }
+        for suffix, flag in (
+            ("27c", part2.body.optional_entity_flag_27c),
+            ("280", part2.body.optional_entity_flag_280),
+            ("284", part2.body.optional_entity_flag_284),
+            ("288", part2.body.optional_entity_flag_288),
+            ("28c", part2.body.optional_entity_flag_28c),
+        ):
+            if flag != 0:
+                optional_entity, next_offset = Entity.read_from(blob, next_offset)
+                optional_entities[suffix] = optional_entity
+
+        return (
+            cls(
+                part1=part1,
+                part2=part2,
+                primary_entity_count=primary_entity_count,
+                entities=tuple(entities),
+                optional_entity_27c=optional_entities["27c"],
+                optional_entity_280=optional_entities["280"],
+                optional_entity_284=optional_entities["284"],
+                optional_entity_288=optional_entities["288"],
+                optional_entity_28c=optional_entities["28c"],
+            ),
+            next_offset,
+        )
 
 
 @dataclass(frozen=True)
-class StgForceModel:
-    """保存 `.stg` 中一个势力对象。"""
+class Force:
+    """对应 stg.ksy.types.force。"""
 
-    index: int
-    part1: StgBlockModel
-    part2: StgBlockModel
+    part1: ForcePart1Block
+    part2: ForcePart2Block
     site_list_pre_count_or_flag: int
-    sites: tuple[StgSiteModel, ...]
-
-    @classmethod
-    def read_from(cls, blob: bytes, offset: int, index: int) -> tuple["StgForceModel", int]:
-        """从对象流读取势力对象及其据点列表。"""
-
-        part1 = StgBlockModel.read_from(blob, offset, "force_part1")
-        part2 = StgBlockModel.read_from(blob, part1.end_offset, "force_part2")
-        ensure_range(part2.end_offset, 4, len(blob), "site_list_pre_count_or_flag")
-        site_list_pre_count_or_flag = read_u32(blob, part2.end_offset)
-        cursor = part2.end_offset + 4
-        site_count = part2.u32(0x00)
-        sites: list[StgSiteModel] = []
-        for site_index in range(site_count):
-            site, cursor = StgSiteModel.read_from(blob, cursor, site_index)
-            sites.append(site)
-        return cls(index=index, part1=part1, part2=part2, site_list_pre_count_or_flag=site_list_pre_count_or_flag, sites=tuple(sites)), cursor
+    sites: tuple[Site, ...]
 
     @property
-    def name(self) -> str:
-        """势力名称。"""
+    def force_name(self) -> str:
+        """对应 instances.force_name。"""
 
-        return self.part1.text(0x00, 20)
+        return self.part1.body.force_name
 
     @property
     def site_count(self) -> int:
-        """势力拥有的据点数量。"""
+        """对应 instances.site_count。"""
 
-        return self.part2.u32(0x00)
+        return self.part2.body.site_count
 
-    def to_summary_dict(self) -> dict[str, object]:
-        """输出势力摘要。"""
+    @classmethod
+    def read_from(cls, blob: bytes, offset: int) -> tuple["Force", int]:
+        """读取 force 对象及其据点列表。"""
 
-        return {
-            "index": self.index,
-            "name": self.name,
-            "siteCount": self.site_count,
-            "siteListPreCountOrFlag": self.site_list_pre_count_or_flag,
-            "part1": self.part1.to_dict(),
-            "part2": self.part2.to_dict(),
-            "sites": [site.to_summary_dict() for site in self.sites],
-        }
+        part1, next_offset = ForcePart1Block.read_from(blob, offset)
+        part2, next_offset = ForcePart2Block.read_from(blob, next_offset)
+        site_list_pre_count_or_flag = _read_u4(
+            blob,
+            next_offset,
+            "force.site_list_pre_count_or_flag",
+        )
+        next_offset += 4
+        sites: list[Site] = []
+        for _ in range(part2.body.site_count):
+            site, next_offset = Site.read_from(blob, next_offset)
+            sites.append(site)
+        return (
+            cls(
+                part1=part1,
+                part2=part2,
+                site_list_pre_count_or_flag=site_list_pre_count_or_flag,
+                sites=tuple(sites),
+            ),
+            next_offset,
+        )
 
 
 @dataclass(frozen=True)
-class StgModel:
-    """保存一个 `.stg` 剧本对象流的数据模型。"""
+class AfterForcesTail:
+    """对应 stg.ksy.types.after_forces_tail。"""
 
-    stage: str
-    present_or_version: int
-    root_part1: StgBlockModel
-    root_part2: StgBlockModel
-    force_count: int
-    forces: tuple[StgForceModel, ...]
-    after_forces_tail: bytes
-    source: str | None = None
+    middle_tail_words: U4Words | None
+    trailer_or_small_tail_words: U4Words
+
+    @property
+    def middle_tail_size(self) -> int:
+        """对应 instances.middle_tail_size。"""
+
+        return 0 if self.middle_tail_words is None else len(self.middle_tail_words.words) * 4
+
+    @property
+    def trailer_or_small_tail_size(self) -> int:
+        """对应 instances.trailer_or_small_tail_size。"""
+
+        return len(self.trailer_or_small_tail_words.words) * 4
 
     @classmethod
-    def from_stg_bytes(cls, blob: bytes, stage: str = "", source: str | None = None) -> "StgModel":
-        """从 `.stg` 原始字节构造剧本模型。"""
+    def from_bytes(cls, blob: bytes) -> "AfterForcesTail":
+        """按 after_forces_tail.seq 解析尾区。"""
 
-        ensure_range(0, 4, len(blob), "present_or_version")
-        present_or_version = read_u32(blob, 0)
-        root_part1 = StgBlockModel.read_from(blob, 4, "root_part1")
-        root_part2 = StgBlockModel.read_from(blob, root_part1.end_offset, "root_part2")
-        ensure_range(root_part2.end_offset, 4, len(blob), "force_count")
-        force_count = read_u32(blob, root_part2.end_offset)
-        cursor = root_part2.end_offset + 4
-        forces: list[StgForceModel] = []
-        for force_index in range(force_count):
-            force, cursor = StgForceModel.read_from(blob, cursor, force_index)
-            forces.append(force)
+        if len(blob) > 0xA0:
+            middle = U4Words.from_bytes(blob[:-0xA0], "after_forces_tail.middle_tail_words")
+            trailer = U4Words.from_bytes(blob[-0xA0:], "after_forces_tail.trailer_or_small_tail_words")
+            return cls(middle_tail_words=middle, trailer_or_small_tail_words=trailer)
         return cls(
-            stage=stage,
+            middle_tail_words=None,
+            trailer_or_small_tail_words=U4Words.from_bytes(
+                blob,
+                "after_forces_tail.trailer_or_small_tail_words",
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class StgFile:
+    """对应 stg.ksy 顶层结构。"""
+
+    present_or_version: int
+    root_part1: RootPart1Block
+    root_part2: RootPart2Block
+    force_count: int
+    forces: tuple[Force, ...]
+    after_forces_tail: AfterForcesTail
+
+    @classmethod
+    def from_bytes(cls, blob: bytes) -> "StgFile":
+        """按 stg.ksy 解析整个 .stg 文件。"""
+
+        present_or_version = _read_u4(blob, 0, "stg.present_or_version")
+        root_part1, next_offset = RootPart1Block.read_from(blob, 4)
+        root_part2, next_offset = RootPart2Block.read_from(blob, next_offset)
+        force_count = _read_u4(blob, next_offset, "stg.force_count")
+        next_offset += 4
+        forces: list[Force] = []
+        for _ in range(force_count):
+            force, next_offset = Force.read_from(blob, next_offset)
+            forces.append(force)
+        after_forces_tail = AfterForcesTail.from_bytes(blob[next_offset:])
+        return cls(
             present_or_version=present_or_version,
             root_part1=root_part1,
             root_part2=root_part2,
             force_count=force_count,
             forces=tuple(forces),
-            after_forces_tail=blob[cursor:],
-            source=source,
+            after_forces_tail=after_forces_tail,
         )
 
     @classmethod
-    def from_stg_file(cls, path: Path, stage: str | None = None) -> "StgModel":
-        """读取 `.stg` 文件并构造剧本模型。"""
+    def from_file(cls, path: Path) -> "StgFile":
+        """从文件系统读取 .stg 文件。"""
 
-        return cls.from_stg_bytes(path.read_bytes(), stage=stage or path.stem, source=str(path))
-
-    @property
-    def title(self) -> str:
-        """剧本标题。"""
-
-        return self.root_part1.text(0x00, 16)
-
-    @property
-    def scenario_year_start(self) -> int:
-        """剧本起始年份。"""
-
-        return self.root_part1.u32(0x1C)
-
-    @property
-    def scenario_year_end(self) -> int:
-        """剧本结束年份。"""
-
-        return self.root_part1.u32(0x20)
-
-    @property
-    def scenario_id(self) -> int:
-        """剧本 ID。"""
-
-        return self.root_part1.u32(0x34)
-
-    @property
-    def sites(self) -> tuple[StgSiteModel, ...]:
-        """展开所有据点。"""
-
-        return tuple(site for force in self.forces for site in force.sites)
-
-    @property
-    def entities(self) -> tuple[StgEntityModel, ...]:
-        """展开所有实体。"""
-
-        return tuple(entity for site in self.sites for entity in site.all_entities)
-
-    def city_lookup_by_site_key(self) -> dict[str, StgSiteModel]:
-        """按地图坐标键索引据点。"""
-
-        return {site.site_key: site for site in self.sites}
-
-    def to_summary_dict(self) -> dict[str, object]:
-        """输出 `.stg` 模型摘要 JSON。"""
-
-        payload: dict[str, object] = {
-            "format": "san-editor-stg-v1",
-            "stage": self.stage,
-            "ksy": str(STG_KSY_SCHEMA_PATH),
-            "presentOrVersion": self.present_or_version,
-            "title": self.title,
-            "scenarioYearStart": self.scenario_year_start,
-            "scenarioYearEnd": self.scenario_year_end,
-            "scenarioId": self.scenario_id,
-            "forceCount": self.force_count,
-            "siteCount": len(self.sites),
-            "entityCount": len(self.entities),
-            "afterForcesTailBytes": len(self.after_forces_tail),
-            "rootPart1": self.root_part1.to_dict(),
-            "rootPart2": self.root_part2.to_dict(),
-            "forces": [force.to_summary_dict() for force in self.forces],
-        }
-        if self.source:
-            payload["source"] = self.source
-        return payload
+        return cls.from_bytes(path.read_bytes())
 
 
-@dataclass(frozen=True)
-class StageEditFilesModel:
-    """聚合 `.m/.dor/.stg` 的地图编辑上下文。"""
-
-    stage: str
-    map_model: StageMapModel | None = None
-    dor_model: DorModel | None = None
-    stg_model: StgModel | None = None
-    sources: dict[str, str] = field(default_factory=dict)
-
-    @classmethod
-    def from_files(
-        cls,
-        stage: str,
-        m_path: Path | None = None,
-        dor_path: Path | None = None,
-        stg_path: Path | None = None,
-    ) -> "StageEditFilesModel":
-        """从可选的 `.m/.dor/.stg` 路径构造聚合模型。"""
-
-        map_model = StageMapModel.from_m_file(m_path, stage) if m_path is not None else None
-        dor_model = DorModel.from_dor_file(dor_path, stage) if dor_path is not None else None
-        stg_model = StgModel.from_stg_file(stg_path, stage) if stg_path is not None else None
-        sources = {
-            suffix: str(path)
-            for suffix, path in (("m", m_path), ("dor", dor_path), ("stg", stg_path))
-            if path is not None
-        }
-        return cls(stage=stage, map_model=map_model, dor_model=dor_model, stg_model=stg_model, sources=sources)
-
-    def build_site_links(self) -> dict[str, object]:
-        """建立 `.dor` 城门与 `.stg` 据点的坐标关联。"""
-
-        if self.dor_model is None or self.stg_model is None:
-            return {
-                "available": False,
-                "reason": "缺少 .dor 或 .stg，无法建立城门与据点关联。",
-                "gates": [],
-            }
-        sites = self.stg_model.city_lookup_by_site_key()
-        gates: list[dict[str, object]] = []
-        matched = 0
-        for record in self.dor_model.records:
-            site = sites.get(record.site_key)
-            if site is not None:
-                matched += 1
-            gate = record.to_dict()
-            gate["siteName"] = site.name if site is not None else ""
-            gate["cityIndex"] = site.city_index if site is not None else None
-            gates.append(gate)
-        return {
-            "available": True,
-            "gateCount": len(gates),
-            "matchedGateCount": matched,
-            "unmatchedGateCount": len(gates) - matched,
-            "gates": gates,
-        }
-
-    def to_editor_context_dict(self) -> dict[str, object]:
-        """输出可保存的多文件地图编辑上下文。"""
-
-        return {
-            "format": "san-editor-stage-files-v1",
-            "stage": self.stage,
-            "ksy": {
-                "m": str(M_KSY_SCHEMA_PATH),
-                "dor": str(DOR_KSY_SCHEMA_PATH),
-                "stg": str(STG_KSY_SCHEMA_PATH),
-            },
-            "sources": self.sources,
-            "map": self.map_model.to_editor_stage_dict() if self.map_model is not None else None,
-            "dor": self.dor_model.to_dict() if self.dor_model is not None else None,
-            "stg": self.stg_model.to_summary_dict() if self.stg_model is not None else None,
-            "siteLinks": self.build_site_links(),
-        }
-
-    def write_editor_context_json(self, path: Path, indent: int = 2) -> None:
-        """把多文件编辑上下文写入 JSON。"""
-
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_editor_context_dict(), ensure_ascii=False, indent=indent), encoding="utf-8")
+__all__ = [
+    "BIG5_ENCODING",
+    "DOR_KSY_PATH",
+    "DOR_MAGIC",
+    "M_KSY_PATH",
+    "M_MAGIC",
+    "STG_KSY_PATH",
+    "AfterForcesTail",
+    "DorFile",
+    "DorGroup",
+    "DorRecord",
+    "Entity",
+    "EntityPart1Block",
+    "EntityPart1Payload",
+    "EntityPart2Block",
+    "EntityPart2Payload",
+    "Force",
+    "ForcePart1Block",
+    "ForcePart1Payload",
+    "ForcePart2Block",
+    "ForcePart2Payload",
+    "MFile",
+    "MMapCell",
+    "RootPart1Block",
+    "RootPart1Payload",
+    "RootPart2Block",
+    "RootPart2Payload",
+    "Site",
+    "SitePart1Block",
+    "SitePart1Payload",
+    "SitePart2Block",
+    "SitePart2Payload",
+    "StgFile",
+    "U4Words",
+]
