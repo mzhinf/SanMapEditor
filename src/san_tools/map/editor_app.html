@@ -288,6 +288,10 @@ const els = {
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
   exportFiles: document.getElementById('exportFiles'),
   sitePicker: document.getElementById('sitePicker'), clearSite: document.getElementById('clearSite'), siteInfo: document.getElementById('siteInfo'), siteNote: document.getElementById('siteNote'),
+  setRegionAnchor: document.getElementById('setRegionAnchor'), copyRegion: document.getElementById('copyRegion'), pasteRegion: document.getElementById('pasteRegion'), saveComposite: document.getElementById('saveComposite'),
+  selectionInfo: document.getElementById('selectionInfo'), compositeList: document.getElementById('compositeList'),
+  hudTool: document.getElementById('hudTool'), hudLayer: document.getElementById('hudLayer'), hudSelection: document.getElementById('hudSelection'), hudSite: document.getElementById('hudSite'),
+  forceList: document.getElementById('forceList'), entityList: document.getElementById('entityList'), validationList: document.getElementById('validationList'),
 };
 function canonicalFieldName(name) { return LEGACY_FIELD_ALIASES[name] || name; }
 function fieldIndex(name) { return state.meta.fields.indexOf(canonicalFieldName(name)); }
@@ -299,6 +303,16 @@ function cellToWorld(col, row) { const [ox, oy] = state.meta.origin; return { x:
 function displayImage() { return state.renderCanvas || state.image; }
 function clampCell(cell) { return { col: Math.max(0, Math.min(state.meta.width - 1, cell.col)), row: Math.max(0, Math.min(state.meta.height - 1, cell.row)) }; }
 function canvasSizeForMeta(meta = state.meta) { return { width: meta.width * 40 + 20 + 128, height: meta.height * 10 + 20 + 128 }; }
+function renderCanvasSizeWithinLimit(meta = state.meta) {
+  const size = canvasSizeForMeta(meta);
+  return size.width <= MAX_BASE_IMAGE_EDGE && size.height <= MAX_BASE_IMAGE_EDGE && size.width * size.height <= MAX_BASE_IMAGE_PIXELS;
+}
+function virtualImageSize(meta = state.meta) {
+  if (!meta) return null;
+  const image = displayImage();
+  if (image) return { width: image.width, height: image.height };
+  return canvasSizeForMeta(meta);
+}
 function worldToCell(x, y) {
   const [ox, oy] = state.meta.origin;
   const row = Math.floor((y - oy) / 10);
@@ -703,25 +717,80 @@ function drawVisiblePointOverlay(viewWidth, viewHeight) {
   }
   ctx.restore();
 }
+function visibleCellRange(viewWidth, viewHeight) {
+  if (!state.meta) return null;
+  const [ox, oy] = state.meta.origin;
+  const left = -state.transform.x / state.transform.scale;
+  const top = -state.transform.y / state.transform.scale;
+  const right = left + viewWidth / state.transform.scale;
+  const bottom = top + viewHeight / state.transform.scale;
+  const padLeft = Math.max(80, state.redrawConfig.maxLeft || 0);
+  const padRight = Math.max(80, state.redrawConfig.maxRight || 0);
+  const padTop = Math.max(60, state.redrawConfig.maxUp || 0);
+  const padBottom = Math.max(60, state.redrawConfig.maxDown || 0);
+  return {
+    left,
+    right,
+    minRow: Math.max(0, Math.floor((top - oy - padTop) / 10) - 2),
+    maxRow: Math.min(state.meta.height - 1, Math.ceil((bottom - oy + padBottom) / 10) + 2),
+    padLeft,
+    padRight,
+    originX: ox,
+  };
+}
+function drawVisibleMapResources(viewWidth, viewHeight) {
+  if (!state.resources || !state.meta) return;
+  const range = visibleCellRange(viewWidth, viewHeight);
+  if (!range) return;
+  for (const layer of RESOURCE_LAYER_OPTIONS) {
+    const fi = fieldIndex(layer);
+    if (fi < 0 || !state.drawImages[layer]) continue;
+    for (let row = range.minRow; row <= range.maxRow; row++) {
+      const rowStartX = range.originX + (row & 1 ? 20 : 0);
+      const minCol = Math.max(0, Math.floor((range.left - rowStartX - range.padLeft) / 40) - 1);
+      const maxCol = Math.min(state.meta.width - 1, Math.ceil((range.right - rowStartX + range.padRight) / 40) + 1);
+      for (let col = minCol; col <= maxCol; col++) drawResource(layer, state.meta.records[row * state.meta.width + col][fi], col, row, ctx);
+    }
+  }
+}
 function draw() {
   const image = displayImage();
-  if (!image) return;
-  const rect = canvas.getBoundingClientRect(); ctx.save(); ctx.clearRect(0, 0, rect.width, rect.height); ctx.translate(state.transform.x, state.transform.y); ctx.scale(state.transform.scale, state.transform.scale); ctx.imageSmoothingEnabled = false; ctx.drawImage(image, 0, 0); drawVisiblePointOverlay(rect.width, rect.height); drawActiveSiteOverlay(); ctx.lineWidth = 1 / state.transform.scale;
+  if (!image && (!state.resources || !state.meta)) return;
+  const rect = canvas.getBoundingClientRect();
+  ctx.save();
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  ctx.translate(state.transform.x, state.transform.y);
+  ctx.scale(state.transform.scale, state.transform.scale);
+  ctx.imageSmoothingEnabled = false;
+  if (image) ctx.drawImage(image, 0, 0);
+  else drawVisibleMapResources(rect.width, rect.height);
+  drawVisiblePointOverlay(rect.width, rect.height);
+  drawActiveSiteOverlay();
+  ctx.lineWidth = 1 / state.transform.scale;
   for (const patch of state.patches.values()) { diamondPath(patch.x, patch.y); ctx.strokeStyle = 'rgba(15,118,110,0.9)'; ctx.stroke(); }
   if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / state.transform.scale; ctx.stroke(); }
-  ctx.restore(); drawMinimap();
+  ctx.restore();
+  drawMinimap();
 }
 function drawMinimap() {
   const image = displayImage();
-  if (!image) return;
   const source = state.minimap || image;
-  const rect = mini.getBoundingClientRect(); miniCtx.clearRect(0, 0, rect.width, rect.height);
+  const imageSize = virtualImageSize();
+  if (!source || !imageSize) return;
+  const rect = mini.getBoundingClientRect();
+  miniCtx.clearRect(0, 0, rect.width, rect.height);
   const scale = Math.min(rect.width / source.width, rect.height / source.height);
-  const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2;
-  miniCtx.imageSmoothingEnabled = true; miniCtx.drawImage(source, ox, oy, w, h);
+  const w = source.width * scale;
+  const h = source.height * scale;
+  const ox = (rect.width - w) / 2;
+  const oy = (rect.height - h) / 2;
+  miniCtx.imageSmoothingEnabled = true;
+  miniCtx.drawImage(source, ox, oy, w, h);
   const mainRect = canvas.getBoundingClientRect();
   const view = { x: -state.transform.x / state.transform.scale, y: -state.transform.y / state.transform.scale, w: mainRect.width / state.transform.scale, h: mainRect.height / state.transform.scale };
-  miniCtx.strokeStyle = '#f59e0b'; miniCtx.lineWidth = 2; miniCtx.strokeRect(ox + view.x / image.width * w, oy + view.y / image.height * h, view.w / image.width * w, view.h / image.height * h);
+  miniCtx.strokeStyle = '#f59e0b';
+  miniCtx.lineWidth = 2;
+  miniCtx.strokeRect(ox + view.x / imageSize.width * w, oy + view.y / imageSize.height * h, view.w / imageSize.width * w, view.h / imageSize.height * h);
 }
 function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = String(v); node.append(a, b); } }
 function switchInspectorTab(tabName) {
@@ -1185,6 +1254,11 @@ function drawResource(layer, value, col, row, targetCtx) {
 }
 function rebuildEditedImage(cells = null) {
   if (!state.resources || !state.meta) return;
+  if (!renderCanvasSizeWithinLimit()) {
+    state.renderCanvas = null;
+    state.renderCtx = null;
+    return;
+  }
   const size = canvasSizeForMeta();
   if (!state.renderCanvas || state.renderCanvas.width !== size.width || state.renderCanvas.height !== size.height) {
     state.renderCanvas = document.createElement('canvas');
@@ -1625,7 +1699,23 @@ canvas.addEventListener('pointerup', ev => { stopDrag(ev); });
 canvas.addEventListener('pointercancel', ev => { stopDrag(ev); });
 canvas.addEventListener('lostpointercapture', ev => { stopDrag(ev); });
 canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; scheduleDraw(); }, { passive: false });
-mini.addEventListener('pointerdown', ev => { const image = displayImage(); if (!image) return; const source = state.minimap || image; const rect = mini.getBoundingClientRect(); const scale = Math.min(rect.width / source.width, rect.height / source.height); const w = source.width * scale; const h = source.height * scale; const ox = (rect.width - w) / 2; const oy = (rect.height - h) / 2; const x = (ev.clientX - rect.left - ox) / w * image.width; const y = (ev.clientY - rect.top - oy) / h * image.height; const main = canvas.getBoundingClientRect(); state.transform.x = main.width / 2 - x * state.transform.scale; state.transform.y = main.height / 2 - y * state.transform.scale; scheduleDraw(); });
+mini.addEventListener('pointerdown', ev => {
+  const imageSize = virtualImageSize();
+  const source = state.minimap || displayImage();
+  if (!imageSize || !source) return;
+  const rect = mini.getBoundingClientRect();
+  const scale = Math.min(rect.width / source.width, rect.height / source.height);
+  const w = source.width * scale;
+  const h = source.height * scale;
+  const ox = (rect.width - w) / 2;
+  const oy = (rect.height - h) / 2;
+  const x = (ev.clientX - rect.left - ox) / w * imageSize.width;
+  const y = (ev.clientY - rect.top - oy) / h * imageSize.height;
+  const main = canvas.getBoundingClientRect();
+  state.transform.x = main.width / 2 - x * state.transform.scale;
+  state.transform.y = main.height / 2 - y * state.transform.scale;
+  scheduleDraw();
+});
 els.openMFile.addEventListener('click', () => { els.loadMFile.click(); });
 document.querySelectorAll('.inspector-tab').forEach(tab => { tab.addEventListener('click', () => switchInspectorTab(tab.dataset.tab)); });
 document.querySelectorAll('[data-layer-shortcut]').forEach(button => { button.addEventListener('click', () => { els.layer.value = button.dataset.layerShortcut; ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); scheduleDraw(); }); });
