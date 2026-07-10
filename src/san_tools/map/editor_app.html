@@ -2845,6 +2845,81 @@ function buildXlsxBytes(sheets) {
   sheets.forEach((sheet, index) => files.push({ name: `xl/worksheets/sheet${index + 1}.xml`, data: worksheetXml(sheet) }));
   return zipStore(files);
 }
+
+function readInt32LE(bytes, offset) {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getInt32(offset, true);
+}
+function writeInt32LE(bytes, offset, value) {
+  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setInt32(offset, Number(value) || 0, true);
+}
+function parseDorBytes(bytes) {
+  const magic = new TextDecoder('ascii').decode(bytes.slice(0, 12));
+  if (magic !== 'Door    Data') throw new Error('\u65e0\u6548 .dor \u6587\u4ef6\u5934');
+  const recordSize = readInt32LE(bytes, 12);
+  if (recordSize !== 0x3c) throw new Error(`.dor \u8bb0\u5f55\u957f\u5ea6\u5f02\u5e38: ${recordSize}`);
+  const groups = [];
+  let offset = 16;
+  let groupIndex = 0;
+  while (offset + 4 <= bytes.length) {
+    const countOffset = offset;
+    const count = readInt32LE(bytes, offset);
+    offset += 4;
+    if (count === 0) break;
+    const records = [];
+    for (let index = 0; index < count; index++) {
+      const recordOffset = offset + index * recordSize;
+      const raw = [];
+      for (let field = 0; field < 15; field++) raw.push(readInt32LE(bytes, recordOffset + field * 4));
+      records.push({ group: groupIndex, doorIndex: index, countOffset, recordOffset, raw });
+    }
+    groups.push({ group: groupIndex, count, countOffset, records });
+    offset += count * recordSize;
+    groupIndex += 1;
+  }
+  return groups;
+}
+function dorRecordKey(group, doorIndex) { return `${Number(group) || 0}:${Number(doorIndex) || 0}`; }
+function dorStoredDoorY(doorY) { return Math.trunc((Number(doorY) - 4) / 2); }
+function buildDorRecordBytes(gate, originalRecord = null) {
+  const raw = originalRecord?.raw ? originalRecord.raw.slice() : Array.from({ length: 15 }, () => 0);
+  raw[0] = Number(gate.doorX) || 0;
+  raw[1] = dorStoredDoorY(gate.doorY);
+  raw[2] = Number(gate.dir) || 0;
+  raw[12] = Number(gate.siteX) || 0;
+  raw[13] = Number(gate.siteY) || 0;
+  const bytes = new Uint8Array(0x3c);
+  for (let index = 0; index < 15; index++) writeInt32LE(bytes, index * 4, raw[index]);
+  return bytes;
+}
+function buildEditedDorBytes(originalBytes) {
+  if (!state.gatePatches.size) return originalBytes;
+  const groups = parseDorBytes(originalBytes);
+  const originalByKey = new Map();
+  for (const group of groups) {
+    for (const record of group.records) originalByKey.set(dorRecordKey(group.group, record.doorIndex), record);
+  }
+  const gatesByGroup = new Map();
+  for (const gate of state.gates.filter(item => !item.deleted)) {
+    const group = Number.isFinite(Number(gate.group)) ? Number(gate.group) : 0;
+    if (!gatesByGroup.has(group)) gatesByGroup.set(group, []);
+    gatesByGroup.get(group).push(gate);
+  }
+  const groupNumbers = [...gatesByGroup.keys()].sort((a, b) => a - b);
+  const parts = [originalBytes.slice(0, 16)];
+  for (const groupNumber of groupNumbers) {
+    const gates = gatesByGroup.get(groupNumber).slice().sort((a, b) => Number(a.doorIndex) - Number(b.doorIndex) || Number(a.gateIndex) - Number(b.gateIndex));
+    const countBytes = new Uint8Array(4);
+    writeInt32LE(countBytes, 0, gates.length);
+    parts.push(countBytes);
+    gates.forEach((gate, index) => {
+      const original = originalByKey.get(dorRecordKey(groupNumber, gate.doorIndex)) || originalByKey.get(dorRecordKey(groupNumber, gate.gateIndex));
+      const normalizedGate = { ...gate, doorIndex: index };
+      parts.push(buildDorRecordBytes(normalizedGate, original));
+    });
+  }
+  parts.push(new Uint8Array(4));
+  return concatBytes(parts);
+}
 function base64ToBytes(text) {
   const raw = window.atob(text);
   const bytes = new Uint8Array(raw.length);
@@ -2893,7 +2968,8 @@ async function buildExportArtifacts() {
     files.push({ name: `${stageName}.${suffix}`, bytes: built.bytes });
     sidecarFlags.push(built.usedFallbackTail);
   }
-  await appendScenarioReference(files, 'dor', 'dor');
+  const dorFile = await readScenarioReference('dor', 'dor');
+  if (dorFile) files.push({ ...dorFile, bytes: buildEditedDorBytes(dorFile.bytes) });
   const stgFile = await readScenarioReference('stg', 'stg');
   if (stgFile) files.push({ ...stgFile, bytes: buildEditedStgBytes(stgFile.bytes) });
   const stageIniEntry = state.meta.scenarioFiles?.stageIni;
