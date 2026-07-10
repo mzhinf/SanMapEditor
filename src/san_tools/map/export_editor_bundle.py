@@ -10,6 +10,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from san_tools.analysis.stage_site_links import build_stage_site_links
+from san_tools.codecs import stage_ini_codec
+from san_tools.map.editor_model import StgFile
 
 try:
     from .extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
@@ -113,6 +115,8 @@ def write_stage_json(
     point_palette: list[str],
     site_links: dict[str, object],
     scenario_files: dict[str, object],
+    scenario_model: dict[str, object],
+    common_model: dict[str, object],
 ) -> None:
     data = {
         "format": "san-editor-stage-v1",
@@ -132,6 +136,8 @@ def write_stage_json(
         "pointPalette": point_palette,
         "siteLinks": site_links,
         "scenarioFiles": scenario_files,
+        "scenarioModel": scenario_model,
+        "commonModel": common_model,
         "image": image_name,
         "minimap": {"image": minimap_name, "source": "rendered-map", "sync": "derived-from-m-records"},
         "sidecars": sidecar_meta,
@@ -274,6 +280,161 @@ def export_resource_catalog(blocks: dict, palette: list[int], stage_dir: Path, r
 
 
 
+
+def _optional_site_entities(site) -> list[tuple[str, object]]:
+    """按 stg.ksy 中的可选 Entity flag 顺序收集附加实体。"""
+
+    return [
+        ("optional_entity_27c", site.optional_entity_27c),
+        ("optional_entity_280", site.optional_entity_280),
+        ("optional_entity_284", site.optional_entity_284),
+        ("optional_entity_288", site.optional_entity_288),
+        ("optional_entity_28c", site.optional_entity_28c),
+    ]
+
+
+def _entity_to_editor_row(entity, entity_key: str, entity_index: int, entity_group: str, site_key: str, site, force_key: str, force_index: int, force) -> dict[str, object]:
+    """把 stg.ksy 的 Entity 字段压缩成编辑器需要的字段级行。"""
+
+    body = entity.part2.body
+    return {
+        "entityKey": entity_key,
+        "entityIndex": entity_index,
+        "entityGroup": entity_group,
+        "entity_name": body.entity_name,
+        "person_id": body.person_id,
+        "portrait_id": body.portrait_id,
+        "static_owner_id": body.static_owner_id,
+        "static_location_id": body.static_location_id,
+        "command": body.command,
+        "soldier_type_id": body.soldier_type_id,
+        "level": body.level,
+        "troop_count": body.troop_count,
+        "martial_force": body.martial_force,
+        "intellect": body.intellect,
+        "loyalty": body.loyalty,
+        "parentSiteKey": site_key,
+        "parent_site_name": site.site_name,
+        "parentForceKey": force_key,
+        "parent_force_index": force_index,
+        "parent_force_name": force.force_name,
+        "actual_force_index": force_index,
+        "actual_force_name": force.force_name,
+    }
+
+
+def build_editor_scenario_model(game_dir: Path, stage_name: str) -> dict[str, object]:
+    """从 .stg 对象流导出势力、据点和武将的嵌套归属模型。"""
+
+    source = game_dir / f"{stage_name}.stg"
+    if not source.exists():
+        return {"available": False, "source": "stg", "reason": f"缺少 {source.name}", "forces": [], "sites": [], "entities": []}
+    try:
+        stg = StgFile.from_file(source)
+    except ValueError as exc:
+        return {"available": False, "source": "stg", "reason": f"无法解析 {source.name}: {exc}", "forces": [], "sites": [], "entities": []}
+
+    forces: list[dict[str, object]] = []
+    sites: list[dict[str, object]] = []
+    entities: list[dict[str, object]] = []
+    for force_index, force in enumerate(stg.forces):
+        force_key = f"force:{force_index}"
+        force_site_keys: list[str] = []
+        for site_index, site in enumerate(force.sites):
+            site_key = f"{force_key}/site:{site_index}"
+            force_site_keys.append(site_key)
+            entity_keys: list[str] = []
+            for entity_index, entity in enumerate(site.entities):
+                entity_key = f"{site_key}/entity:{entity_index}"
+                entity_keys.append(entity_key)
+                entities.append(_entity_to_editor_row(entity, entity_key, entity_index, "primary", site_key, site, force_key, force_index, force))
+            for entity_group, entity in _optional_site_entities(site):
+                if entity is None:
+                    continue
+                entity_index = len(entity_keys)
+                entity_key = f"{site_key}/{entity_group}"
+                entity_keys.append(entity_key)
+                entities.append(_entity_to_editor_row(entity, entity_key, entity_index, entity_group, site_key, site, force_key, force_index, force))
+            site_body = site.part1.body
+            sites.append({
+                "siteKey": site_key,
+                "siteIndex": site_index,
+                "site_name": site_body.site_name,
+                "city_index": site_body.city_index,
+                "house_attr": site_body.house_attr,
+                "castle_scale": site_body.castle_scale,
+                "population": site_body.population,
+                "gold": site_body.gold,
+                "food": site_body.food,
+                "standby_soldier": site_body.standby_soldier,
+                "develop": site_body.develop,
+                "commerce": site_body.commerce,
+                "security": site_body.security,
+                "coord_x": site_body.coord_x,
+                "coord_y": site_body.coord_y,
+                "governor": site_body.governor,
+                "primary_entity_count": site.primary_entity_count,
+                "entityKeys": entity_keys,
+                "parentForceKey": force_key,
+                "parent_force_index": force_index,
+                "parent_force_name": force.force_name,
+            })
+        forces.append({
+            "forceKey": force_key,
+            "forceIndex": force_index,
+            "force_name": force.part1.body.force_name,
+            "force_slot_or_index_14": force.part1.body.force_slot_or_index_14,
+            "force_lord_person_id": force.part1.body.force_lord_person_id,
+            "force_index_1based": force.part2.body.force_index_1based,
+            "site_count": force.site_count,
+            "siteKeys": force_site_keys,
+        })
+    return {
+        "available": True,
+        "source": "stg",
+        "path": source.name,
+        "force_count": stg.force_count,
+        "scenario_title": stg.root_part1.body.scenario_title,
+        "scenario_year_start": stg.root_part1.body.scenario_year_start,
+        "scenario_year_end": stg.root_part1.body.scenario_year_end,
+        "forces": forces,
+        "sites": sites,
+        "entities": entities,
+    }
+
+
+def _pick_master_rows(rows: list[dict[str, object]], fields: tuple[str, ...], limit: int = 512) -> list[dict[str, object]]:
+    """从 stage.ini 母表行中挑选前端索引需要的稳定字段。"""
+
+    return [{field: row.get(field, "") for field in fields} for row in rows[:limit]]
+
+
+def build_editor_common_model(root: Path) -> dict[str, object]:
+    """导出 stage.ini 中可作为全局武将、技能、城池和兵种索引的轻量母表。"""
+
+    try:
+        payload = stage_ini_codec.build_payload(root)
+    except (FileNotFoundError, ValueError) as exc:
+        return {"available": False, "source": "stage.ini", "reason": str(exc), "generals": [], "skills": [], "cities": [], "soldiers": []}
+
+    tables = payload.get("tables", {})
+    tail_records = tables.get("tail_records", [])
+    skill_names = {"說服", "鼓舞", "大喝", "迷惑", "怒殺技"}
+    skill_candidates = [
+        row for row in tail_records
+        if row.get("name") and (150 <= int(row.get("record_index", -1)) <= 173 or "技" in str(row.get("name")) or row.get("name") in skill_names)
+    ]
+    return {
+        "available": True,
+        "source": "stage.ini",
+        "path": Path(str(payload.get("stage_ini_path", "stage.ini"))).name,
+        "generals": _pick_master_rows(tables.get("general_master", []), ("record_index", "record_id_candidate", "name", "label", "family_guess")),
+        "skills": _pick_master_rows(skill_candidates, ("record_index", "name", "label", "family_guess")),
+        "cities": _pick_master_rows(tables.get("city_master", []), ("record_index", "name", "label", "place_id_candidate_stage_ini", "family_guess")),
+        "soldiers": _pick_master_rows(tables.get("troop_master", []), ("record_index", "name", "label", "family_guess")),
+    }
+
+
 def copy_scenario_reference_files(game_dir: Path, stage_dir: Path, stage_name: str) -> dict[str, object]:
     """复制编辑器导出时需要原样保留的剧本侧参考文件。"""
 
@@ -402,6 +563,8 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     sidecar_meta = build_sidecar_export_meta(game_dir, stage, GRID_SIZE, ACTIVE_ROWS)
     site_links = build_editor_site_links(root, stage)
     scenario_files = copy_scenario_reference_files(game_dir, stage_dir, stage)
+    scenario_model = build_editor_scenario_model(game_dir, stage)
+    common_model = build_editor_common_model(root)
 
     export_resource_catalog(blocks, palette, stage_dir, records)
     export_minimap(map_path, stage_dir / "minimap.png")
@@ -421,6 +584,8 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
         PAINT_RGB_PALETTE_HEX,
         site_links,
         scenario_files,
+        scenario_model,
+        common_model,
     )
     template = resolve_editor_template(root)
     shutil.copyfile(template, stage_dir / "editor.html")

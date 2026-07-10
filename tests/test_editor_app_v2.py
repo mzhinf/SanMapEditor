@@ -7,7 +7,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from san_tools.map.export_editor_bundle import copy_scenario_reference_files, write_stage_json
+from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, copy_scenario_reference_files, write_stage_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +30,6 @@ class TestEditorAppV2Template(unittest.TestCase):
             'id="canvas"',
             'terrain_tag',
             'minimap_color',
-            'id="layerVisibilityList"',
         ):
             self.assertIn(marker, html)
 
@@ -82,7 +81,10 @@ class TestEditorAppV2Template(unittest.TestCase):
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
         self.assertIn('terrain_tag', html)
         self.assertIn('minimap_color', html)
+        self.assertIn('scenarioModel', html)
+        self.assertIn('selectedCells', html)
         self.assertNotIn('land_water_hint', html)
+        self.assertNotIn('id="layerVisibilityList"', html)
 
 class TestEditorBundleScenarioFiles(unittest.TestCase):
     """验证编辑器 bundle 会携带剧本侧参考文件信息。"""
@@ -123,17 +125,44 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
                 ['#000000'],
                 {'available': False},
                 scenario_files,
+                {'available': True, 'forces': [], 'sites': [], 'entities': []},
+                {'available': True, 'generals': [], 'skills': [], 'cities': [], 'soldiers': []},
             )
             payload = json.loads(out_path.read_text(encoding='utf-8'))
             self.assertEqual(payload['scenarioFiles']['dor']['path'], 'stage99.dor')
             self.assertEqual(payload['scenarioFiles']['stg']['path'], 'stage99.stg')
             self.assertEqual(payload['scenarioFiles']['heads']['path'], 'heads.dat')
+            self.assertTrue(payload['scenarioModel']['available'])
+            self.assertTrue(payload['commonModel']['available'])
             self.assertIn('blocked', payload['editableLayers'])
             self.assertIn('terrain_tag', payload['editableLayers'])
             self.assertEqual(payload['resourceLayers'], ['acwx', 'acwy', 'acwz'])
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+
+
+    def test_stage01_scenario_and_common_models_use_stg_and_stage_ini(self) -> None:
+        """验证编辑器 bundle 使用 .stg 和 stage.ini 生成管理面板数据源。"""
+        game_dir = ROOT / '三国霸业'
+        if not (game_dir / 'stage01.stg').exists() or not (game_dir / 'stage.ini').exists():
+            self.skipTest('缺少 stage01.stg 或 stage.ini 样本')
+
+        scenario = build_editor_scenario_model(game_dir, 'stage01')
+        common = build_editor_common_model(ROOT)
+
+        self.assertTrue(scenario['available'])
+        self.assertGreater(len(scenario['forces']), 0)
+        self.assertGreater(len(scenario['sites']), 0)
+        self.assertGreater(len(scenario['entities']), 0)
+        self.assertIn('force_name', scenario['forces'][0])
+        self.assertIn('site_name', scenario['sites'][0])
+        self.assertIn('entity_name', scenario['entities'][0])
+        self.assertTrue(common['available'])
+        self.assertGreater(len(common['generals']), 0)
+        self.assertGreater(len(common['skills']), 0)
+        self.assertGreater(len(common['cities']), 0)
+        self.assertGreater(len(common['soldiers']), 0)
 
 if __name__ == '__main__':
     unittest.main()

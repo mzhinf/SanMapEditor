@@ -135,7 +135,6 @@ canvas { display: block; width: 100%; height: 100%; }
     <section class="section">
       <div class="section-title">图层控制</div>
       <div class="field"><label>当前图层</label><select id="layer"></select></div>
-      <div class="layer-list" id="layerVisibilityList"></div>
     </section>
     <section class="section resource-section">
       <div class="section-title">资源库</div>
@@ -224,8 +223,8 @@ const mini = document.getElementById('minimap');
 const miniCtx = mini.getContext('2d');
 const LEGACY_FIELD_ALIASES = { flags: 'reserved0', word06: 'reserved0', byte08: 'terrain_tag', byte09: 'blocked', byte10: 'site_trigger', byte11: 'site_area', byte12: 'reserved1', byte13: 'minimap_color', final_palette: 'minimap_color', byte14: 'reserved2', byte15: 'reserved2' };
 const DEFAULT_FIELD_META = [
-  { name: 'acwx', alias: 'terrain_base', label: '底层地表', editable: true, reserved: false },
-  { name: 'acwy', alias: 'terrain_overlay', label: '叠加地表', editable: true, reserved: false },
+  { name: 'acwx', alias: 'terrain_base', label: '地表层', editable: true, reserved: false },
+  { name: 'acwy', alias: 'terrain_overlay', label: '叠加层', editable: true, reserved: false },
   { name: 'acwz', alias: 'object_overlay', label: '物件层', editable: true, reserved: false },
   { name: 'reserved0', alias: '', label: '保留字段 0', editable: false, reserved: true },
   { name: 'terrain_tag', alias: '', label: '地形标记', editable: true, reserved: false },
@@ -254,12 +253,12 @@ const state = {
   resourceByIndex: {},
   drawImages: {},
   layerStats: {},
-  layerVisibility: Object.fromEntries(PAINT_LAYER_OPTIONS.map(layer => [layer, true])),
   image: null,
   renderCanvas: null,
   renderCtx: null,
   minimap: null,
   selected: null,
+  selectedCells: new Map(),
   selectedResource: Object.fromEntries(PAINT_LAYER_OPTIONS.map(layer => [layer, null])),
   transform: { x: 24, y: 24, scale: 0.8 },
   dragging: false,
@@ -276,11 +275,14 @@ const state = {
   baseImageNote: '',
   siteIndex: null,
   activeSiteKey: '',
+  scenario: null,
+  commonModel: null,
+  scenarioPatches: new Map(),
 };
 const els = {
   status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
   cellInfo: document.getElementById('cellInfo'), recordList: document.getElementById('recordList'), tool: document.getElementById('tool'),
-  layer: document.getElementById('layer'), layerVisibilityList: document.getElementById('layerVisibilityList'), patchCount: document.getElementById('patchCount'),
+  layer: document.getElementById('layer'), patchCount: document.getElementById('patchCount'),
   patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceSpacer: document.getElementById('resourceSpacer'), resourceMeta: document.getElementById('resourceMeta'), resourceFilter: document.getElementById('resourceFilter'),
   resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
@@ -296,6 +298,44 @@ function fieldIndex(name) { return state.meta.fields.indexOf(canonicalFieldName(
 function recordIndex(cell) { return cell.row * state.meta.width + cell.col; }
 function recordAt(cell) { return state.meta.records[recordIndex(cell)]; }
 function cellKey(cell) { return `${cell.col},${cell.row}`; }
+function selectedCellList() { return [...state.selectedCells.values()]; }
+function rememberSelectedCell(cell) {
+  state.selected = cell;
+  state.selectedCells.set(cellKey(cell), { col: cell.col, row: cell.row });
+}
+function addRectToSelection(anchor, cell) {
+  const left = Math.min(anchor.col, cell.col);
+  const right = Math.max(anchor.col, cell.col);
+  const top = Math.min(anchor.row, cell.row);
+  const bottom = Math.max(anchor.row, cell.row);
+  for (let row = top; row <= bottom; row++) for (let col = left; col <= right; col++) rememberSelectedCell({ col, row });
+}
+function selectCell(cell, ev = {}) {
+  const key = cellKey(cell);
+  if (ev.shiftKey && state.selected) {
+    addRectToSelection(state.selected, cell);
+    state.selected = cell;
+  } else if (ev.ctrlKey || ev.metaKey) {
+    if (state.selectedCells.has(key)) state.selectedCells.delete(key);
+    else rememberSelectedCell(cell);
+    state.selected = cell;
+  } else {
+    state.selectedCells.clear();
+    rememberSelectedCell(cell);
+  }
+  syncActiveSiteFromCell(cell);
+}
+function selectedCellBounds() {
+  const cells = selectedCellList();
+  if (!cells.length) return null;
+  const cols = cells.map(cell => cell.col);
+  const rows = cells.map(cell => cell.row);
+  const left = Math.min(...cols);
+  const right = Math.max(...cols);
+  const top = Math.min(...rows);
+  const bottom = Math.max(...rows);
+  return { left, right, top, bottom, width: right - left + 1, height: bottom - top + 1, count: cells.length };
+}
 function patchKey(cell, field) { return `${cellKey(cell)}:${canonicalFieldName(field)}`; }
 function cellToWorld(col, row) { const [ox, oy] = state.meta.origin; return { x: ox + col * 40 + (row & 1 ? 20 : 0), y: oy + row * 10 }; }
 function displayImage() { return state.renderCanvas || state.image; }
@@ -399,6 +439,62 @@ function normalizeSiteLinks(siteLinks) {
     sources: siteLinks?.sources || {},
   };
 }
+function normalizeScenarioModel(model) {
+  const forces = Array.isArray(model?.forces) ? model.forces.map((force, index) => ({
+    ...force,
+    forceKey: typeof force.forceKey === 'string' && force.forceKey ? force.forceKey : `force:${index}`,
+    forceIndex: Number.isFinite(Number(force.forceIndex)) ? Number(force.forceIndex) : index,
+    force_name: typeof force.force_name === 'string' ? force.force_name : `势力 ${index + 1}`,
+    force_lord_person_id: Number.isFinite(Number(force.force_lord_person_id)) ? Number(force.force_lord_person_id) : 0,
+    siteKeys: Array.isArray(force.siteKeys) ? force.siteKeys.slice() : [],
+    deleted: false,
+  })) : [];
+  const sites = Array.isArray(model?.sites) ? model.sites.map((site, index) => ({
+    ...site,
+    siteKey: typeof site.siteKey === 'string' && site.siteKey ? site.siteKey : `site:${index}`,
+    siteIndex: Number.isFinite(Number(site.siteIndex)) ? Number(site.siteIndex) : index,
+    site_name: typeof site.site_name === 'string' ? site.site_name : `据点 ${index + 1}`,
+    coord_x: Number.isFinite(Number(site.coord_x)) ? Number(site.coord_x) : 0,
+    coord_y: Number.isFinite(Number(site.coord_y)) ? Number(site.coord_y) : 0,
+    parentForceKey: typeof site.parentForceKey === 'string' ? site.parentForceKey : '',
+    parent_force_name: typeof site.parent_force_name === 'string' ? site.parent_force_name : '',
+    entityKeys: Array.isArray(site.entityKeys) ? site.entityKeys.slice() : [],
+    deleted: false,
+  })) : [];
+  const entities = Array.isArray(model?.entities) ? model.entities.map((entity, index) => ({
+    ...entity,
+    entityKey: typeof entity.entityKey === 'string' && entity.entityKey ? entity.entityKey : `entity:${index}`,
+    entityIndex: Number.isFinite(Number(entity.entityIndex)) ? Number(entity.entityIndex) : index,
+    entity_name: typeof entity.entity_name === 'string' ? entity.entity_name : `武将 ${index + 1}`,
+    person_id: Number.isFinite(Number(entity.person_id)) ? Number(entity.person_id) : 0,
+    portrait_id: Number.isFinite(Number(entity.portrait_id)) ? Number(entity.portrait_id) : 0,
+    parentSiteKey: typeof entity.parentSiteKey === 'string' ? entity.parentSiteKey : '',
+    parentForceKey: typeof entity.parentForceKey === 'string' ? entity.parentForceKey : '',
+    deleted: false,
+  })) : [];
+  return {
+    available: model?.available === true,
+    source: model?.source || 'stg',
+    reason: typeof model?.reason === 'string' ? model.reason : '',
+    forces,
+    sites,
+    entities,
+    forceByKey: new Map(forces.map(force => [force.forceKey, force])),
+    siteByKey: new Map(sites.map(site => [site.siteKey, site])),
+    entityByKey: new Map(entities.map(entity => [entity.entityKey, entity])),
+  };
+}
+function normalizeCommonModel(model) {
+  return {
+    available: model?.available === true,
+    source: model?.source || 'stage.ini',
+    reason: typeof model?.reason === 'string' ? model.reason : '',
+    generals: Array.isArray(model?.generals) ? model.generals.slice() : [],
+    skills: Array.isArray(model?.skills) ? model.skills.slice() : [],
+    cities: Array.isArray(model?.cities) ? model.cities.slice() : [],
+    soldiers: Array.isArray(model?.soldiers) ? model.soldiers.slice() : [],
+  };
+}
 
 function sourceOutputSize(meta = state.meta) {
   const size = meta?.render?.source_output_size;
@@ -435,7 +531,7 @@ function normalizeMeta(meta) {
   const pointLayers = (Array.isArray(meta.pointLayers) && meta.pointLayers.length ? meta.pointLayers : POINT_LAYER_OPTIONS).map(canonicalFieldName);
   const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name)).map(canonicalFieldName);
   const pointPalette = Array.isArray(meta.pointPalette) ? meta.pointPalette.slice(0, 256) : [];
-  return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, sidecars: normalizeSidecars(meta.sidecars), siteLinks: normalizeSiteLinks(meta.siteLinks) };
+  return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, sidecars: normalizeSidecars(meta.sidecars), siteLinks: normalizeSiteLinks(meta.siteLinks), scenarioModel: meta.scenarioModel || { available: false }, commonModel: meta.commonModel || { available: false } };
 }
 function getFieldMeta(name) {
   return state.fieldMetaByName.get(canonicalFieldName(name)) || DEFAULT_FIELD_META.find(entry => entry.name === canonicalFieldName(name)) || { name, alias: name, label: name, editable: true, reserved: false };
@@ -451,26 +547,46 @@ function isPointLayer(name) {
 function currentLayerName() { return canonicalFieldName(els.layer.value); }
 function visiblePointLayer() {
   const layer = currentLayerName();
-  return isPointLayer(layer) && state.layerVisibility[layer] !== false ? layer : null;
+  return isPointLayer(layer) ? layer : null;
 }
-function hasHiddenResourceLayers() { return RESOURCE_LAYER_OPTIONS.some(layer => state.layerVisibility[layer] === false); }
 function buildSiteIndex(siteLinks) {
-  if (!siteLinks?.available) return null;
+  const scenarioSites = state.scenario?.available ? state.scenario.sites.filter(site => !site.deleted) : [];
+  const linkCities = siteLinks?.available ? siteLinks.cities : [];
+  if (!scenarioSites.length && !linkCities.length) return null;
   const cityByKey = new Map();
   const cityByCell = new Map();
   const cityKeyByGateCell = new Map();
   const gatesBySiteKey = new Map();
-  for (const city of siteLinks.cities) {
+  const cityKeyByCoord = new Map();
+  const sourceSites = scenarioSites.length
+    ? scenarioSites.map(site => ({
+        siteKey: site.siteKey,
+        cityName: site.site_name,
+        forceIndex: site.parent_force_index,
+        forceName: site.parent_force_name,
+        cityIndex: site.city_index,
+        sourceRecordIndex: site.siteIndex,
+        mapX: site.coord_x,
+        mapY: site.coord_y,
+        expectedX: site.coord_x,
+        expectedY: site.coord_y,
+        gateIndices: [],
+        gateCount: 0,
+      }))
+    : linkCities;
+  for (const city of sourceSites) {
     const view = { ...city, gates: [] };
     cityByKey.set(city.siteKey, view);
     cityByCell.set(`${city.mapX},${city.mapY}`, city.siteKey);
+    cityKeyByCoord.set(`${city.mapX},${city.mapY}`, city.siteKey);
     gatesBySiteKey.set(city.siteKey, view.gates);
   }
-  for (const gate of siteLinks.gates) {
-    const list = gatesBySiteKey.get(gate.siteKey);
+  for (const gate of siteLinks?.gates || []) {
+    const linkedKey = cityByKey.has(gate.siteKey) ? gate.siteKey : cityKeyByCoord.get(`${gate.siteX},${gate.siteY}`);
+    const list = gatesBySiteKey.get(linkedKey);
     if (!list) continue;
-    list.push(gate);
-    cityKeyByGateCell.set(`${gate.doorX},${gate.doorY}`, gate.siteKey);
+    list.push({ ...gate, siteKey: linkedKey });
+    cityKeyByGateCell.set(`${gate.doorX},${gate.doorY}`, linkedKey);
   }
   for (const city of cityByKey.values()) {
     city.gates.sort((a, b) => a.doorY - b.doorY || a.doorX - b.doorX || a.gateIndex - b.gateIndex);
@@ -483,8 +599,8 @@ function activeSite() {
   return state.siteIndex?.cityByKey.get(state.activeSiteKey) || null;
 }
 function siteOverlayStatus() {
-  if (!state.meta?.siteLinks?.available) return '未加载';
-  return `${state.meta.siteLinks.cityCount} 据点 / ${state.meta.siteLinks.gateCount} 城门`;
+  if (state.siteIndex) return `${state.siteIndex.cityByKey.size} 据点 / ${state.meta.siteLinks?.gateCount || 0} 城门`;
+  return '未加载';
 }
 function formatGateSummary(site, limit = 8) {
   const gates = Array.isArray(site?.gates) ? site.gates : [];
@@ -492,20 +608,60 @@ function formatGateSummary(site, limit = 8) {
   const text = gates.slice(0, limit).map(gate => `${gate.doorX},${gate.doorY}`).join(' | ');
   return gates.length > limit ? `${text} 等 ${gates.length} 处` : text;
 }
+function renderActiveSiteEditor(siteView) {
+  els.siteNote.textContent = '';
+  const site = state.scenario?.siteByKey.get(siteView?.siteKey || '');
+  if (!site) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'record-list';
+  const row = document.createElement('div');
+  row.className = 'record-row';
+  const copy = document.createElement('div');
+  copy.className = 'record-copy';
+  appendScenarioInput(copy, site, 'site', 'site_name', false, 'site_name');
+  appendScenarioInput(copy, site, 'site', 'coord_x', true, 'coord_x');
+  appendScenarioInput(copy, site, 'site', 'coord_y', true, 'coord_y');
+  const forceLabel = document.createElement('label');
+  forceLabel.className = 'record-note';
+  forceLabel.textContent = 'parentForceKey ';
+  const forceSelect = document.createElement('select');
+  for (const force of scenarioRows('force')) {
+    const option = document.createElement('option');
+    option.value = force.forceKey;
+    option.textContent = force.force_name;
+    if (force.forceKey === site.parentForceKey) option.selected = true;
+    forceSelect.append(option);
+  }
+  forceSelect.addEventListener('change', () => updateScenarioField('site', site.siteKey, 'parentForceKey', forceSelect.value));
+  forceLabel.append(forceSelect);
+  copy.append(forceLabel);
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.textContent = '删除据点';
+  del.addEventListener('click', () => markScenarioDeleted('site', site.siteKey));
+  row.append(copy, del);
+  wrap.append(row);
+  els.siteNote.append(wrap);
+}
 function refreshSiteInfo() {
-  if (!state.meta?.siteLinks?.available) {
-    setPairs(els.siteInfo, [['据点联动', '未加载']]);
-    els.siteNote.textContent = state.meta?.siteLinks?.reason || '当前 bundle 未携带 .dor / .stg 归属信息。';
+  if (!state.siteIndex) {
+    setPairs(els.siteInfo, [['据点模型', '未加载']]);
+    els.siteNote.textContent = state.scenario?.reason || state.meta?.siteLinks?.reason || '当前 bundle 未携带 .stg 据点模型。';
     return;
   }
   const site = activeSite();
   if (!site) {
     setPairs(els.siteInfo, [
-      ['据点数', state.meta.siteLinks.cityCount],
-      ['城门数', state.meta.siteLinks.gateCount],
-      ['已匹配', state.meta.siteLinks.matchedGateCount],
+      ['据点数', state.siteIndex.cityByKey.size],
+      ['城门数', state.meta.siteLinks?.gateCount || 0],
+      ['数据源', state.scenario?.available ? '.stg' : 'siteLinks'],
     ]);
-    els.siteNote.textContent = '可从右侧下拉框选择据点，或在地图上直接点中城池坐标 / 城门坐标。';
+    els.siteNote.textContent = '选择据点后可编辑 site_name、coord_x、coord_y 和 parentForceKey。';
+    const addSite = document.createElement('button');
+    addSite.type = 'button';
+    addSite.textContent = '新增据点';
+    addSite.addEventListener('click', addScenarioSite);
+    els.siteNote.append(addSite);
     return;
   }
   setPairs(els.siteInfo, [
@@ -515,7 +671,7 @@ function refreshSiteInfo() {
     ['城门数', site.gateCount],
     ['城门坐标', formatGateSummary(site)],
   ]);
-  els.siteNote.textContent = site.sourceRecordIndex == null ? '' : `来源记录：stg #${site.sourceRecordIndex}`;
+  renderActiveSiteEditor(site);
 }
 function renderSitePicker() {
   els.sitePicker.textContent = '';
@@ -523,7 +679,7 @@ function renderSitePicker() {
   empty.value = '';
   empty.textContent = '未选据点';
   els.sitePicker.append(empty);
-  if (!state.meta?.siteLinks?.available || !state.siteIndex) {
+  if (!state.siteIndex) {
     els.sitePicker.disabled = true;
     els.clearSite.disabled = true;
     refreshSiteInfo();
@@ -647,47 +803,14 @@ function renderLayerOptions() {
     if (name === current) option.selected = true;
     els.layer.append(option);
   }
-  renderLayerVisibilityList();
-}
-function renderLayerVisibilityList() {
-  if (!els.layerVisibilityList) return;
-  const options = state.meta?.editableLayers || PAINT_LAYER_OPTIONS;
-  els.layerVisibilityList.textContent = '';
-  for (const name of options) {
-    const row = document.createElement('div');
-    row.className = 'layer-row' + (name === currentLayerName() ? ' active' : '');
-    const visible = document.createElement('input');
-    visible.type = 'checkbox';
-    visible.checked = state.layerVisibility[name] !== false;
-    visible.title = '显示 / 隐藏图层';
-    visible.addEventListener('change', () => {
-      state.layerVisibility[name] = visible.checked;
-      scheduleDraw();
-      renderLayerVisibilityList();
-    });
-    const select = document.createElement('button');
-    select.type = 'button';
-    select.className = 'ghost';
-    select.textContent = layerOptionLabel(name);
-    select.addEventListener('click', () => {
-      els.layer.value = name;
-      ensureSelectedResource(currentLayerName());
-      renderResourceList();
-      refreshSide();
-      refreshPatches();
-      renderLayerVisibilityList();
-      scheduleDraw();
-    });
-    row.append(visible, select);
-    els.layerVisibilityList.append(row);
-  }
 }
 function moveSelected(dx, dy) {
   if (!state.meta) return;
   const next = state.selected ? { col: state.selected.col + dx, row: state.selected.row + dy } : { col: 0, row: 0 };
   next.col = Math.max(0, Math.min(state.meta.width - 1, next.col));
   next.row = Math.max(0, Math.min(state.meta.height - 1, next.row));
-  state.selected = next;
+  state.selectedCells.clear();
+  rememberSelectedCell(next);
   syncActiveSiteFromCell(next);
   refreshSide();
   refreshPatches();
@@ -778,7 +901,7 @@ function drawVisibleMapResources(viewWidth, viewHeight) {
   if (!range) return;
   for (const layer of RESOURCE_LAYER_OPTIONS) {
     const fi = fieldIndex(layer);
-    if (fi < 0 || !state.drawImages[layer] || state.layerVisibility[layer] === false) continue;
+    if (fi < 0 || !state.drawImages[layer]) continue;
     for (let row = range.minRow; row <= range.maxRow; row++) {
       const rowStartX = range.originX + (row & 1 ? 20 : 0);
       const minCol = Math.max(0, Math.floor((range.left - rowStartX - range.padLeft) / 40) - 1);
@@ -789,7 +912,7 @@ function drawVisibleMapResources(viewWidth, viewHeight) {
 }
 function draw() {
   const image = displayImage();
-  const useCompositedImage = image && !hasHiddenResourceLayers();
+  const useCompositedImage = !!image;
   if (!useCompositedImage && (!state.resources || !state.meta)) return;
   const rect = canvas.getBoundingClientRect();
   ctx.save();
@@ -803,7 +926,8 @@ function draw() {
   drawActiveSiteOverlay();
   ctx.lineWidth = 1 / state.transform.scale;
   for (const patch of state.patches.values()) { diamondPath(patch.x, patch.y); ctx.strokeStyle = 'rgba(15,118,110,0.9)'; ctx.stroke(); }
-  if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / state.transform.scale; ctx.stroke(); }
+  for (const cell of selectedCellList()) { diamondPath(cell.col, cell.row); ctx.fillStyle = 'rgba(245,158,11,0.14)'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.4 / state.transform.scale; ctx.fill(); ctx.stroke(); }
+  if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2.4 / state.transform.scale; ctx.stroke(); }
   ctx.restore();
   drawMinimap();
 }
@@ -842,45 +966,56 @@ function updateHud() {
   els.hudSite.textContent = site ? `据点：${site.cityName}` : `据点：${siteOverlayStatus()}`;
 }
 function currentRegionBounds() {
+  const selection = selectedCellBounds();
+  if (selection) return selection;
   if (!state.selected || !state.regionAnchor) return null;
   const left = Math.min(state.selected.col, state.regionAnchor.col);
   const right = Math.max(state.selected.col, state.regionAnchor.col);
   const top = Math.min(state.selected.row, state.regionAnchor.row);
   const bottom = Math.max(state.selected.row, state.regionAnchor.row);
-  return { left, right, top, bottom, width: right - left + 1, height: bottom - top + 1 };
+  return { left, right, top, bottom, width: right - left + 1, height: bottom - top + 1, count: (right - left + 1) * (bottom - top + 1) };
 }
 function describeRegion() {
+  const selection = selectedCellBounds();
+  if (selection) return `选区：${selection.count} 格，范围 ${selection.left},${selection.top} 到 ${selection.right},${selection.bottom}`;
   const bounds = currentRegionBounds();
   if (!state.regionAnchor) return '未设置区域。';
   if (!bounds) return `起点：${state.regionAnchor.col},${state.regionAnchor.row}`;
   return `区域：${bounds.left},${bounds.top} 到 ${bounds.right},${bounds.bottom}，${bounds.width} x ${bounds.height}`;
 }
 function captureRegionSnapshot(name = '区域复制') {
+  const selectedCells = selectedCellList();
+  if (selectedCells.length) {
+    const bounds = selectedCellBounds();
+    const cells = selectedCells.map(cell => ({ dx: cell.col - bounds.left, dy: cell.row - bounds.top, record: recordAt(cell).slice() }));
+    return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'cells', width: bounds.width, height: bounds.height, count: cells.length, fields: state.meta.fields.slice(), cells };
+  }
   const bounds = currentRegionBounds();
   if (!bounds) return null;
   const rows = [];
   for (let row = bounds.top; row <= bounds.bottom; row++) {
     const line = [];
-    for (let col = bounds.left; col <= bounds.right; col++) {
-      line.push(recordAt({ col, row }).slice());
-    }
+    for (let col = bounds.left; col <= bounds.right; col++) line.push(recordAt({ col, row }).slice());
     rows.push(line);
   }
-  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, width: bounds.width, height: bounds.height, fields: state.meta.fields.slice(), rows };
+  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'rect', width: bounds.width, height: bounds.height, count: bounds.count, fields: state.meta.fields.slice(), rows };
 }
 function pasteRegionSnapshot(snapshot) {
   if (!snapshot || !state.selected) return false;
   const changes = [];
-  for (let row = 0; row < snapshot.height; row++) {
-    for (let col = 0; col < snapshot.width; col++) {
-      const target = { col: state.selected.col + col, row: state.selected.row + row };
-      if (target.col >= state.meta.width || target.row >= state.meta.height) continue;
-      const source = snapshot.rows[row][col];
-      for (const field of snapshot.fields) {
-        const sourceIndex = snapshot.fields.indexOf(field);
-        if (sourceIndex < 0) continue;
-        changes.push({ x: target.col, y: target.row, field, after: source[sourceIndex] });
-      }
+  const pushRecord = (target, source) => {
+    if (target.col >= state.meta.width || target.row >= state.meta.height) return;
+    for (const field of snapshot.fields) {
+      const sourceIndex = snapshot.fields.indexOf(field);
+      if (sourceIndex < 0) continue;
+      changes.push({ x: target.col, y: target.row, field, after: source[sourceIndex] });
+    }
+  };
+  if (snapshot.mode === 'cells' && Array.isArray(snapshot.cells)) {
+    for (const cell of snapshot.cells) pushRecord({ col: state.selected.col + cell.dx, row: state.selected.row + cell.dy }, cell.record);
+  } else {
+    for (let row = 0; row < snapshot.height; row++) {
+      for (let col = 0; col < snapshot.width; col++) pushRecord({ col: state.selected.col + col, row: state.selected.row + row }, snapshot.rows[row][col]);
     }
   }
   return applyChangeSet(changes);
@@ -916,6 +1051,113 @@ function refreshCompositeList() {
     els.compositeList.append(row);
   }
 }
+function scenarioRows(kind) {
+  const list = state.scenario?.[`${kind}s`] || [];
+  return list.filter(row => !row.deleted);
+}
+function scenarioPatchKey(kind, key, op, field = '') { return `${kind}:${op}:${key}:${field}`; }
+function storeScenarioPatch(kind, key, op, field, before, after) {
+  state.scenarioPatches.set(scenarioPatchKey(kind, key, op, field), { kind, key, op, field, before, after });
+  refreshPatches();
+}
+function refreshScenarioRelations() {
+  if (!state.scenario) return;
+  state.scenario.forceByKey = new Map(state.scenario.forces.map(force => [force.forceKey, force]));
+  state.scenario.siteByKey = new Map(state.scenario.sites.map(site => [site.siteKey, site]));
+  state.scenario.entityByKey = new Map(state.scenario.entities.map(entity => [entity.entityKey, entity]));
+  for (const site of state.scenario.sites) {
+    const force = state.scenario.forceByKey.get(site.parentForceKey);
+    if (force) {
+      site.parent_force_index = force.forceIndex;
+      site.parent_force_name = force.force_name;
+    }
+  }
+  for (const entity of state.scenario.entities) {
+    const site = state.scenario.siteByKey.get(entity.parentSiteKey);
+    const force = site ? state.scenario.forceByKey.get(site.parentForceKey) : null;
+    if (site) {
+      entity.parent_site_name = site.site_name;
+      entity.parentForceKey = site.parentForceKey;
+    }
+    if (force) {
+      entity.parent_force_index = force.forceIndex;
+      entity.parent_force_name = force.force_name;
+      entity.actual_force_index = force.forceIndex;
+      entity.actual_force_name = force.force_name;
+    }
+  }
+  state.siteIndex = buildSiteIndex(state.meta.siteLinks);
+}
+function updateScenarioField(kind, key, field, rawValue, numeric = false) {
+  const row = state.scenario?.[`${kind}ByKey`]?.get(key);
+  if (!row || row.deleted) return;
+  const after = numeric ? Number.parseInt(rawValue, 10) : String(rawValue || '');
+  if (numeric && !Number.isFinite(after)) return;
+  const before = row[field];
+  if (before === after) return;
+  row[field] = after;
+  refreshScenarioRelations();
+  storeScenarioPatch(kind, key, 'update', field, before, after);
+  renderSitePicker();
+  renderDomainManagers();
+  scheduleDraw();
+}
+function markScenarioDeleted(kind, key) {
+  const row = state.scenario?.[`${kind}ByKey`]?.get(key);
+  if (!row || row.deleted) return;
+  row.deleted = true;
+  storeScenarioPatch(kind, key, 'delete', '', { ...row, deleted: false }, { ...row, deleted: true });
+  refreshScenarioRelations();
+  if (kind === 'site' && state.activeSiteKey === key) state.activeSiteKey = '';
+  renderSitePicker();
+  renderDomainManagers();
+  scheduleDraw();
+}
+function addScenarioForce() {
+  if (!state.scenario) return;
+  const index = state.scenario.forces.length;
+  const force = { forceKey: `force:new:${Date.now()}`, forceIndex: index, force_name: `新势力 ${index + 1}`, force_lord_person_id: 0, site_count: 0, siteKeys: [], deleted: false };
+  state.scenario.forces.push(force);
+  refreshScenarioRelations();
+  storeScenarioPatch('force', force.forceKey, 'add', '', null, { ...force });
+  renderDomainManagers();
+}
+function addScenarioSite() {
+  if (!state.scenario) return;
+  const force = scenarioRows('force')[0] || null;
+  const cell = state.selected || { col: 0, row: 0 };
+  const index = state.scenario.sites.length;
+  const site = { siteKey: `site:new:${Date.now()}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
+  state.scenario.sites.push(site);
+  if (force) force.siteKeys.push(site.siteKey);
+  refreshScenarioRelations();
+  storeScenarioPatch('site', site.siteKey, 'add', '', null, { ...site });
+  setActiveSite(site.siteKey, { focus: true });
+  renderDomainManagers();
+}
+function addScenarioEntity() {
+  if (!state.scenario) return;
+  const site = state.scenario.siteByKey.get(state.activeSiteKey) || scenarioRows('site')[0] || null;
+  const force = site ? state.scenario.forceByKey.get(site.parentForceKey) : null;
+  const index = state.scenario.entities.length;
+  const entity = { entityKey: `entity:new:${Date.now()}`, entityIndex: index, entityGroup: 'primary', entity_name: `新武将 ${index + 1}`, person_id: 0, portrait_id: 0, soldier_type_id: 0, troop_count: 0, parentSiteKey: site?.siteKey || '', parent_site_name: site?.site_name || '', parentForceKey: force?.forceKey || '', actual_force_index: force?.forceIndex ?? 0, actual_force_name: force?.force_name || '', deleted: false };
+  state.scenario.entities.push(entity);
+  if (site) site.entityKeys.push(entity.entityKey);
+  refreshScenarioRelations();
+  storeScenarioPatch('entity', entity.entityKey, 'add', '', null, { ...entity });
+  renderDomainManagers();
+}
+function appendScenarioInput(parent, row, kind, field, numeric = false, label = field) {
+  const wrap = document.createElement('label');
+  wrap.className = 'record-note';
+  wrap.textContent = `${label} `;
+  const input = document.createElement('input');
+  input.type = numeric ? 'number' : 'text';
+  input.value = row[field] ?? '';
+  input.addEventListener('change', () => updateScenarioField(kind, row[`${kind}Key`], field, input.value, numeric));
+  wrap.append(input);
+  parent.append(wrap);
+}
 function renderManagerList(node, rows, emptyText) {
   node.textContent = '';
   if (!rows.length) {
@@ -939,23 +1181,81 @@ function renderManagerList(node, rows, emptyText) {
     node.append(row);
   }
 }
-function renderDomainManagers() {
-  const sites = state.siteIndex ? [...state.siteIndex.cityByKey.values()] : [];
-  const forceMap = new Map();
-  for (const site of sites) {
-    const key = site.forceName || `势力 ${site.forceIndex ?? '-'}`;
-    if (!forceMap.has(key)) forceMap.set(key, []);
-    forceMap.get(key).push(site);
+function renderScenarioCollection(node, titleAction, rows, emptyText, buildRow) {
+  node.textContent = '';
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.textContent = titleAction.label;
+  add.addEventListener('click', titleAction.onClick);
+  node.append(add);
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = emptyText;
+    node.append(empty);
+    return;
   }
-  renderManagerList(
+  for (const item of rows) node.append(buildRow(item));
+}
+function renderDomainManagers() {
+  const scenario = state.scenario;
+  if (!scenario?.available) {
+    renderManagerList(els.forceList, [], scenario?.reason || '当前 bundle 未携带可编辑 .stg 场景模型。');
+    renderManagerList(els.entityList, [], '当前 bundle 未携带可编辑 .stg Entity 模型。');
+    return;
+  }
+  renderScenarioCollection(
     els.forceList,
-    [...forceMap.entries()].map(([name, list]) => ({ label: `${name} · ${list.length} 据点`, onClick: () => setActiveSite(list[0].siteKey, { focus: true }) })),
-    '当前 bundle 未提供势力索引；请导入带 .stg 的关卡 bundle。',
+    { label: '新增势力', onClick: addScenarioForce },
+    scenarioRows('force'),
+    '当前 .stg 没有势力记录。',
+    force => {
+      const row = document.createElement('div');
+      row.className = 'manager-row';
+      const copy = document.createElement('div');
+      copy.className = 'record-copy';
+      const title = document.createElement('div');
+      title.className = 'record-name';
+      title.textContent = `${force.force_name} / ${force.siteKeys?.length || 0} 据点`;
+      copy.append(title);
+      appendScenarioInput(copy, force, 'force', 'force_name', false, 'force_name');
+      appendScenarioInput(copy, force, 'force', 'force_lord_person_id', true, 'force_lord_person_id');
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '删除';
+      del.addEventListener('click', () => markScenarioDeleted('force', force.forceKey));
+      row.append(copy, del);
+      return row;
+    },
   );
-  renderManagerList(
+  const entities = scenarioRows('entity').slice(0, 120);
+  renderScenarioCollection(
     els.entityList,
-    sites.slice(0, 80).map(site => ({ label: `${site.cityName} · ${site.forceName || '未标注势力'} · ${site.gateCount} 门`, onClick: () => setActiveSite(site.siteKey, { focus: true }) })),
-    '武将字段来自 .stg Entity；当前前端先提供据点定位入口，字段编辑在 Raw 中逐步开放。',
+    { label: '新增武将', onClick: addScenarioEntity },
+    entities,
+    '当前 .stg 没有武将 Entity。',
+    entity => {
+      const row = document.createElement('div');
+      row.className = 'manager-row';
+      const copy = document.createElement('div');
+      copy.className = 'record-copy';
+      const title = document.createElement('div');
+      title.className = 'record-name';
+      title.textContent = `${entity.entity_name} / ${entity.parent_site_name || '-'} / ${entity.actual_force_name || '-'}`;
+      const note = document.createElement('div');
+      note.className = 'record-note';
+      note.textContent = `person_id=${entity.person_id} portrait_id=${entity.portrait_id}`;
+      copy.append(title, note);
+      appendScenarioInput(copy, entity, 'entity', 'entity_name', false, 'entity_name');
+      appendScenarioInput(copy, entity, 'person_id', true, 'person_id');
+      appendScenarioInput(copy, entity, 'portrait_id', true, 'portrait_id');
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '删除';
+      del.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
+      row.append(copy, del);
+      return row;
+    },
   );
 }
 function validationIssues() {
@@ -1156,9 +1456,13 @@ function refreshSide() {
 }
 function hasSelectedLayerPatch() { return !!state.selected && state.patches.has(patchKey(state.selected, els.layer.value)); }
 function refreshPatches() {
-  els.patchCount.value = String(state.patches.size);
-  els.patchList.textContent = [...state.patches.values()].slice(-12).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`).join('\n');
-  els.status.textContent = state.patches.size ? `已修改（${state.patches.size}）` : (state.baseImageNote || '就绪');
+  const mapChanges = [...state.patches.values()];
+  const scenarioChanges = [...state.scenarioPatches.values()];
+  els.patchCount.value = String(mapChanges.length + scenarioChanges.length);
+  const mapLines = mapChanges.slice(-8).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`);
+  const scenarioLines = scenarioChanges.slice(-6).map(change => `${change.kind} ${change.op} ${change.field || '-'} ${change.key}`);
+  els.patchList.textContent = [...mapLines, ...scenarioLines].join('\n');
+  els.status.textContent = mapChanges.length || scenarioChanges.length ? `已修改（${mapChanges.length + scenarioChanges.length}）` : (state.baseImageNote || '就绪');
   els.undoEdit.disabled = !state.undoStack.length;
   els.resetCell.disabled = !hasSelectedLayerPatch();
   els.resetAll.disabled = !state.patches.size;
@@ -1465,8 +1769,12 @@ function resetEditState(meta) {
   renderLayerOptions();
   state.originalRecords = state.meta.records.map(record => record.slice());
   state.patches.clear();
+  state.scenarioPatches.clear();
+  state.scenario = normalizeScenarioModel(state.meta.scenarioModel);
+  state.commonModel = normalizeCommonModel(state.meta.commonModel);
   state.undoStack = [];
   state.selected = null;
+  state.selectedCells.clear();
   state.regionAnchor = null;
   state.regionClipboard = null;
   state.activeCompositeId = null;
@@ -1526,6 +1834,8 @@ function parseStageM(buffer, name = 'local.m') {
     minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' },
     sidecars: inheritedSidecars,
     siteLinks: inheritedSiteLinks,
+    scenarioModel: state.meta.stage === stageName ? state.meta.scenarioModel : { available: false, reason: '仅加载 .m 时不会重新读取 .stg。', forces: [], sites: [], entities: [] },
+    commonModel: state.meta.commonModel,
     resources: state.meta.resources,
     records,
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
@@ -1571,6 +1881,7 @@ function downloadPatch() {
     fields: state.meta.fields,
     minimap: { dirtyCells: [...state.patches.values()].filter(patch => patch.minimapDirty).map(patch => [patch.x, patch.y]) },
     changes: [...state.patches.values()],
+    scenarioChanges: [...state.scenarioPatches.values()],
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -1714,8 +2025,7 @@ canvas.addEventListener('pointerdown', ev => {
   const world = clientToWorld(ev);
   const cell = worldToCell(world.x, world.y);
   if (!cell) return;
-  state.selected = cell;
-  syncActiveSiteFromCell(cell);
+  selectCell(cell, ev);
   if (els.tool.value === 'paint') {
     applyPaint(cell);
     return;
@@ -1768,7 +2078,7 @@ els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
 els.sitePicker.addEventListener('change', () => { setActiveSite(els.sitePicker.value, { focus: !!els.sitePicker.value }); });
 els.clearSite.addEventListener('click', () => { setActiveSite('', { skipDraw: false }); });
-els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); refreshPatches(); renderLayerVisibilityList(); scheduleDraw(); });
+els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); refreshPatches(); scheduleDraw(); });
 els.resourceFilter.addEventListener('input', () => { renderResourceList(); });
 els.resourceSort.addEventListener('change', () => { renderResourceList(); });
 els.resourceList.addEventListener('scroll', scheduleResourceListRender);
