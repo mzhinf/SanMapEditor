@@ -12,6 +12,7 @@ from PIL import Image, ImageDraw
 from san_tools.analysis.analyze_dor import parse_dor
 from san_tools.analysis.stage_site_links import build_stage_site_links
 from san_tools.codecs import stage_ini_codec
+from san_tools.codecs.stage_ini_excel_codec import write_workbook
 from san_tools.map.editor_model import StgFile
 from san_tools.map.stg_editor_patch import build_stg_layout_index, build_stg_patch_index
 
@@ -604,6 +605,54 @@ def export_heads_atlas(game_dir: Path, stage_dir: Path, palette: list[int]) -> d
         "height": first_height,
         "columns": columns,
     }
+
+
+def _xlsx_cell_value(value: object) -> object:
+    """把 stage.ini 解析值规整为 xlsx 可直接写入的单元格值。"""
+
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if value is None:
+        return ""
+    return value
+
+
+def _stage_ini_sheet(name: str, rows: list[dict[str, object]], preferred: tuple[str, ...] = ()) -> dict[str, object]:
+    """按稳定字段顺序生成一个 stage.ini 工作簿页。"""
+
+    headers: list[str] = []
+    for field in preferred:
+        if field not in headers:
+            headers.append(field)
+    for row in rows:
+        for field in row:
+            if field not in headers:
+                headers.append(field)
+    if not headers:
+        headers = ["说明"]
+        values = [["无数据"]]
+    else:
+        values = [[_xlsx_cell_value(row.get(field, "")) for field in headers] for row in rows]
+    return {"name": name, "headers": headers, "rows": values}
+
+
+def build_stage_ini_workbook_sheets(game_dir: Path) -> list[dict[str, object]]:
+    """把 stage.ini 字段级解析结果导出为编辑器随包工作簿。"""
+
+    payload = stage_ini_codec.build_payload(game_dir)
+    tables = payload.get("tables", {})
+    header = payload.get("header", {})
+    summary_rows = [[key, _xlsx_cell_value(value)] for key, value in header.items()]
+    summary_rows.insert(0, ["stage_ini_path", payload.get("stage_ini_path", "stage.ini")])
+    return [
+        {"name": "stage_ini_info", "headers": ["字段", "值"], "rows": summary_rows},
+        _stage_ini_sheet("general_master", tables.get("general_master", []), ("record_index", "record_id_candidate", "name", "label", "family_guess")),
+        _stage_ini_sheet("city_master", tables.get("city_master", []), ("record_index", "place_id_candidate_stage_ini", "name", "label", "family_guess")),
+        _stage_ini_sheet("troop_master", tables.get("troop_master", []), ("record_index", "record_id_candidate", "name", "label", "family_guess")),
+        _stage_ini_sheet("main_records", tables.get("main_records", []), ("record_index", "name", "raw_hex", "u16_words")),
+        _stage_ini_sheet("tail_records", tables.get("tail_records", []), ("record_index", "name", "raw_hex", "u16_words")),
+    ]
+
 def copy_scenario_reference_files(game_dir: Path, stage_dir: Path, stage_name: str) -> dict[str, object]:
     """复制编辑器导出时需要原样保留的剧本侧参考文件。"""
 
@@ -619,7 +668,21 @@ def copy_scenario_reference_files(game_dir: Path, stage_dir: Path, stage_name: s
             continue
         shutil.copyfile(source, stage_dir / out_name)
         references[key] = {"available": True, "path": out_name, "bytes": source.stat().st_size}
+    stage_ini = game_dir / "stage.ini"
+    if stage_ini.exists():
+        shutil.copyfile(stage_ini, stage_dir / "stage.ini")
+        references["stageIni"] = {"available": True, "path": "stage.ini", "bytes": stage_ini.stat().st_size}
+        try:
+            workbook_path = stage_dir / "stage_ini.xlsx"
+            write_workbook(workbook_path, build_stage_ini_workbook_sheets(game_dir))
+            references["stageIniWorkbook"] = {"available": True, "path": workbook_path.name, "bytes": workbook_path.stat().st_size}
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            references["stageIniWorkbook"] = {"available": False, "reason": str(exc)}
+    else:
+        references["stageIni"] = {"available": False, "reason": "缺少 stage.ini"}
+        references["stageIniWorkbook"] = {"available": False, "reason": "缺少 stage.ini"}
     return references
+
 def export_minimap(map_path: Path, out_path: Path, max_width: int = 280) -> None:
     image = Image.open(map_path).convert("RGB")
     scale = max_width / image.width

@@ -297,6 +297,8 @@ const state = {
   scenario: null,
   commonModel: null,
   scenarioPatches: new Map(),
+  gates: [],
+  gatePatches: new Map(),
   activeForceKey: '',
   activeEntityKey: '',
   activeHistoryGeneralKey: '',
@@ -607,7 +609,8 @@ function buildSiteIndex(siteLinks) {
     cityKeyByCoord.set(`${city.mapX},${city.mapY}`, city.siteKey);
     gatesBySiteKey.set(city.siteKey, view.gates);
   }
-  for (const gate of siteLinks?.gates || []) {
+  const sourceGates = Array.isArray(state.gates) && state.gates.length ? state.gates.filter(gate => !gate.deleted) : (siteLinks?.gates || []);
+  for (const gate of sourceGates) {
     const linkedKey = cityByKey.has(gate.siteKey) ? gate.siteKey : cityKeyByCoord.get(`${gate.siteX},${gate.siteY}`);
     const list = gatesBySiteKey.get(linkedKey);
     if (!list) continue;
@@ -651,23 +654,53 @@ function renderActiveSiteEditor(siteView) {
   appendScenarioSelect(wrap, site, 'site', 'parentForceKey', scenarioRows('force').map(force => ({ value: force.forceKey, label: force.force_name })), 'parentForceKey');
   const gateTitle = document.createElement('div');
   gateTitle.className = 'record-name';
-  gateTitle.textContent = `城门 ${siteView.gates?.length || 0}`;
+  gateTitle.textContent = `\u57ce\u95e8 ${siteView.gates?.length || 0}`;
   wrap.append(gateTitle);
+  const addGate = document.createElement('button');
+  addGate.type = 'button';
+  addGate.textContent = '\u65b0\u589e\u57ce\u95e8';
+  addGate.addEventListener('click', () => addSiteGate(siteView));
+  wrap.append(addGate);
   const gateList = document.createElement('div');
   gateList.className = 'manager-sublist';
   for (const gate of siteView.gates || []) {
-    gateList.append(buildScenarioListRow(`门 ${gate.gateIndex} (${gate.doorX},${gate.doorY}) dir=${gate.dir}`, false, () => {
+    const gateCard = document.createElement('div');
+    gateCard.className = 'manager-detail';
+    const head = document.createElement('div');
+    head.className = 'record-name';
+    head.textContent = `\u95e8 ${gate.gateIndex} / .dor group ${gate.group}`;
+    gateCard.append(head);
+    appendGateInput(gateCard, gate, 'doorX', '\u57ce\u95e8X');
+    appendGateInput(gateCard, gate, 'doorY', '\u57ce\u95e8Y');
+    appendGateInput(gateCard, gate, 'siteX', '\u636e\u70b9X');
+    appendGateInput(gateCard, gate, 'siteY', '\u636e\u70b9Y');
+    appendGateInput(gateCard, gate, 'dir', '\u65b9\u5411');
+    appendGateInput(gateCard, gate, 'group', '\u7ec4\u53f7');
+    appendGateInput(gateCard, gate, 'doorIndex', '\u95e8\u5e8f\u53f7');
+    const actions = document.createElement('div');
+    actions.className = 'manager-row';
+    const locate = document.createElement('button');
+    locate.type = 'button';
+    locate.textContent = '\u5b9a\u4f4d';
+    locate.addEventListener('click', () => {
       state.selectedCells.clear();
       rememberSelectedCell({ col: gate.doorX, row: gate.doorY });
       focusSite(site.siteKey);
       refreshSide();
       scheduleDraw();
-    }, '定位'));
+    });
+    const delGate = document.createElement('button');
+    delGate.type = 'button';
+    delGate.textContent = '\u5220\u9664';
+    delGate.addEventListener('click', () => deleteSiteGate(gateKey(gate)));
+    actions.append(locate, delGate);
+    gateCard.append(actions);
+    gateList.append(gateCard);
   }
   if (!(siteView.gates || []).length) {
     const empty = document.createElement('div');
     empty.className = 'placeholder';
-    empty.textContent = '当前据点没有匹配到 .dor 城门。';
+    empty.textContent = '\u5f53\u524d\u636e\u70b9\u6ca1\u6709\u5339\u914d\u5230 .dor \u57ce\u95e8\u3002';
     gateList.append(empty);
   }
   wrap.append(gateList);
@@ -1170,6 +1203,88 @@ function refreshCompositeList() {
     els.compositeList.append(row);
   }
 }
+function gateKey(gate) { return gate.gateKey || `gate:${gate.gateIndex}`; }
+function normalizeGateRows(rows) {
+  return rows.map((gate, index) => ({
+    ...gate,
+    gateKey: typeof gate.gateKey === 'string' && gate.gateKey ? gate.gateKey : `gate:${Number.isFinite(Number(gate.gateIndex)) ? Number(gate.gateIndex) : index}`,
+    gateIndex: Number.isFinite(Number(gate.gateIndex)) ? Number(gate.gateIndex) : index,
+    group: Number.isFinite(Number(gate.group)) ? Number(gate.group) : 0,
+    doorIndex: Number.isFinite(Number(gate.doorIndex)) ? Number(gate.doorIndex) : index,
+    doorX: Number.isFinite(Number(gate.doorX)) ? Number(gate.doorX) : 0,
+    doorY: Number.isFinite(Number(gate.doorY)) ? Number(gate.doorY) : 0,
+    dir: Number.isFinite(Number(gate.dir)) ? Number(gate.dir) : 0,
+    siteX: Number.isFinite(Number(gate.siteX)) ? Number(gate.siteX) : 0,
+    siteY: Number.isFinite(Number(gate.siteY)) ? Number(gate.siteY) : 0,
+    siteKey: typeof gate.siteKey === 'string' ? gate.siteKey : '',
+    cityName: typeof gate.cityName === 'string' ? gate.cityName : '',
+    deleted: gate.deleted === true,
+  }));
+}
+function gateRowsForSite(siteKey) {
+  return state.gates.filter(gate => !gate.deleted && gate.siteKey === siteKey);
+}
+function storeGatePatch(gate, op, field, before, after) {
+  const key = gateKey(gate);
+  state.gatePatches.set(`gate:${op}:${key}:${field || ''}`, { kind: 'gate', key, op, field, before, after });
+  refreshPatches();
+}
+function refreshGateViews() {
+  state.siteIndex = buildSiteIndex(state.meta.siteLinks);
+  renderSitePicker();
+  renderDomainManagers();
+  scheduleDraw();
+}
+function updateGateField(gateKeyValue, field, rawValue, numeric = true) {
+  const gate = state.gates.find(item => gateKey(item) === gateKeyValue);
+  if (!gate || gate.deleted) return;
+  const after = numeric ? Number.parseInt(rawValue, 10) : String(rawValue || '');
+  if (numeric && !Number.isFinite(after)) return;
+  const before = gate[field];
+  if (before === after) return;
+  gate[field] = after;
+  storeGatePatch(gate, 'update', field, before, after);
+  refreshGateViews();
+}
+function addSiteGate(siteView) {
+  if (!siteView) return;
+  const index = state.gates.length;
+  const gate = {
+    gateKey: `gate:new:${Date.now()}`,
+    gateIndex: index,
+    group: Number.isFinite(Number(siteView.forceIndex)) ? Number(siteView.forceIndex) : 0,
+    doorIndex: index,
+    doorX: Number(siteView.mapX || 0),
+    doorY: Number(siteView.mapY || 0),
+    dir: 0,
+    siteX: Number(siteView.mapX || 0),
+    siteY: Number(siteView.mapY || 0),
+    siteKey: siteView.siteKey,
+    cityName: siteView.cityName || '',
+    deleted: false,
+  };
+  state.gates.push(gate);
+  storeGatePatch(gate, 'add', '', null, { ...gate });
+  refreshGateViews();
+}
+function deleteSiteGate(gateKeyValue) {
+  const gate = state.gates.find(item => gateKey(item) === gateKeyValue);
+  if (!gate || gate.deleted) return;
+  gate.deleted = true;
+  storeGatePatch(gate, 'delete', '', { ...gate, deleted: false }, { ...gate });
+  refreshGateViews();
+}
+function appendGateInput(parent, gate, field, label, numeric = true) {
+  const wrap = document.createElement('label');
+  wrap.className = 'record-note';
+  wrap.textContent = `${label} `;
+  const input = document.createElement('input');
+  input.type = numeric ? 'number' : 'text';
+  input.value = gate[field] ?? '';
+  input.addEventListener('change', () => updateGateField(gateKey(gate), field, input.value, numeric));
+  wrap.append(input);
+  parent.append(wrap);
+}
 function scenarioCollectionName(kind) { return kind === 'entity' ? 'entities' : kind + 's'; }
 function scenarioRows(kind) {
   const list = state.scenario?.[scenarioCollectionName(kind)] || [];
@@ -1557,6 +1672,8 @@ function validationIssues() {
   if (!state.meta.siteLinks?.available) issues.push({ level: 'warn', text: state.meta.siteLinks?.reason || '未加载 .dor/.stg 关联信息，据点和城门只能按 .m 数据层编辑。' });
   if (!state.meta.scenarioFiles?.dor?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .dor 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
   if (!state.meta.scenarioFiles?.stg?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .stg 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
+  if (!state.meta.scenarioFiles?.stageIni?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage.ini\uff0c\u57ce\u6c60\u4e0e\u6b66\u5c06\u5168\u5c40\u6bcd\u8868\u53ea\u80fd\u5bfc\u51fa patch\u3002' });
+  if (!state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage_ini.xlsx\uff0c\u4fdd\u5b58\u65f6\u4e0d\u4f1a\u751f\u6210\u5de5\u4f5c\u7c3f\u3002' });
   const unsupportedScenario = unsupportedScenarioChanges();
   if (unsupportedScenario.length) issues.push({ level: 'warn', text: '.stg 对象新增、删除或归属移动暂未写回二进制：' + unsupportedScenario.length + ' 项会保留在 patch。' });
   for (const patch of state.patches.values()) {
@@ -1751,11 +1868,14 @@ function hasSelectedLayerPatch() { return !!state.selected && state.patches.has(
 function refreshPatches() {
   const mapChanges = [...state.patches.values()];
   const scenarioChanges = [...state.scenarioPatches.values()];
-  els.patchCount.value = String(mapChanges.length + scenarioChanges.length);
+  const gateChanges = [...state.gatePatches.values()];
+  const totalChanges = mapChanges.length + scenarioChanges.length + gateChanges.length;
+  els.patchCount.value = String(totalChanges);
   const mapLines = mapChanges.slice(-8).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`);
   const scenarioLines = scenarioChanges.slice(-6).map(change => `${change.kind} ${change.op} ${change.field || '-'} ${change.key}`);
-  els.patchList.textContent = [...mapLines, ...scenarioLines].join('\n');
-  els.status.textContent = mapChanges.length || scenarioChanges.length ? `已修改（${mapChanges.length + scenarioChanges.length}）` : (state.baseImageNote || '就绪');
+  const gateLines = gateChanges.slice(-6).map(change => `gate ${change.op} ${change.field || '-'} ${change.key}`);
+  els.patchList.textContent = [...mapLines, ...scenarioLines, ...gateLines].join('\n');
+  els.status.textContent = totalChanges ? `\u5df2\u4fee\u6539\uff08${totalChanges}\uff09` : (state.baseImageNote || '\u5c31\u7eea');
   els.undoEdit.disabled = !state.undoStack.length;
   els.resetCell.disabled = !hasSelectedLayerPatch();
   els.resetAll.disabled = !state.patches.size;
@@ -2084,6 +2204,8 @@ function resetEditState(meta) {
   state.originalRecords = state.meta.records.map(record => record.slice());
   state.patches.clear();
   state.scenarioPatches.clear();
+  state.gatePatches.clear();
+  state.gates = normalizeGateRows(state.meta.siteLinks?.gates || []);
   state.scenario = normalizeScenarioModel(state.meta.scenarioModel);
   state.commonModel = normalizeCommonModel(state.meta.commonModel);
   state.undoStack = [];
@@ -2201,6 +2323,7 @@ function downloadPatch() {
     minimap: { dirtyCells: [...state.patches.values()].filter(patch => patch.minimapDirty).map(patch => [patch.x, patch.y]) },
     changes: [...state.patches.values()],
     scenarioChanges: [...state.scenarioPatches.values()],
+    gateChanges: [...state.gatePatches.values()],
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -2434,6 +2557,35 @@ function buildEditedStgBytes(originalBytes) {
   }
   return bytes;
 }
+function jsonBytes(payload) {
+  return new TextEncoder().encode(JSON.stringify(payload, null, 2));
+}
+function buildDorPatchArtifact() {
+  if (!state.gatePatches.size) return null;
+  return {
+    name: `${state.meta.stage}_dor_patch.json`,
+    bytes: jsonBytes({
+      format: 'san-editor-dor-patch-v1',
+      stage: state.meta.stage,
+      gateChanges: [...state.gatePatches.values()],
+      gates: state.gates.filter(gate => !gate.deleted),
+    }),
+  };
+}
+function buildScenarioPatchArtifact() {
+  if (!state.scenarioPatches.size) return null;
+  return {
+    name: `${state.meta.stage}_scenario_patch.json`,
+    bytes: jsonBytes({
+      format: 'san-editor-scenario-patch-v1',
+      stage: state.meta.stage,
+      scenarioChanges: [...state.scenarioPatches.values()],
+      forces: scenarioRows('force'),
+      sites: scenarioRows('site'),
+      entities: scenarioRows('entity'),
+    }),
+  };
+}
 function base64ToBytes(text) {
   const raw = window.atob(text);
   const bytes = new Uint8Array(raw.length);
@@ -2464,6 +2616,15 @@ async function appendScenarioReference(files, key, suffix) {
   if (file) files.push(file);
   return file;
 }
+async function appendScenarioNamedReference(files, key, name) {
+  const entry = state.meta.scenarioFiles?.[key];
+  if (!entry?.path) return null;
+  const response = await fetch(entry.path, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`\u65e0\u6cd5\u8bfb\u53d6 ${entry.path}`);
+  const file = { name, bytes: new Uint8Array(await response.arrayBuffer()) };
+  files.push(file);
+  return file;
+}
 async function buildExportArtifacts() {
   const stageName = state.meta.stage;
   const files = [{ name: `${stageName}.m`, bytes: buildStageBytes() }];
@@ -2476,7 +2637,13 @@ async function buildExportArtifacts() {
   await appendScenarioReference(files, 'dor', 'dor');
   const stgFile = await readScenarioReference('stg', 'stg');
   if (stgFile) files.push({ ...stgFile, bytes: buildEditedStgBytes(stgFile.bytes) });
+  await appendScenarioNamedReference(files, 'stageIni', 'stage.ini');
+  await appendScenarioNamedReference(files, 'stageIniWorkbook', 'stage_ini.xlsx');
   await appendScenarioReference(files, 'heads', 'heads.dat');
+  const scenarioPatch = buildScenarioPatchArtifact();
+  if (scenarioPatch) files.push(scenarioPatch);
+  const dorPatch = buildDorPatchArtifact();
+  if (dorPatch) files.push(dorPatch);
   return { files, usedFallbackTail: sidecarFlags.some(Boolean) };
 }
 async function writeFilesToDirectory(dirHandle, files) {

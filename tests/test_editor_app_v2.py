@@ -7,7 +7,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, build_editor_site_links, copy_scenario_reference_files, export_heads_atlas, write_stage_json
+from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, build_editor_site_links, build_stage_ini_workbook_sheets, copy_scenario_reference_files, export_heads_atlas, write_stage_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,6 +98,11 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn('historyGenerals', html)
         self.assertIn('inactiveHistoryGeneralRows', html)
         self.assertIn('Number(entity?.command || 0) > 0', html)
+        self.assertIn('normalizeGateRows', html)
+        self.assertIn('appendGateInput', html)
+        self.assertIn('buildDorPatchArtifact', html)
+        self.assertIn('stageIniWorkbook', html)
+        self.assertIn('gateChanges', html)
         self.assertNotIn('land_water_hint', html)
         self.assertNotIn('id="layerVisibilityList"', html)
         reset_body = re.search(r'function resetEditState\(meta\) \{([\s\S]*?)\n\}', html)
@@ -150,6 +155,8 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
             self.assertEqual(payload['scenarioFiles']['dor']['path'], 'stage99.dor')
             self.assertEqual(payload['scenarioFiles']['stg']['path'], 'stage99.stg')
             self.assertEqual(payload['scenarioFiles']['heads']['path'], 'heads.dat')
+            self.assertFalse(payload['scenarioFiles']['stageIni']['available'])
+            self.assertFalse(payload['scenarioFiles']['stageIniWorkbook']['available'])
             self.assertTrue(payload['scenarioModel']['available'])
             self.assertTrue(payload['commonModel']['available'])
             self.assertIn('blocked', payload['editableLayers'])
@@ -158,6 +165,27 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    def test_stage_ini_reference_and_workbook_are_exported_for_stage01(self) -> None:
+        game_dir = ROOT / ''.join(chr(code) for code in (0x4e09, 0x56fd, 0x9738, 0x4e1a))
+        if not (game_dir / 'stage.ini').exists() or not (game_dir / 'stage01.dor').exists():
+            self.skipTest('missing stage01 or stage.ini sample')
+
+        tmp_dir = ROOT / 'derived' / 'test_tmp' / 'editor_bundle_stage_ini_files'
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        stage_dir = tmp_dir / 'stage01'
+        stage_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            scenario_files = copy_scenario_reference_files(game_dir, stage_dir, 'stage01')
+            self.assertTrue(scenario_files['stageIni']['available'])
+            self.assertTrue(scenario_files['stageIniWorkbook']['available'])
+            self.assertTrue((stage_dir / 'stage.ini').exists())
+            self.assertTrue((stage_dir / 'stage_ini.xlsx').exists())
+            sheets = build_stage_ini_workbook_sheets(game_dir)
+            sheet_names = {sheet['name'] for sheet in sheets}
+            self.assertIn('general_master', sheet_names)
+            self.assertIn('city_master', sheet_names)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
     def test_stage01_scenario_and_common_models_use_stg_and_stage_ini(self) -> None:
