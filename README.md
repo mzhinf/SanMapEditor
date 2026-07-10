@@ -60,7 +60,7 @@
 导出编辑器 bundle：
 
 ```powershell
-& $py src/san_tools/map/export_editor_bundle.py . --stage stage11
+& $py src/san_tools/map/export_editor_bundle.py . --stage stage01 --out derived/editor
 ```
 
 导出全部已发现关卡：
@@ -83,17 +83,17 @@
 启动本地静态服务：
 
 ```powershell
-& $py -m http.server 8787 --bind 127.0.0.1 --directory derived/editor
+& $py -m http.server 8771 --bind 127.0.0.1 --directory derived/editor
 ```
 
 说明：
 
-- 导出命令和静态服务启动命令本身没有变化。
+- 当前推荐使用 `stage01` 作为验收样本，并显式写入 `derived/editor`。
 - `stage01` 这类超大关卡现在会在页面内自动跳过超大 `map.png`，改为按资源重建视图，因此仍然可以继续使用上面的两条命令。
 
 浏览器入口：
-- [stage11 编辑器](http://127.0.0.1:8787/stage11/editor.html)
-- [编辑器索引](http://127.0.0.1:8787/index.html)
+- [stage01 编辑器](http://127.0.0.1:8771/stage01/editor.html)
+- [编辑器索引](http://127.0.0.1:8771/index.html)
 
 ### 编辑器 patch 写回
 
