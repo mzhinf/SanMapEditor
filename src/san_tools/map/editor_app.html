@@ -140,7 +140,6 @@ canvas { display: block; width: 100%; height: 100%; }
     </div>
     <span class="status" id="status">正在加载</span>
   </header>
-
   <aside class="resource-panel">
     <section class="section">
       <div class="section-title">图层控制</div>
@@ -168,7 +167,6 @@ canvas { display: block; width: 100%; height: 100%; }
       <div class="composite-list" id="compositeList"></div>
     </section>
   </aside>
-
   <main class="canvas-zone" id="viewport">
     <div class="canvas-hud">
       <div class="hud-pill" id="hudTool">工具：选择</div>
@@ -182,7 +180,6 @@ canvas { display: block; width: 100%; height: 100%; }
       <canvas id="minimap"></canvas>
     </div>
   </main>
-
   <aside class="inspector-panel">
     <nav class="inspector-tabs" aria-label="属性面板">
       <button class="inspector-tab active" data-tab="properties" type="button">属性</button>
@@ -219,7 +216,6 @@ canvas { display: block; width: 100%; height: 100%; }
       </section>
     </div>
   </aside>
-
   <footer class="bottom-dock">
     <section class="section"><div class="section-title">当前工作</div><div class="hint">选择格子后可在 Raw 中精确改字段；选择区域后可复制全部层数据或保存为合成物件。</div></section>
     <section class="history-section"><div class="section-title">修改记录</div><div class="patch-list" id="patchList"></div></section>
@@ -509,7 +505,6 @@ function normalizeCommonModel(model) {
     heads: model?.heads || { available: false },
   };
 }
-
 function sourceOutputSize(meta = state.meta) {
   const size = meta?.render?.source_output_size;
   if (!Array.isArray(size) || size.length !== 2) return null;
@@ -637,7 +632,6 @@ function renderActiveSiteEditor(siteView) {
   appendScenarioInput(wrap, site, 'site', 'food', true, 'food');
   appendScenarioInput(wrap, site, 'site', 'standby_soldier', true, 'standby_soldier');
   appendScenarioSelect(wrap, site, 'site', 'parentForceKey', scenarioRows('force').map(force => ({ value: force.forceKey, label: force.force_name })), 'parentForceKey');
-
   const gateTitle = document.createElement('div');
   gateTitle.className = 'record-name';
   gateTitle.textContent = `城门 ${siteView.gates?.length || 0}`;
@@ -660,7 +654,6 @@ function renderActiveSiteEditor(siteView) {
     gateList.append(empty);
   }
   wrap.append(gateList);
-
   const entities = scenarioRows('entity').filter(entity => entity.parentSiteKey === site.siteKey);
   const troopTotal = entities.reduce((sum, entity) => sum + Number(entity.troop_count || 0), 0);
   const entityTitle = document.createElement('div');
@@ -679,7 +672,6 @@ function renderActiveSiteEditor(siteView) {
     entityList.append(empty);
   }
   wrap.append(entityList);
-
   const del = document.createElement('button');
   del.type = 'button';
   del.textContent = '删除据点';
@@ -1101,8 +1093,9 @@ function refreshCompositeList() {
     els.compositeList.append(row);
   }
 }
+function scenarioCollectionName(kind) { return kind === 'entity' ? 'entities' : kind + 's'; }
 function scenarioRows(kind) {
-  const list = state.scenario?.[`${kind}s`] || [];
+  const list = state.scenario?.[scenarioCollectionName(kind)] || [];
   return list.filter(row => !row.deleted);
 }
 function scenarioPatchKey(kind, key, op, field = '') { return `${kind}:${op}:${key}:${field}`; }
@@ -1330,7 +1323,6 @@ function renderDomainManagers() {
   }
   refreshScenarioRelations();
   ensureActiveScenarioKeys();
-
   const forceRows = scenarioRows('force');
   els.forceList.textContent = '';
   const forceToolbar = document.createElement('div');
@@ -1379,7 +1371,6 @@ function renderDomainManagers() {
   }
   forceSplit.append(forceItems, forceDetail);
   els.forceList.append(forceSplit);
-
   const entityRows = scenarioRows('entity');
   els.entityList.textContent = '';
   const entityToolbar = document.createElement('div');
@@ -1967,7 +1958,11 @@ function resetEditState(meta) {
   for (const layer of state.meta.pointLayers || POINT_LAYER_OPTIONS) state.selectedResource[layer] = 0;
   state.siteIndex = buildSiteIndex(state.meta.siteLinks);
   state.activeSiteKey = '';
+  state.activeForceKey = '';
+  state.activeEntityKey = '';
+  refreshScenarioRelations();
   renderSitePicker();
+  renderDomainManagers();
   rebuildLayerStats();
   recomputeRedrawConfig();
   rebuildEditedImage();
@@ -2022,7 +2017,6 @@ function parseStageM(buffer, name = 'local.m') {
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
   });
 }
-
 async function loadLocalMFile(file) {
   if (!file) return;
   try {

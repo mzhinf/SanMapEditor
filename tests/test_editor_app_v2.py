@@ -88,8 +88,13 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn('selectedCells', html)
         self.assertIn('entityPortraitStyle', html)
         self.assertIn('manager-detail', html)
+        self.assertIn('scenarioCollectionName', html)
+        self.assertIn("kind === 'entity' ? 'entities' : kind + 's'", html)
         self.assertNotIn('land_water_hint', html)
         self.assertNotIn('id="layerVisibilityList"', html)
+        reset_body = re.search(r'function resetEditState\(meta\) \{([\s\S]*?)\n\}', html)
+        self.assertIsNotNone(reset_body)
+        self.assertIn('renderDomainManagers();', reset_body.group(1))
 
 class TestEditorBundleScenarioFiles(unittest.TestCase):
     """验证编辑器 bundle 会携带剧本侧参考文件信息。"""
