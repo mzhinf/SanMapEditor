@@ -253,9 +253,10 @@ const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
 const RESOURCE_LAYER_OPTIONS = ['acwx', 'acwy', 'acwz'];
 const POINT_LAYER_OPTIONS = ['terrain_tag', 'blocked', 'site_trigger', 'site_area'];
 const DATA_OVERLAY_OPTIONS = [
-  { key: 'site_trigger', name: 'site_trigger', label: '据点影响', color: '#0ea5e9', mode: 'fill' },
-  { key: 'site_area', name: 'site_area', label: '据点核心', color: '#f59e0b', mode: 'center' },
-  { key: 'blocked', name: 'blocked', label: '阻挡', color: '#ef4444', mode: 'outline' },
+  { key: 'terrain_tag', name: 'terrain_tag', label: '\u5730\u5f62\u6807\u8bb0', color: '#22c55e', mode: 'midpoint-square' },
+  { key: 'site_trigger', name: 'site_trigger', label: '\u636e\u70b9\u5f71\u54cd', color: '#0ea5e9', mode: 'fill' },
+  { key: 'site_area', name: 'site_area', label: '\u636e\u70b9\u6838\u5fc3', color: '#f59e0b', mode: 'center-ring' },
+  { key: 'blocked', name: 'blocked', label: '\u963b\u6321', color: '#ef4444', mode: 'large-outline' },
 ];
 const SCENARIO_FIELD_LABELS = {
   force: {
@@ -1014,6 +1015,24 @@ function innerDiamondPath(col, row, pad = 6) {
   ctx.lineTo(p.x + pad, p.y + 10);
   ctx.closePath();
 }
+function midpointSquarePath(col, row) {
+  const p = cellToWorld(col, row);
+  ctx.beginPath();
+  ctx.moveTo(p.x + 30, p.y + 5);
+  ctx.lineTo(p.x + 30, p.y + 15);
+  ctx.lineTo(p.x + 10, p.y + 15);
+  ctx.lineTo(p.x + 10, p.y + 5);
+  ctx.closePath();
+}
+function largeDiamondPath(col, row, pad = 2) {
+  const p = cellToWorld(col, row);
+  ctx.beginPath();
+  ctx.moveTo(p.x + 20, p.y - pad);
+  ctx.lineTo(p.x + 40 + pad, p.y + 10);
+  ctx.lineTo(p.x + 20, p.y + 20 + pad);
+  ctx.lineTo(p.x - pad, p.y + 10);
+  ctx.closePath();
+}
 function drawCellDataOverlay(option, col, row, value) {
   if (option.mode === 'fill') {
     diamondPath(col, row);
@@ -1021,12 +1040,27 @@ function drawCellDataOverlay(option, col, row, value) {
     ctx.fill();
     return;
   }
-  if (option.mode === 'center') {
+  if (option.mode === 'midpoint-square') {
+    midpointSquarePath(col, row);
+    ctx.strokeStyle = overlayPaletteColor(option, value, 0.94);
+    ctx.lineWidth = 1.5 / state.transform.scale;
+    ctx.stroke();
+    return;
+  }
+  if (option.mode === 'center-ring') {
     const p = cellToWorld(col, row);
     ctx.beginPath();
-    ctx.arc(p.x + 20, p.y + 10, Math.max(2.2, 4 / state.transform.scale), 0, Math.PI * 2);
-    ctx.fillStyle = overlayPaletteColor(option, value, 0.92);
-    ctx.fill();
+    ctx.arc(p.x + 20, p.y + 10, Math.hypot(10, 5), 0, Math.PI * 2);
+    ctx.strokeStyle = overlayPaletteColor(option, value, 0.96);
+    ctx.lineWidth = 1.8 / state.transform.scale;
+    ctx.stroke();
+    return;
+  }
+  if (option.mode === 'large-outline') {
+    largeDiamondPath(col, row);
+    ctx.strokeStyle = overlayPaletteColor(option, value, 0.96);
+    ctx.lineWidth = 2.2 / state.transform.scale;
+    ctx.stroke();
     return;
   }
   diamondPath(col, row);
@@ -1486,11 +1520,16 @@ function removeSiteFromForce(siteKey) {
   if (!site || site.deleted) return;
   updateScenarioField('site', site.siteKey, 'parentForceKey', '');
 }
+function siteHouseAttrValue(site) {
+  const value = Number(site?.house_attr ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
 function siteKindLabel(site) {
-  const cityId = String(site?.city_index ?? '');
-  const cities = state.commonModel?.cities || [];
-  const matched = cities.some(city => String(city.record_index ?? '') === cityId || String(city.place_id_candidate_stage_ini ?? '') === cityId);
-  return matched ? '\u57ce\u6c60' : '\u519b\u5be8/\u5c71\u5be8';
+  const houseAttr = siteHouseAttrValue(site);
+  if (houseAttr === 1) return '\u57ce\u6c60';
+  if (houseAttr === 2) return '\u519b\u5be8';
+  if (houseAttr === 3) return '\u5c71\u5be8';
+  return houseAttr ? `\u672a\u77e5(${houseAttr})` : '\u672a\u5206\u7c7b';
 }
 function appendScenarioInput(parent, row, kind, field, numeric = false, label = field) {
   const wrap = document.createElement('label');
@@ -2012,21 +2051,8 @@ function applyPointResourceThumbStyle(thumb, layer, entry) {
   thumb.style.clipPath = '';
   thumb.style.border = '';
   thumb.style.background = '';
+  thumb.style.backgroundColor = '';
   if (entry.index === 0) return;
-  if (layer === 'site_trigger') {
-    thumb.style.background = entry.color;
-    thumb.style.clipPath = 'polygon(50% 0,100% 50%,50% 100%,0 50%)';
-    return;
-  }
-  if (layer === 'site_area') {
-    thumb.style.background = `radial-gradient(circle at center, ${entry.color} 0 28%, transparent 30%)`;
-    return;
-  }
-  if (layer === 'blocked') {
-    thumb.style.background = 'transparent';
-    thumb.style.border = '2px solid #ef4444';
-    return;
-  }
   thumb.style.backgroundColor = entry.color;
 }
 function paintResourceList() {
@@ -2703,7 +2729,7 @@ function buildScenarioPatchArtifact() {
 
 function stageIniPatchModel() { return state.commonModel?.stageIniPatchModel?.available ? state.commonModel.stageIniPatchModel : null; }
 function stageIniRowsForKind(kind) {
-  if (kind === 'site') return scenarioRows('site').filter(site => siteKindLabel(site) === '\u57ce\u6c60');
+  if (kind === 'site') return scenarioRows('site').filter(site => siteHouseAttrValue(site) === 1);
   if (kind === 'entity') return scenarioRows('entity').filter(isGeneralEntity);
   return [];
 }
