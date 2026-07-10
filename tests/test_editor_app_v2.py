@@ -20,7 +20,7 @@ class TestEditorAppV2Template(unittest.TestCase):
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
         for marker in (
             '地图编辑器 2.0',
-            '合成物件 / 区域复制',
+            '合成对象 / 区域复制',
             '势力管理',
             '据点 / 城门',
             '武将管理',
@@ -92,8 +92,9 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn("kind === 'entity' ? 'entities' : kind + 's'", html)
         self.assertIn('overlayList', html)
         self.assertIn('DATA_OVERLAY_OPTIONS', html)
-        self.assertIn('site_influence', html)
+        self.assertIn("name: 'site_trigger'", html)
         self.assertIn('drawCellDataOverlay', html)
+        self.assertIn('applyPointResourceThumbStyle', html)
         self.assertIn('historyGenerals', html)
         self.assertIn('inactiveHistoryGeneralRows', html)
         self.assertIn('Number(entity?.command || 0) > 0', html)

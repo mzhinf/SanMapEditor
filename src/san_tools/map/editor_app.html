@@ -164,7 +164,7 @@ canvas { display: block; width: 100%; height: 100%; }
       <div class="overlay-list" id="overlayList"></div>
     </section>
     <section class="section">
-      <div class="section-title">合成物件 / 区域复制</div>
+      <div class="section-title">合成对象 / 区域复制</div>
       <div class="selection-actions">
         <button id="setRegionAnchor" type="button">设起点</button>
         <button id="copyRegion" type="button">复制区域</button>
@@ -225,7 +225,7 @@ canvas { display: block; width: 100%; height: 100%; }
     </div>
   </aside>
   <footer class="bottom-dock">
-    <section class="section"><div class="section-title">当前工作</div><div class="hint">选择格子后可在 Raw 中精确改字段；选择区域后可复制全部层数据或保存为合成物件。</div></section>
+    <section class="section"><div class="section-title">当前工作</div><div class="hint">选择格子后可在 Raw 中精确改字段；选择区域后可复制全部层数据或保存为合成对象。</div></section>
     <section class="history-section"><div class="section-title">修改记录</div><div class="patch-list" id="patchList"></div></section>
     <section class="section"><div class="section-title">状态</div><div class="field"><label>修改数量</label><input id="patchCount" value="0" readonly></div><div class="hint">导出前会检查 .m 长度、字段范围、sidecar 参考和据点联动状态。</div></section>
   </footer>
@@ -253,9 +253,9 @@ const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
 const RESOURCE_LAYER_OPTIONS = ['acwx', 'acwy', 'acwz'];
 const POINT_LAYER_OPTIONS = ['terrain_tag', 'blocked', 'site_trigger', 'site_area'];
 const DATA_OVERLAY_OPTIONS = [
-  { key: 'site_trigger', name: 'site_influence', label: '据点影响', color: '#0ea5e9', mode: 'fill' },
-  { key: 'site_area', name: 'site_area', label: '据点核心', color: '#f59e0b', mode: 'inner' },
-  { key: 'blocked', name: 'blocked', label: '阻挡', color: '#ef4444', mode: 'blocked' },
+  { key: 'site_trigger', name: 'site_trigger', label: '据点影响', color: '#0ea5e9', mode: 'fill' },
+  { key: 'site_area', name: 'site_area', label: '据点核心', color: '#f59e0b', mode: 'center' },
+  { key: 'blocked', name: 'blocked', label: '阻挡', color: '#ef4444', mode: 'outline' },
 ];
 const PAINT_LAYER_OPTIONS = [...RESOURCE_LAYER_OPTIONS, ...POINT_LAYER_OPTIONS];
 const MAX_BASE_IMAGE_EDGE = 8192;
@@ -939,17 +939,11 @@ function drawCellDataOverlay(option, col, row, value) {
     ctx.fill();
     return;
   }
-  if (option.mode === 'inner') {
-    innerDiamondPath(col, row, 7);
-    ctx.fillStyle = overlayPaletteColor(option, value, 0.26);
-    ctx.strokeStyle = overlayPaletteColor(option, value, 0.92);
-    ctx.lineWidth = 1.4 / state.transform.scale;
-    ctx.fill();
-    ctx.stroke();
+  if (option.mode === 'center') {
     const p = cellToWorld(col, row);
     ctx.beginPath();
-    ctx.arc(p.x + 20, p.y + 10, Math.max(1.8, 3 / state.transform.scale), 0, Math.PI * 2);
-    ctx.fillStyle = overlayPaletteColor(option, value, 0.95);
+    ctx.arc(p.x + 20, p.y + 10, Math.max(2.2, 4 / state.transform.scale), 0, Math.PI * 2);
+    ctx.fillStyle = overlayPaletteColor(option, value, 0.92);
     ctx.fill();
     return;
   }
@@ -957,17 +951,13 @@ function drawCellDataOverlay(option, col, row, value) {
   ctx.strokeStyle = overlayPaletteColor(option, value, 0.95);
   ctx.lineWidth = 1.8 / state.transform.scale;
   ctx.stroke();
-  const p = cellToWorld(col, row);
-  ctx.beginPath();
-  ctx.moveTo(p.x + 7, p.y + 7);
-  ctx.lineTo(p.x + 33, p.y + 13);
-  ctx.moveTo(p.x + 7, p.y + 13);
-  ctx.lineTo(p.x + 33, p.y + 7);
-  ctx.stroke();
 }
 function drawVisiblePointOverlay(viewWidth, viewHeight) {
   if (!state.meta) return;
-  const options = DATA_OVERLAY_OPTIONS.filter(option => state.dataOverlayVisible[option.key]);
+  const options = DATA_OVERLAY_OPTIONS
+    .filter(option => state.dataOverlayVisible[option.key])
+    .map(option => ({ ...option, fieldIndex: fieldIndex(option.key) }))
+    .filter(option => option.fieldIndex >= 0);
   if (!options.length) return;
   const range = visibleCellRange(viewWidth, viewHeight);
   if (!range) return;
@@ -976,12 +966,11 @@ function drawVisiblePointOverlay(viewWidth, viewHeight) {
     const rowStartX = range.originX + (row & 1 ? 20 : 0);
     const minCol = Math.max(0, Math.floor((range.left - rowStartX - 24) / 40) - 1);
     const maxCol = Math.min(state.meta.width - 1, Math.ceil((range.right - rowStartX + 24) / 40) + 1);
+    const rowOffset = row * state.meta.width;
     for (let col = minCol; col <= maxCol; col++) {
-      const record = state.meta.records[row * state.meta.width + col];
+      const record = state.meta.records[rowOffset + col];
       for (const option of options) {
-        const fi = fieldIndex(option.key);
-        if (fi < 0) continue;
-        const value = record[fi];
+        const value = record[option.fieldIndex];
         if (!value) continue;
         drawCellDataOverlay(option, col, row, value);
       }
@@ -1159,7 +1148,7 @@ function refreshCompositeList() {
   if (!state.compositeObjects.length) {
     const empty = document.createElement('div');
     empty.className = 'placeholder';
-    empty.textContent = '还没有合成物件。';
+    empty.textContent = '还没有合成对象。';
     els.compositeList.append(empty);
     return;
   }
@@ -1266,13 +1255,14 @@ function addScenarioForce() {
   const index = state.scenario.forces.length;
   const force = { forceKey: `force:new:${Date.now()}`, forceIndex: index, force_name: `新势力 ${index + 1}`, force_lord_person_id: 0, site_count: 0, siteKeys: [], deleted: false };
   state.scenario.forces.push(force);
+  state.activeForceKey = force.forceKey;
   refreshScenarioRelations();
   storeScenarioPatch('force', force.forceKey, 'add', '', null, { ...force });
   renderDomainManagers();
 }
-function addScenarioSite() {
+function addScenarioSite(forceKey = '') {
   if (!state.scenario) return;
-  const force = scenarioRows('force')[0] || null;
+  const force = state.scenario.forceByKey.get(forceKey || state.activeForceKey) || scenarioRows('force')[0] || null;
   const cell = state.selected || { col: 0, row: 0 };
   const index = state.scenario.sites.length;
   const site = { siteKey: `site:new:${Date.now()}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
@@ -1457,6 +1447,14 @@ function renderDomainManagers() {
     forceDetail.append(title);
     appendScenarioInput(forceDetail, force, 'force', 'force_name', false, 'force_name');
     appendScenarioInput(forceDetail, force, 'force', 'force_lord_person_id', true, 'force_lord_person_id');
+    const siteToolbar = document.createElement('div');
+    siteToolbar.className = 'manager-toolbar';
+    const addSiteForForce = document.createElement('button');
+    addSiteForForce.type = 'button';
+    addSiteForForce.textContent = '新增据点';
+    addSiteForForce.addEventListener('click', () => addScenarioSite(force.forceKey));
+    siteToolbar.append(addSiteForForce);
+    forceDetail.append(siteToolbar);
     const siteList = document.createElement('div');
     siteList.className = 'manager-sublist';
     for (const site of scenarioRows('site').filter(site => site.parentForceKey === force.forceKey)) {
@@ -1774,6 +1772,29 @@ function buildPointEntries(layer) {
   const usage = state.layerStats[layer]?.counts || new Map();
   return Array.from({ length: 256 }, (_entry, index) => ({ index, used: usage.get(index) || 0, color: pointPaletteColor(index) }));
 }
+function applyPointResourceThumbStyle(thumb, layer, entry) {
+  thumb.classList.add('point-swatch');
+  thumb.classList.toggle('zero', entry.index === 0);
+  thumb.style.clipPath = '';
+  thumb.style.border = '';
+  thumb.style.background = '';
+  if (entry.index === 0) return;
+  if (layer === 'site_trigger') {
+    thumb.style.background = entry.color;
+    thumb.style.clipPath = 'polygon(50% 0,100% 50%,50% 100%,0 50%)';
+    return;
+  }
+  if (layer === 'site_area') {
+    thumb.style.background = `radial-gradient(circle at center, ${entry.color} 0 28%, transparent 30%)`;
+    return;
+  }
+  if (layer === 'blocked') {
+    thumb.style.background = 'transparent';
+    thumb.style.border = '2px solid #ef4444';
+    return;
+  }
+  thumb.style.backgroundColor = entry.color;
+}
 function paintResourceList() {
   const model = state.resourceListModel;
   if (!model || !model.info) return;
@@ -1824,9 +1845,7 @@ function paintResourceList() {
     const thumb = document.createElement('div');
     thumb.className = 'resource-thumb';
     if (model.info.kind === 'point') {
-      thumb.classList.add('point-swatch');
-      if (entry.index === 0) thumb.classList.add('zero');
-      else thumb.style.backgroundColor = entry.color;
+      applyPointResourceThumbStyle(thumb, model.layer, entry);
     } else {
       thumb.style.backgroundImage = `url(${model.info.image})`;
       thumb.style.backgroundPosition = `-${entry.atlas[0]}px -${entry.atlas[1]}px`;
@@ -2551,7 +2570,7 @@ els.tool.addEventListener('change', () => { updateHud(); });
 els.setRegionAnchor.addEventListener('click', () => { if (!state.selected) return; state.regionAnchor = { ...state.selected }; refreshCompositeList(); scheduleDraw(); });
 els.copyRegion.addEventListener('click', () => { const snapshot = captureRegionSnapshot('区域复制'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已复制区域 ' + snapshot.width + ' x ' + snapshot.height; });
 els.pasteRegion.addEventListener('click', () => { const snapshot = state.regionClipboard || state.compositeObjects.find(item => item.id === state.activeCompositeId); if (!snapshot || !state.selected) return; if (pasteRegionSnapshot(snapshot)) els.status.textContent = '已粘贴 ' + snapshot.name; });
-els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成物件 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
+els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成对象 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
 els.loadMFile.addEventListener('change', () => { loadLocalMFile(els.loadMFile.files?.[0]); els.loadMFile.value = ''; });
 els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
 document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; scheduleDraw(); });

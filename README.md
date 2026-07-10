@@ -75,7 +75,7 @@
 - 地图编辑器页面升级为 2.0 五区布局：顶部工具栏、左侧资源库、中央地图画布、右侧 Inspector、底部历史与状态面板。
 - 左侧资源库支持地表层、叠加层、物件层、数据层色板切换，并保留资源窗口化渲染，避免一次性挂载全部 DOM。
 - `.m` 记录字段按 `m.ksy` 的 `acwx/acwy/acwz/reserved0/terrain_tag/blocked/site_trigger/site_area/reserved1/minimap_color/reserved2` 统一口径展示；旧 `byte08..byte15` 仅作为兼容别名处理。
-- 页面支持区域复制和合成物件，复制内容包含当前选区内每个 cell 的所有层字段。
+- 页面支持区域复制和合成对象，复制内容包含当前选区内每个 cell 的所有层字段。
 - 右侧 Inspector 提供属性、势力、据点、武将、Raw、校验 6 个视图；据点视图会按 `.dor/.stg` 联动高亮城门。
 - bundle 导出时会复制同名 `.dor/.stg` 与可选 `heads.dat` 到关卡目录，浏览器导出会把这些参考文件随 `.m/.s/.x` 一起下载。
 - 校验视图会提示 `.m` 结构、sidecar 尾区、`.dor/.stg` 参考文件和字段范围风险。
