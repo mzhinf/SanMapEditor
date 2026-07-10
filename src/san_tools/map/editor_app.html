@@ -1964,8 +1964,128 @@ function scenarioPatchField(change) {
   const row = scenarioRowForPatch(change);
   return row?.patchFields?.[change.field] || null;
 }
+function changeRequiresStgRebuild(change) {
+  return change.op === 'add' || change.op === 'delete' || change.field === 'parentForceKey' || change.field === 'parentSiteKey';
+}
 function unsupportedScenarioChanges() {
-  return [...state.scenarioPatches.values()].filter(change => change.op !== 'update' || !scenarioPatchField(change));
+  return [...state.scenarioPatches.values()].filter(change => {
+    if (changeRequiresStgRebuild(change)) return !state.meta?.scenarioModel?.stgLayout;
+    return change.op !== 'update' || !scenarioPatchField(change);
+  });
+}
+function spanBytes(source, span) {
+  return source.slice(Number(span?.[0] || 0), Number(span?.[1] || 0));
+}
+function firstTemplate(kind) {
+  return scenarioRows(kind).find(row => Array.isArray(row.stgLayout?.span)) || null;
+}
+function relativePatchFields(row, template = null) {
+  const source = Object.keys(row.patchFields || {}).length ? row : template;
+  const spanStart = Number(source?.stgLayout?.span?.[0]);
+  const fields = source?.patchFields || {};
+  if (!Number.isFinite(spanStart)) return {};
+  const result = {};
+  for (const [name, field] of Object.entries(fields)) result[name] = { ...field, offset: Number(field.offset) - spanStart };
+  return result;
+}
+function writeRelativeField(bytes, field, value) {
+  const offset = Number(field.offset);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (field.type === 'str') {
+    bytes.set(encodeBig5Fixed(value, Number(field.size || 0)), offset);
+    return;
+  }
+  if (field.type === 's4') {
+    view.setInt32(offset, Number(value), true);
+    return;
+  }
+  if (field.type === 'u4') {
+    view.setUint32(offset, Number(value), true);
+    return;
+  }
+}
+function patchChunkFields(bytes, row, template = null) {
+  const fields = relativePatchFields(row, template);
+  for (const [name, field] of Object.entries(fields)) {
+    if (row[name] !== undefined) writeRelativeField(bytes, field, row[name]);
+  }
+  return bytes;
+}
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
+}
+function buildEntityChunk(originalBytes, row) {
+  const template = firstTemplate('entity');
+  const source = Array.isArray(row.stgLayout?.span) ? row : template;
+  if (!source) throw new Error('缺少可克隆的 Entity 模板。');
+  const chunk = spanBytes(originalBytes, source.stgLayout.span);
+  return patchChunkFields(chunk, row, source);
+}
+function buildSiteChunk(originalBytes, row, entityRows) {
+  const template = firstTemplate('site');
+  const source = Array.isArray(row.stgLayout?.headerSpan) ? row : template;
+  if (!source) throw new Error('缺少可克隆的 Site 模板。');
+  const header = spanBytes(originalBytes, source.stgLayout.headerSpan);
+  patchChunkFields(header, row, source);
+  const base = Number(source.stgLayout.span[0]);
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  const primaryRows = entityRows.filter(entity => entity.entityGroup === 'primary');
+  view.setUint32(Number(source.stgLayout.primaryEntityCountOffset) - base, primaryRows.length, true);
+  const primary = primaryRows.map(entity => buildEntityChunk(originalBytes, entity));
+  const optionalOrder = ['optional_entity_27c', 'optional_entity_280', 'optional_entity_284', 'optional_entity_288', 'optional_entity_28c'];
+  const optional = [];
+  for (const group of optionalOrder) {
+    const rows = entityRows.filter(entity => entity.entityGroup === group);
+    if (rows.length > 1) throw new Error('同一据点的可选武将槽位只能保留一个对象。');
+    const flagOffset = Number(source.stgLayout.optionalEntityFlagOffsets?.[group]);
+    if (Number.isFinite(flagOffset)) view.setUint32(flagOffset - base, rows.length ? 1 : 0, true);
+    if (rows[0]) optional.push(buildEntityChunk(originalBytes, rows[0]));
+  }
+  return concatBytes([header, ...primary, ...optional]);
+}
+function buildForceChunk(originalBytes, row, siteRows, entitiesBySite) {
+  const template = firstTemplate('force');
+  const source = Array.isArray(row.stgLayout?.headerSpan) ? row : template;
+  if (!source) throw new Error('缺少可克隆的 Force 模板。');
+  const header = spanBytes(originalBytes, source.stgLayout.headerSpan);
+  patchChunkFields(header, row, source);
+  const base = Number(source.stgLayout.span[0]);
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  view.setUint32(Number(source.stgLayout.siteCountOffset) - base, siteRows.length, true);
+  view.setUint32(Number(source.stgLayout.siteListPreCountOffset) - base, siteRows.length, true);
+  const siteChunks = siteRows.map(site => buildSiteChunk(originalBytes, site, entitiesBySite.get(site.siteKey) || []));
+  return concatBytes([header, ...siteChunks]);
+}
+function buildRewrittenStgBytes(originalBytes) {
+  const layout = state.meta.scenarioModel?.stgLayout;
+  if (!layout) throw new Error('stage.json 缺少 .stg 对象流布局。');
+  const forces = scenarioRows('force');
+  const sites = scenarioRows('site');
+  const entities = scenarioRows('entity');
+  const sitesByForce = new Map(forces.map(force => [force.forceKey, []]));
+  for (const site of sites) {
+    if (!sitesByForce.has(site.parentForceKey)) sitesByForce.set(site.parentForceKey, []);
+    sitesByForce.get(site.parentForceKey).push(site);
+  }
+  const entitiesBySite = new Map(sites.map(site => [site.siteKey, []]));
+  for (const entity of entities) {
+    if (!entitiesBySite.has(entity.parentSiteKey)) entitiesBySite.set(entity.parentSiteKey, []);
+    entitiesBySite.get(entity.parentSiteKey).push(entity);
+  }
+  const prefix = spanBytes(originalBytes, layout.prefixSpan);
+  const prefixView = new DataView(prefix.buffer, prefix.byteOffset, prefix.byteLength);
+  prefixView.setUint32(Number(layout.forceCountOffset), forces.length, true);
+  prefixView.setUint32(Number(layout.root2ForceCountOffset), forces.length, true);
+  const forceChunks = forces.map(force => buildForceChunk(originalBytes, force, sitesByForce.get(force.forceKey) || [], entitiesBySite));
+  const tail = spanBytes(originalBytes, layout.tailSpan);
+  return concatBytes([prefix, ...forceChunks, tail]);
 }
 function writeStgPatchField(view, bytes, field, value) {
   const offset = Number(field.offset);
@@ -1986,6 +2106,8 @@ function writeStgPatchField(view, bytes, field, value) {
 }
 function buildEditedStgBytes(originalBytes) {
   if (!state.scenarioPatches.size) return originalBytes;
+  const needsRebuild = [...state.scenarioPatches.values()].some(changeRequiresStgRebuild);
+  if (needsRebuild) return buildRewrittenStgBytes(originalBytes);
   const bytes = new Uint8Array(originalBytes);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   for (const change of state.scenarioPatches.values()) {

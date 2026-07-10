@@ -169,6 +169,89 @@ def _scan_entity_patch_index(
     return entity_key, offset
 
 
+def build_stg_layout_index(blob: bytes) -> dict[str, object]:
+    """顺序扫描 .stg，记录可重建对象流所需的 span 与 count 偏移。"""
+
+    offset = 4
+    _root1_payload, _root1_size, offset = _read_sized_payload(blob, offset, "root_part1")
+    root2_payload, _root2_size, offset = _read_sized_payload(blob, offset, "root_part2")
+    force_count_offset = offset
+    force_count = _read_u4(blob, offset, "stg.force_count")
+    offset += 4
+    forces_start = offset
+    forces: dict[str, dict[str, object]] = {}
+    sites: dict[str, dict[str, object]] = {}
+    entities: dict[str, dict[str, object]] = {}
+
+    for force_index in range(force_count):
+        force_key = f"force:{force_index}"
+        force_start = offset
+        _force_part1_payload, _force_part1_size, offset = _read_sized_payload(blob, offset, f"{force_key}.part1")
+        force_part2_payload, _force_part2_size, offset = _read_sized_payload(blob, offset, f"{force_key}.part2")
+        site_count_offset = force_part2_payload
+        site_count = _read_u4(blob, site_count_offset, f"{force_key}.site_count")
+        site_list_pre_count_offset = offset
+        offset += 4
+        force_header_end = offset
+        site_keys: list[str] = []
+        for site_index in range(site_count):
+            site_key = f"{force_key}/site:{site_index}"
+            site_keys.append(site_key)
+            site_start = offset
+            _site_part1_payload, _site_part1_size, offset = _read_sized_payload(blob, offset, f"{site_key}.part1")
+            site_part2_payload, _site_part2_size, offset = _read_sized_payload(blob, offset, f"{site_key}.part2")
+            primary_entity_count_offset = offset
+            primary_entity_count = _read_u4(blob, offset, f"{site_key}.primary_entity_count")
+            offset += 4
+            site_header_end = offset
+            entity_keys: list[str] = []
+            for entity_index in range(primary_entity_count):
+                entity_key = f"{site_key}/entity:{entity_index}"
+                entity_start = offset
+                _entity_key, offset = _scan_entity_patch_index(blob, offset, entity_key, {})
+                entities[entity_key] = {"span": [entity_start, offset], "kind": "primary"}
+                entity_keys.append(entity_key)
+            optional_entity_flag_offsets = {
+                "optional_entity_27c": site_part2_payload + 0x27C,
+                "optional_entity_280": site_part2_payload + 0x280,
+                "optional_entity_284": site_part2_payload + 0x284,
+                "optional_entity_288": site_part2_payload + 0x288,
+                "optional_entity_28c": site_part2_payload + 0x28C,
+            }
+            for suffix, flag_offset in optional_entity_flag_offsets.items():
+                if _read_u4(blob, flag_offset, f"{site_key}.{suffix}_flag") != 0:
+                    entity_key = f"{site_key}/{suffix}"
+                    entity_start = offset
+                    _entity_key, offset = _scan_entity_patch_index(blob, offset, entity_key, {})
+                    entities[entity_key] = {"span": [entity_start, offset], "kind": suffix}
+                    entity_keys.append(entity_key)
+            sites[site_key] = {
+                "span": [site_start, offset],
+                "headerSpan": [site_start, site_header_end],
+                "primaryEntityCountOffset": primary_entity_count_offset,
+                "optionalEntityFlagOffsets": optional_entity_flag_offsets,
+                "entityKeys": entity_keys,
+            }
+        forces[force_key] = {
+            "span": [force_start, offset],
+            "headerSpan": [force_start, force_header_end],
+            "siteCountOffset": site_count_offset,
+            "siteListPreCountOffset": site_list_pre_count_offset,
+            "siteKeys": site_keys,
+        }
+    return {
+        "layout": {
+            "prefixSpan": [0, forces_start],
+            "tailSpan": [offset, len(blob)],
+            "forceCountOffset": force_count_offset,
+            "root2ForceCountOffset": root2_payload + 0x14,
+        },
+        "forces": forces,
+        "sites": sites,
+        "entities": entities,
+    }
+
+
 def encode_big5_fixed(text: str, size: int) -> bytes:
     """把编辑后的文本编码为 Big5 定长零填充字段。"""
 
@@ -216,6 +299,7 @@ def apply_stg_scenario_changes(blob: bytes, changes: list[dict[str, object]]) ->
 __all__ = [
     "PatchField",
     "apply_stg_scenario_changes",
+    "build_stg_layout_index",
     "build_stg_patch_index",
     "encode_big5_fixed",
 ]

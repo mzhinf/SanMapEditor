@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 from san_tools.analysis.stage_site_links import build_stage_site_links
 from san_tools.codecs import stage_ini_codec
 from san_tools.map.editor_model import StgFile
-from san_tools.map.stg_editor_patch import build_stg_patch_index
+from san_tools.map.stg_editor_patch import build_stg_layout_index, build_stg_patch_index
 
 try:
     from .extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
@@ -294,7 +294,7 @@ def _optional_site_entities(site) -> list[tuple[str, object]]:
     ]
 
 
-def _entity_to_editor_row(entity, entity_key: str, entity_index: int, entity_group: str, site_key: str, site, force_key: str, force_index: int, force, patch_fields: dict[str, object]) -> dict[str, object]:
+def _entity_to_editor_row(entity, entity_key: str, entity_index: int, entity_group: str, site_key: str, site, force_key: str, force_index: int, force, patch_fields: dict[str, object], stg_layout: dict[str, object]) -> dict[str, object]:
     """把 stg.ksy 的 Entity 字段压缩成编辑器需要的字段级行。"""
 
     body = entity.part2.body
@@ -315,6 +315,7 @@ def _entity_to_editor_row(entity, entity_key: str, entity_index: int, entity_gro
         "intellect": body.intellect,
         "loyalty": body.loyalty,
         "patchFields": patch_fields,
+        "stgLayout": stg_layout,
         "parentSiteKey": site_key,
         "parent_site_name": site.site_name,
         "parentForceKey": force_key,
@@ -350,6 +351,7 @@ def build_editor_scenario_model(game_dir: Path, stage_name: str) -> dict[str, ob
         blob = source.read_bytes()
         stg = StgFile.from_bytes(blob)
         patch_index = build_stg_patch_index(blob)
+        layout_index = build_stg_layout_index(blob)
     except ValueError as exc:
         return {"available": False, "source": "stg", "reason": f"无法解析 {source.name}: {exc}", "forces": [], "sites": [], "entities": []}
 
@@ -366,14 +368,14 @@ def build_editor_scenario_model(game_dir: Path, stage_name: str) -> dict[str, ob
             for entity_index, entity in enumerate(site.entities):
                 entity_key = f"{site_key}/entity:{entity_index}"
                 entity_keys.append(entity_key)
-                entities.append(_entity_to_editor_row(entity, entity_key, entity_index, "primary", site_key, site, force_key, force_index, force, patch_index.get(entity_key, {})))
+                entities.append(_entity_to_editor_row(entity, entity_key, entity_index, "primary", site_key, site, force_key, force_index, force, patch_index.get(entity_key, {}), layout_index["entities"].get(entity_key, {})))
             for entity_group, entity in _optional_site_entities(site):
                 if entity is None:
                     continue
                 entity_index = len(entity_keys)
                 entity_key = f"{site_key}/{entity_group}"
                 entity_keys.append(entity_key)
-                entities.append(_entity_to_editor_row(entity, entity_key, entity_index, entity_group, site_key, site, force_key, force_index, force, patch_index.get(entity_key, {})))
+                entities.append(_entity_to_editor_row(entity, entity_key, entity_index, entity_group, site_key, site, force_key, force_index, force, patch_index.get(entity_key, {}), layout_index["entities"].get(entity_key, {})))
             site_body = site.part1.body
             sites.append({
                 "siteKey": site_key,
@@ -395,6 +397,7 @@ def build_editor_scenario_model(game_dir: Path, stage_name: str) -> dict[str, ob
                 "primary_entity_count": site.primary_entity_count,
                 "entityKeys": entity_keys,
                 "patchFields": patch_index.get(site_key, {}),
+                "stgLayout": layout_index["sites"].get(site_key, {}),
                 "parentForceKey": force_key,
                 "parent_force_index": force_index,
                 "parent_force_name": force.force_name,
@@ -409,6 +412,7 @@ def build_editor_scenario_model(game_dir: Path, stage_name: str) -> dict[str, ob
             "site_count": force.site_count,
             "siteKeys": force_site_keys,
             "patchFields": patch_index.get(force_key, {}),
+            "stgLayout": layout_index["forces"].get(force_key, {}),
         })
     scenario_strings = [force["force_name"] for force in forces] + [site["site_name"] for site in sites] + [entity["entity_name"] for entity in entities]
     return {
@@ -420,6 +424,7 @@ def build_editor_scenario_model(game_dir: Path, stage_name: str) -> dict[str, ob
         "scenario_year_start": stg.root_part1.body.scenario_year_start,
         "scenario_year_end": stg.root_part1.body.scenario_year_end,
         "big5CharMap": build_big5_char_map(scenario_strings),
+        "stgLayout": layout_index["layout"],
         "forces": forces,
         "sites": sites,
         "entities": entities,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from san_tools.map.editor_model import StgFile
 from san_tools.map.extract_kingdom import find_game_dir
-from san_tools.map.stg_editor_patch import apply_stg_scenario_changes, build_stg_patch_index, encode_big5_fixed
+from san_tools.map.stg_editor_patch import apply_stg_scenario_changes, build_stg_layout_index, build_stg_patch_index, encode_big5_fixed
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +31,25 @@ class TestStgEditorPatch(unittest.TestCase):
         self.assertIn('entity_name', index['force:0/site:0/entity:0'])
         self.assertIn('person_id', index['force:0/site:0/entity:0'])
 
+    def test_stage01_layout_index_contains_object_stream_offsets(self) -> None:
+        game_dir = find_game_dir(ROOT)
+        path = game_dir / 'stage01.stg'
+        if not path.exists():
+            self.skipTest('缺少 stage01.stg 样本')
+
+        layout = build_stg_layout_index(path.read_bytes())
+
+        self.assertIn('forceCountOffset', layout['layout'])
+        self.assertIn('root2ForceCountOffset', layout['layout'])
+        self.assertIn('force:0', layout['forces'])
+        self.assertIn('force:0/site:0', layout['sites'])
+        self.assertIn('force:0/site:0/entity:0', layout['entities'])
+        self.assertIn('siteCountOffset', layout['forces']['force:0'])
+        self.assertIn('primaryEntityCountOffset', layout['sites']['force:0/site:0'])
+        self.assertEqual(
+            sorted(layout['sites']['force:0/site:0']['optionalEntityFlagOffsets']),
+            ['optional_entity_27c', 'optional_entity_280', 'optional_entity_284', 'optional_entity_288', 'optional_entity_28c'],
+        )
     def test_stage01_updates_existing_force_site_and_entity_fields(self) -> None:
         game_dir = find_game_dir(ROOT)
         path = game_dir / 'stage01.stg'
