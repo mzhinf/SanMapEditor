@@ -1266,6 +1266,8 @@ function validationIssues() {
   if (!state.meta.siteLinks?.available) issues.push({ level: 'warn', text: state.meta.siteLinks?.reason || '未加载 .dor/.stg 关联信息，据点和城门只能按 .m 数据层编辑。' });
   if (!state.meta.scenarioFiles?.dor?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .dor 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
   if (!state.meta.scenarioFiles?.stg?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .stg 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
+  const unsupportedScenario = unsupportedScenarioChanges();
+  if (unsupportedScenario.length) issues.push({ level: 'warn', text: '.stg 对象新增、删除或归属移动暂未写回二进制：' + unsupportedScenario.length + ' 项会保留在 patch。' });
   for (const patch of state.patches.values()) {
     const bounds = recordFieldBounds(patch.field);
     if (patch.after < bounds.min || patch.after > bounds.max) issues.push({ level: 'error', text: `${patch.x},${patch.y} ${patch.field} 超出范围 ${bounds.min}..${bounds.max}` });
@@ -1936,6 +1938,63 @@ function buildActiveSidecarBytes() {
   }
   return output;
 }
+function mergedBig5CharMap() {
+  return { ...(state.meta?.commonModel?.big5CharMap || {}), ...(state.meta?.scenarioModel?.big5CharMap || {}) };
+}
+function encodeBig5Fixed(text, size) {
+  const table = mergedBig5CharMap();
+  const bytes = [];
+  for (const char of String(text || '')) {
+    const encoded = table[char];
+    if (!encoded) throw new Error(`缺少 Big5 编码映射：${char}`);
+    bytes.push(...encoded);
+  }
+  if (bytes.length > size) throw new Error(`Big5 字段过长：${text}`);
+  while (bytes.length < size) bytes.push(0);
+  return bytes;
+}
+function scenarioRowForPatch(change) {
+  if (!state.scenario) return null;
+  if (change.kind === 'force') return state.scenario.forceByKey.get(change.key) || null;
+  if (change.kind === 'site') return state.scenario.siteByKey.get(change.key) || null;
+  if (change.kind === 'entity') return state.scenario.entityByKey.get(change.key) || null;
+  return null;
+}
+function scenarioPatchField(change) {
+  const row = scenarioRowForPatch(change);
+  return row?.patchFields?.[change.field] || null;
+}
+function unsupportedScenarioChanges() {
+  return [...state.scenarioPatches.values()].filter(change => change.op !== 'update' || !scenarioPatchField(change));
+}
+function writeStgPatchField(view, bytes, field, value) {
+  const offset = Number(field.offset);
+  if (!Number.isFinite(offset)) throw new Error('无效 .stg 字段偏移');
+  if (field.type === 'str') {
+    bytes.set(encodeBig5Fixed(value, Number(field.size || 0)), offset);
+    return;
+  }
+  if (field.type === 's4') {
+    view.setInt32(offset, Number(value), true);
+    return;
+  }
+  if (field.type === 'u4') {
+    view.setUint32(offset, Number(value), true);
+    return;
+  }
+  throw new Error(`不支持的 .stg 字段类型：${field.type}`);
+}
+function buildEditedStgBytes(originalBytes) {
+  if (!state.scenarioPatches.size) return originalBytes;
+  const bytes = new Uint8Array(originalBytes);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (const change of state.scenarioPatches.values()) {
+    const field = scenarioPatchField(change);
+    if (!field) continue;
+    writeStgPatchField(view, bytes, field, change.after);
+  }
+  return bytes;
+}
 function base64ToBytes(text) {
   const raw = window.atob(text);
   const bytes = new Uint8Array(raw.length);
@@ -1954,12 +2013,17 @@ function buildSidecarBytes(suffix) {
   merged.set(tailBytes, activeBytes.length);
   return { bytes: merged, usedFallbackTail: !tailEntry?.tailBase64 };
 }
-async function appendScenarioReference(files, key, suffix) {
+async function readScenarioReference(key, suffix) {
   const entry = state.meta.scenarioFiles?.[key];
-  if (!entry?.path) return;
+  if (!entry?.path) return null;
   const response = await fetch(entry.path, { cache: 'no-store' });
   if (!response.ok) throw new Error(`无法读取 ${entry.path}`);
-  files.push({ name: `${state.meta.stage}.${suffix}`, bytes: new Uint8Array(await response.arrayBuffer()) });
+  return { name: `${state.meta.stage}.${suffix}`, bytes: new Uint8Array(await response.arrayBuffer()) };
+}
+async function appendScenarioReference(files, key, suffix) {
+  const file = await readScenarioReference(key, suffix);
+  if (file) files.push(file);
+  return file;
 }
 async function buildExportArtifacts() {
   const stageName = state.meta.stage;
@@ -1971,7 +2035,8 @@ async function buildExportArtifacts() {
     sidecarFlags.push(built.usedFallbackTail);
   }
   await appendScenarioReference(files, 'dor', 'dor');
-  await appendScenarioReference(files, 'stg', 'stg');
+  const stgFile = await readScenarioReference('stg', 'stg');
+  if (stgFile) files.push({ ...stgFile, bytes: buildEditedStgBytes(stgFile.bytes) });
   await appendScenarioReference(files, 'heads', 'heads.dat');
   return { files, usedFallbackTail: sidecarFlags.some(Boolean) };
 }

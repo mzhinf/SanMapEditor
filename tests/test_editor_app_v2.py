@@ -158,11 +158,16 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
         self.assertIn('force_name', scenario['forces'][0])
         self.assertIn('site_name', scenario['sites'][0])
         self.assertIn('entity_name', scenario['entities'][0])
+        self.assertIn('force_name', scenario['forces'][0]['patchFields'])
+        self.assertIn('coord_x', scenario['sites'][0]['patchFields'])
+        self.assertIn('troop_count', scenario['entities'][0]['patchFields'])
+        self.assertGreater(len(scenario['big5CharMap']), 0)
         self.assertTrue(common['available'])
         self.assertGreater(len(common['generals']), 0)
         self.assertGreater(len(common['skills']), 0)
         self.assertGreater(len(common['cities']), 0)
         self.assertGreater(len(common['soldiers']), 0)
+        self.assertGreater(len(common['big5CharMap']), 0)
 
 if __name__ == '__main__':
     unittest.main()
