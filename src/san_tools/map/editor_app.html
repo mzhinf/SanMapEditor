@@ -77,7 +77,17 @@ canvas { display: block; width: 100%; height: 100%; }
 .inspector-page.active { display: grid; gap: 12px; }
 .kv { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 6px 10px; font-size: 13px; }
 .kv .k { color: var(--muted); }
-.manager-list { display: grid; gap: 6px; }
+.manager-list { display: grid; gap: 8px; }
+.manager-toolbar { display: flex; gap: 6px; align-items: center; }
+.manager-split { display: grid; grid-template-rows: minmax(96px, auto) auto; gap: 8px; }
+.manager-items { display: grid; gap: 6px; max-height: 220px; overflow: auto; }
+.manager-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
+.manager-row.active { border-color: var(--accent); background: var(--accent-weak); }
+.manager-detail { display: grid; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.manager-sublist { display: grid; gap: 4px; max-height: 160px; overflow: auto; }
+.manager-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 5px 6px; border: 1px solid var(--soft); border-radius: 6px; background: #fbfaf7; font-size: 12px; }
+.entity-card { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: start; }
+.portrait { width: 52px; height: 58px; border: 1px solid var(--line); border-radius: 6px; background: #111 center / cover no-repeat; image-rendering: pixelated; }
 .manager-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
 .record-list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--soft); background: #fff; }
@@ -278,6 +288,8 @@ const state = {
   scenario: null,
   commonModel: null,
   scenarioPatches: new Map(),
+  activeForceKey: '',
+  activeEntityKey: '',
 };
 const els = {
   status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
@@ -324,6 +336,7 @@ function selectCell(cell, ev = {}) {
     rememberSelectedCell(cell);
   }
   syncActiveSiteFromCell(cell);
+  updateHud();
 }
 function selectedCellBounds() {
   const cells = selectedCellList();
@@ -493,6 +506,7 @@ function normalizeCommonModel(model) {
     skills: Array.isArray(model?.skills) ? model.skills.slice() : [],
     cities: Array.isArray(model?.cities) ? model.cities.slice() : [],
     soldiers: Array.isArray(model?.soldiers) ? model.soldiers.slice() : [],
+    heads: model?.heads || { available: false },
   };
 }
 
@@ -613,34 +627,64 @@ function renderActiveSiteEditor(siteView) {
   const site = state.scenario?.siteByKey.get(siteView?.siteKey || '');
   if (!site) return;
   const wrap = document.createElement('div');
-  wrap.className = 'record-list';
-  const row = document.createElement('div');
-  row.className = 'record-row';
-  const copy = document.createElement('div');
-  copy.className = 'record-copy';
-  appendScenarioInput(copy, site, 'site', 'site_name', false, 'site_name');
-  appendScenarioInput(copy, site, 'site', 'coord_x', true, 'coord_x');
-  appendScenarioInput(copy, site, 'site', 'coord_y', true, 'coord_y');
-  const forceLabel = document.createElement('label');
-  forceLabel.className = 'record-note';
-  forceLabel.textContent = 'parentForceKey ';
-  const forceSelect = document.createElement('select');
-  for (const force of scenarioRows('force')) {
-    const option = document.createElement('option');
-    option.value = force.forceKey;
-    option.textContent = force.force_name;
-    if (force.forceKey === site.parentForceKey) option.selected = true;
-    forceSelect.append(option);
+  wrap.className = 'manager-detail';
+  appendScenarioInput(wrap, site, 'site', 'site_name', false, 'site_name');
+  appendScenarioInput(wrap, site, 'site', 'coord_x', true, 'coord_x');
+  appendScenarioInput(wrap, site, 'site', 'coord_y', true, 'coord_y');
+  appendScenarioInput(wrap, site, 'site', 'city_index', true, 'city_index');
+  appendScenarioInput(wrap, site, 'site', 'population', true, 'population');
+  appendScenarioInput(wrap, site, 'site', 'gold', true, 'gold');
+  appendScenarioInput(wrap, site, 'site', 'food', true, 'food');
+  appendScenarioInput(wrap, site, 'site', 'standby_soldier', true, 'standby_soldier');
+  appendScenarioSelect(wrap, site, 'site', 'parentForceKey', scenarioRows('force').map(force => ({ value: force.forceKey, label: force.force_name })), 'parentForceKey');
+
+  const gateTitle = document.createElement('div');
+  gateTitle.className = 'record-name';
+  gateTitle.textContent = `城门 ${siteView.gates?.length || 0}`;
+  wrap.append(gateTitle);
+  const gateList = document.createElement('div');
+  gateList.className = 'manager-sublist';
+  for (const gate of siteView.gates || []) {
+    gateList.append(buildScenarioListRow(`门 ${gate.gateIndex} (${gate.doorX},${gate.doorY}) dir=${gate.dir}`, false, () => {
+      state.selectedCells.clear();
+      rememberSelectedCell({ col: gate.doorX, row: gate.doorY });
+      focusSite(site.siteKey);
+      refreshSide();
+      scheduleDraw();
+    }, '定位'));
   }
-  forceSelect.addEventListener('change', () => updateScenarioField('site', site.siteKey, 'parentForceKey', forceSelect.value));
-  forceLabel.append(forceSelect);
-  copy.append(forceLabel);
+  if (!(siteView.gates || []).length) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '当前据点没有匹配到 .dor 城门。';
+    gateList.append(empty);
+  }
+  wrap.append(gateList);
+
+  const entities = scenarioRows('entity').filter(entity => entity.parentSiteKey === site.siteKey);
+  const troopTotal = entities.reduce((sum, entity) => sum + Number(entity.troop_count || 0), 0);
+  const entityTitle = document.createElement('div');
+  entityTitle.className = 'record-name';
+  entityTitle.textContent = `武将 ${entities.length} / 士兵 ${troopTotal}`;
+  wrap.append(entityTitle);
+  const entityList = document.createElement('div');
+  entityList.className = 'manager-sublist';
+  for (const entity of entities) {
+    entityList.append(buildScenarioListRow(`${entity.entity_name} / ${soldierName(entity.soldier_type_id)} / ${entity.troop_count || 0}`, entity.entityKey === state.activeEntityKey, () => { state.activeEntityKey = entity.entityKey; switchInspectorTab('entities'); renderDomainManagers(); }, '编辑'));
+  }
+  if (!entities.length) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '当前据点没有武将。';
+    entityList.append(empty);
+  }
+  wrap.append(entityList);
+
   const del = document.createElement('button');
   del.type = 'button';
   del.textContent = '删除据点';
   del.addEventListener('click', () => markScenarioDeleted('site', site.siteKey));
-  row.append(copy, del);
-  wrap.append(row);
+  wrap.append(del);
   els.siteNote.append(wrap);
 }
 function refreshSiteInfo() {
@@ -987,8 +1031,13 @@ function captureRegionSnapshot(name = '区域复制') {
   const selectedCells = selectedCellList();
   if (selectedCells.length) {
     const bounds = selectedCellBounds();
-    const cells = selectedCells.map(cell => ({ dx: cell.col - bounds.left, dy: cell.row - bounds.top, record: recordAt(cell).slice() }));
-    return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'cells', width: bounds.width, height: bounds.height, count: cells.length, fields: state.meta.fields.slice(), cells };
+    const active = state.selected || selectedCells[0];
+    const anchor = { dx: active.col - bounds.left, dy: active.row - bounds.top };
+    const cells = selectedCells
+      .slice()
+      .sort((a, b) => a.row - b.row || a.col - b.col)
+      .map(cell => ({ dx: cell.col - bounds.left, dy: cell.row - bounds.top, record: recordAt(cell).slice() }));
+    return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'cells', width: bounds.width, height: bounds.height, count: cells.length, fields: state.meta.fields.slice(), anchor, cells };
   }
   const bounds = currentRegionBounds();
   if (!bounds) return null;
@@ -1012,7 +1061,8 @@ function pasteRegionSnapshot(snapshot) {
     }
   };
   if (snapshot.mode === 'cells' && Array.isArray(snapshot.cells)) {
-    for (const cell of snapshot.cells) pushRecord({ col: state.selected.col + cell.dx, row: state.selected.row + cell.dy }, cell.record);
+    const anchor = snapshot.anchor || { dx: 0, dy: 0 };
+    for (const cell of snapshot.cells) pushRecord({ col: state.selected.col + cell.dx - anchor.dx, row: state.selected.row + cell.dy - anchor.dy }, cell.record);
   } else {
     for (let row = 0; row < snapshot.height; row++) {
       for (let col = 0; col < snapshot.width; col++) pushRecord({ col: state.selected.col + col, row: state.selected.row + row }, snapshot.rows[row][col]);
@@ -1065,11 +1115,17 @@ function refreshScenarioRelations() {
   state.scenario.forceByKey = new Map(state.scenario.forces.map(force => [force.forceKey, force]));
   state.scenario.siteByKey = new Map(state.scenario.sites.map(site => [site.siteKey, site]));
   state.scenario.entityByKey = new Map(state.scenario.entities.map(entity => [entity.entityKey, entity]));
+  for (const force of state.scenario.forces) force.siteKeys = [];
+  for (const site of state.scenario.sites) site.entityKeys = [];
   for (const site of state.scenario.sites) {
     const force = state.scenario.forceByKey.get(site.parentForceKey);
     if (force) {
       site.parent_force_index = force.forceIndex;
       site.parent_force_name = force.force_name;
+      if (!site.deleted && !force.deleted) force.siteKeys.push(site.siteKey);
+    } else {
+      site.parent_force_index = -1;
+      site.parent_force_name = '';
     }
   }
   for (const entity of state.scenario.entities) {
@@ -1078,12 +1134,21 @@ function refreshScenarioRelations() {
     if (site) {
       entity.parent_site_name = site.site_name;
       entity.parentForceKey = site.parentForceKey;
+      if (!entity.deleted && !site.deleted) site.entityKeys.push(entity.entityKey);
+    } else {
+      entity.parent_site_name = '';
+      entity.parentForceKey = '';
     }
     if (force) {
       entity.parent_force_index = force.forceIndex;
       entity.parent_force_name = force.force_name;
       entity.actual_force_index = force.forceIndex;
       entity.actual_force_name = force.force_name;
+    } else {
+      entity.parent_force_index = -1;
+      entity.parent_force_name = '';
+      entity.actual_force_index = -1;
+      entity.actual_force_name = '';
     }
   }
   state.siteIndex = buildSiteIndex(state.meta.siteLinks);
@@ -1108,7 +1173,9 @@ function markScenarioDeleted(kind, key) {
   row.deleted = true;
   storeScenarioPatch(kind, key, 'delete', '', { ...row, deleted: false }, { ...row, deleted: true });
   refreshScenarioRelations();
+  if (kind === 'force' && state.activeForceKey === key) state.activeForceKey = '';
   if (kind === 'site' && state.activeSiteKey === key) state.activeSiteKey = '';
+  if (kind === 'entity' && state.activeEntityKey === key) state.activeEntityKey = '';
   renderSitePicker();
   renderDomainManagers();
   scheduleDraw();
@@ -1197,6 +1264,63 @@ function renderScenarioCollection(node, titleAction, rows, emptyText, buildRow) 
   }
   for (const item of rows) node.append(buildRow(item));
 }
+function ensureActiveScenarioKeys() {
+  const forces = scenarioRows('force');
+  const sites = scenarioRows('site');
+  const entities = scenarioRows('entity');
+  if (!forces.some(force => force.forceKey === state.activeForceKey)) state.activeForceKey = forces[0]?.forceKey || '';
+  if (!sites.some(site => site.siteKey === state.activeSiteKey)) state.activeSiteKey = sites[0]?.siteKey || '';
+  if (!entities.some(entity => entity.entityKey === state.activeEntityKey)) state.activeEntityKey = entities[0]?.entityKey || '';
+}
+function activeForce() { return state.scenario?.forceByKey.get(state.activeForceKey) || scenarioRows('force')[0] || null; }
+function activeEntity() { return state.scenario?.entityByKey.get(state.activeEntityKey) || scenarioRows('entity')[0] || null; }
+function commonName(rows, keys, value) {
+  const text = String(value ?? '');
+  const row = rows.find(item => keys.some(key => String(item[key] ?? '') === text));
+  return row?.name || row?.label || text;
+}
+function soldierName(id) { return commonName(state.commonModel?.soldiers || [], ['record_index', 'record_id_candidate'], id); }
+function cityName(id) { return commonName(state.commonModel?.cities || [], ['record_index', 'place_id_candidate_stage_ini'], id); }
+function entityPortraitStyle(entity) {
+  const heads = state.commonModel?.heads;
+  if (!heads?.available || !heads.image) return '';
+  const count = Number(heads.count || 0);
+  const index = Math.max(0, Math.min(count ? count - 1 : Number(entity.portrait_id || 0), Number(entity.portrait_id || 0)));
+  const columns = Math.max(1, Number(heads.columns || 16));
+  const tileW = Math.max(1, Math.round(Number(heads.width || 105) / 2));
+  const tileH = Math.max(1, Math.round(Number(heads.height || 116) / 2));
+  const col = index % columns;
+  const row = Math.floor(index / columns);
+  return `background-image:url('${heads.image}');background-size:${columns * tileW}px auto;background-position:-${col * tileW}px -${row * tileH}px;`;
+}
+function appendScenarioSelect(parent, row, kind, field, options, label = field) {
+  const wrap = document.createElement('label');
+  wrap.className = 'record-note';
+  wrap.textContent = `${label} `;
+  const select = document.createElement('select');
+  for (const optionData of options) {
+    const option = document.createElement('option');
+    option.value = optionData.value;
+    option.textContent = optionData.label;
+    if (option.value === String(row[field] ?? '')) option.selected = true;
+    select.append(option);
+  }
+  select.addEventListener('change', () => updateScenarioField(kind, row[`${kind}Key`], field, select.value));
+  wrap.append(select);
+  parent.append(wrap);
+}
+function buildScenarioListRow(labelText, active, onPick, actionText = '选择') {
+  const row = document.createElement('div');
+  row.className = 'manager-row' + (active ? ' active' : '');
+  const label = document.createElement('div');
+  label.textContent = labelText;
+  const pick = document.createElement('button');
+  pick.type = 'button';
+  pick.textContent = actionText;
+  pick.addEventListener('click', onPick);
+  row.append(label, pick);
+  return row;
+}
 function renderDomainManagers() {
   const scenario = state.scenario;
   if (!scenario?.available) {
@@ -1204,59 +1328,114 @@ function renderDomainManagers() {
     renderManagerList(els.entityList, [], '当前 bundle 未携带可编辑 .stg Entity 模型。');
     return;
   }
-  renderScenarioCollection(
-    els.forceList,
-    { label: '新增势力', onClick: addScenarioForce },
-    scenarioRows('force'),
-    '当前 .stg 没有势力记录。',
-    force => {
-      const row = document.createElement('div');
-      row.className = 'manager-row';
-      const copy = document.createElement('div');
-      copy.className = 'record-copy';
-      const title = document.createElement('div');
-      title.className = 'record-name';
-      title.textContent = `${force.force_name} / ${force.siteKeys?.length || 0} 据点`;
-      copy.append(title);
-      appendScenarioInput(copy, force, 'force', 'force_name', false, 'force_name');
-      appendScenarioInput(copy, force, 'force', 'force_lord_person_id', true, 'force_lord_person_id');
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.textContent = '删除';
-      del.addEventListener('click', () => markScenarioDeleted('force', force.forceKey));
-      row.append(copy, del);
-      return row;
-    },
-  );
-  const entities = scenarioRows('entity').slice(0, 120);
-  renderScenarioCollection(
-    els.entityList,
-    { label: '新增武将', onClick: addScenarioEntity },
-    entities,
-    '当前 .stg 没有武将 Entity。',
-    entity => {
-      const row = document.createElement('div');
-      row.className = 'manager-row';
-      const copy = document.createElement('div');
-      copy.className = 'record-copy';
-      const title = document.createElement('div');
-      title.className = 'record-name';
-      title.textContent = `${entity.entity_name} / ${entity.parent_site_name || '-'} / ${entity.actual_force_name || '-'}`;
-      const note = document.createElement('div');
-      note.className = 'record-note';
-      note.textContent = `person_id=${entity.person_id} portrait_id=${entity.portrait_id}`;
-      copy.append(title, note);
-      appendScenarioInput(copy, entity, 'entity', 'entity_name', false, 'entity_name');
-      appendScenarioInput(copy, entity, 'person_id', true, 'person_id');
-      appendScenarioInput(copy, entity, 'portrait_id', true, 'portrait_id');
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.textContent = '删除';
-      del.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
-      row.append(copy, del);
-      return row;
-    },
-  );
+  refreshScenarioRelations();
+  ensureActiveScenarioKeys();
+
+  const forceRows = scenarioRows('force');
+  els.forceList.textContent = '';
+  const forceToolbar = document.createElement('div');
+  forceToolbar.className = 'manager-toolbar';
+  const addForce = document.createElement('button');
+  addForce.type = 'button';
+  addForce.textContent = '新增势力';
+  addForce.addEventListener('click', addScenarioForce);
+  forceToolbar.append(addForce);
+  els.forceList.append(forceToolbar);
+  const forceSplit = document.createElement('div');
+  forceSplit.className = 'manager-split';
+  const forceItems = document.createElement('div');
+  forceItems.className = 'manager-items';
+  for (const force of forceRows) {
+    const sites = scenarioRows('site').filter(site => site.parentForceKey === force.forceKey);
+    forceItems.append(buildScenarioListRow(`${force.force_name} / ${sites.length} 据点`, force.forceKey === state.activeForceKey, () => { state.activeForceKey = force.forceKey; renderDomainManagers(); }));
+  }
+  if (!forceRows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '当前 .stg 没有势力记录。';
+    forceItems.append(empty);
+  }
+  const forceDetail = document.createElement('div');
+  forceDetail.className = 'manager-detail';
+  const force = activeForce();
+  if (force) {
+    const title = document.createElement('div');
+    title.className = 'record-name';
+    title.textContent = force.force_name;
+    forceDetail.append(title);
+    appendScenarioInput(forceDetail, force, 'force', 'force_name', false, 'force_name');
+    appendScenarioInput(forceDetail, force, 'force', 'force_lord_person_id', true, 'force_lord_person_id');
+    const siteList = document.createElement('div');
+    siteList.className = 'manager-sublist';
+    for (const site of scenarioRows('site').filter(site => site.parentForceKey === force.forceKey)) {
+      siteList.append(buildScenarioListRow(`${site.site_name} (${site.coord_x},${site.coord_y})`, site.siteKey === state.activeSiteKey, () => { setActiveSite(site.siteKey, { focus: true }); switchInspectorTab('sites'); }, '定位'));
+    }
+    forceDetail.append(siteList);
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '删除势力';
+    del.addEventListener('click', () => markScenarioDeleted('force', force.forceKey));
+    forceDetail.append(del);
+  }
+  forceSplit.append(forceItems, forceDetail);
+  els.forceList.append(forceSplit);
+
+  const entityRows = scenarioRows('entity');
+  els.entityList.textContent = '';
+  const entityToolbar = document.createElement('div');
+  entityToolbar.className = 'manager-toolbar';
+  const addEntity = document.createElement('button');
+  addEntity.type = 'button';
+  addEntity.textContent = '新增武将';
+  addEntity.addEventListener('click', addScenarioEntity);
+  entityToolbar.append(addEntity);
+  els.entityList.append(entityToolbar);
+  const entitySplit = document.createElement('div');
+  entitySplit.className = 'manager-split';
+  const entityItems = document.createElement('div');
+  entityItems.className = 'manager-items';
+  for (const entity of entityRows.slice(0, 240)) {
+    entityItems.append(buildScenarioListRow(`${entity.entity_name} / ${entity.parent_site_name || '-'} / ${entity.actual_force_name || '-'}`, entity.entityKey === state.activeEntityKey, () => { state.activeEntityKey = entity.entityKey; renderDomainManagers(); }));
+  }
+  if (!entityRows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '当前 .stg 没有武将 Entity。';
+    entityItems.append(empty);
+  }
+  const entityDetail = document.createElement('div');
+  entityDetail.className = 'manager-detail';
+  const entity = activeEntity();
+  if (entity) {
+    const card = document.createElement('div');
+    card.className = 'entity-card';
+    const portrait = document.createElement('div');
+    portrait.className = 'portrait';
+    portrait.setAttribute('style', entityPortraitStyle(entity));
+    const fields = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'record-name';
+    title.textContent = entity.entity_name;
+    const note = document.createElement('div');
+    note.className = 'record-note';
+    note.textContent = `person_id=${entity.person_id} portrait_id=${entity.portrait_id} 兵种=${soldierName(entity.soldier_type_id)} 兵力=${entity.troop_count || 0}`;
+    fields.append(title, note);
+    card.append(portrait, fields);
+    entityDetail.append(card);
+    appendScenarioInput(entityDetail, entity, 'entity', 'entity_name', false, 'entity_name');
+    appendScenarioInput(entityDetail, entity, 'entity', 'person_id', true, 'person_id');
+    appendScenarioInput(entityDetail, entity, 'entity', 'portrait_id', true, 'portrait_id');
+    appendScenarioInput(entityDetail, entity, 'entity', 'soldier_type_id', true, 'soldier_type_id');
+    appendScenarioInput(entityDetail, entity, 'entity', 'troop_count', true, 'troop_count');
+    appendScenarioSelect(entityDetail, entity, 'entity', 'parentSiteKey', scenarioRows('site').map(site => ({ value: site.siteKey, label: `${site.site_name} / ${site.parent_force_name || '-'}` })), 'parentSiteKey');
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '删除武将';
+    del.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
+    entityDetail.append(del);
+  }
+  entitySplit.append(entityItems, entityDetail);
+  els.entityList.append(entitySplit);
 }
 function validationIssues() {
   const issues = [];

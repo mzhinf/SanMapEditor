@@ -7,7 +7,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, copy_scenario_reference_files, write_stage_json
+from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, build_editor_site_links, copy_scenario_reference_files, export_heads_atlas, write_stage_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +86,8 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn('buildRewrittenStgBytes', html)
         self.assertIn('parentSiteKey', html)
         self.assertIn('selectedCells', html)
+        self.assertIn('entityPortraitStyle', html)
+        self.assertIn('manager-detail', html)
         self.assertNotIn('land_water_hint', html)
         self.assertNotIn('id="layerVisibilityList"', html)
 
@@ -170,12 +172,26 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
         self.assertIn('optionalEntityFlagOffsets', scenario['sites'][0]['stgLayout'])
         self.assertIn('stgLayout', scenario['entities'][0])
         self.assertGreater(len(scenario['big5CharMap']), 0)
+        links = build_editor_site_links(ROOT, 'stage01')
+        self.assertTrue(links['available'])
+        self.assertGreater(links['gateCount'], 0)
+        self.assertEqual(links['gateCount'], links['matchedGateCount'])
         self.assertTrue(common['available'])
         self.assertGreater(len(common['generals']), 0)
         self.assertGreater(len(common['skills']), 0)
         self.assertGreater(len(common['cities']), 0)
         self.assertGreater(len(common['soldiers']), 0)
         self.assertGreater(len(common['big5CharMap']), 0)
+        tmp_dir = ROOT / 'derived' / 'test_tmp' / 'heads_atlas'
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            heads = export_heads_atlas(game_dir, tmp_dir, [(i, i, i) for i in range(256)])
+            self.assertTrue(heads['available'])
+            self.assertGreater(heads['count'], 0)
+            self.assertTrue((tmp_dir / heads['image']).exists())
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 if __name__ == '__main__':
     unittest.main()

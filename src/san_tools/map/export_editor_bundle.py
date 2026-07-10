@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from san_tools.analysis.analyze_dor import parse_dor
 from san_tools.analysis.stage_site_links import build_stage_site_links
 from san_tools.codecs import stage_ini_codec
 from san_tools.map.editor_model import StgFile
@@ -465,6 +466,72 @@ def build_editor_common_model(root: Path) -> dict[str, object]:
     }
 
 
+def _palette_to_flat_rgb(palette: list[int]) -> list[int]:
+    """把渲染调色板转换为 Pillow P 图像可使用的 768 项 RGB 列表。"""
+
+    flat: list[int] = []
+    for item in palette[:256]:
+        if isinstance(item, int):
+            flat.extend(((item >> 16) & 0xFF, (item >> 8) & 0xFF, item & 0xFF))
+        else:
+            red, green, blue = item
+            flat.extend((int(red), int(green), int(blue)))
+    flat.extend([0] * (768 - len(flat)))
+    return flat[:768]
+
+
+def export_heads_atlas(game_dir: Path, stage_dir: Path, palette: list[int]) -> dict[str, object]:
+    """从 heads.dat 导出武将头像图集，供编辑器按 portrait_id 切片显示。"""
+
+    source = game_dir / "heads.dat"
+    if not source.exists():
+        return {"available": False, "reason": "缺少 heads.dat"}
+    blob = source.read_bytes()
+    if len(blob) < 8:
+        return {"available": False, "reason": "heads.dat 长度不足"}
+    first_offset = int.from_bytes(blob[:4], "little")
+    if first_offset <= 0 or first_offset % 4 != 0 or first_offset > len(blob):
+        return {"available": False, "reason": "heads.dat 偏移表无效"}
+    raw_offsets = [int.from_bytes(blob[index:index + 4], "little") for index in range(0, first_offset, 4)]
+    offsets = [offset for offset in raw_offsets if first_offset <= offset < len(blob)]
+    if not offsets:
+        return {"available": False, "reason": "heads.dat 未找到头像偏移"}
+    offsets = sorted(dict.fromkeys(offsets))
+    first_width = int.from_bytes(blob[offsets[0]:offsets[0] + 2], "little")
+    first_height = int.from_bytes(blob[offsets[0] + 2:offsets[0] + 4], "little")
+    if first_width <= 0 or first_height <= 0:
+        return {"available": False, "reason": "heads.dat 头像尺寸无效"}
+    columns = 16
+    rows = (len(offsets) + columns - 1) // columns
+    atlas = Image.new("P", (columns * first_width, rows * first_height), 0)
+    atlas.putpalette(_palette_to_flat_rgb(palette))
+    count = 0
+    for index, offset in enumerate(offsets):
+        if offset + 4 > len(blob):
+            continue
+        width = int.from_bytes(blob[offset:offset + 2], "little")
+        height = int.from_bytes(blob[offset + 2:offset + 4], "little")
+        size = width * height
+        start = offset + 4
+        end = start + size
+        if width != first_width or height != first_height or end > len(blob):
+            continue
+        image = Image.frombytes("P", (width, height), blob[start:end])
+        image.putpalette(atlas.getpalette())
+        atlas.paste(image, ((index % columns) * first_width, (index // columns) * first_height))
+        count += 1
+    out_name = "heads.png"
+    atlas.convert("RGBA").save(stage_dir / out_name)
+    return {
+        "available": count > 0,
+        "source": "heads.dat",
+        "path": "heads.dat",
+        "image": out_name,
+        "count": count,
+        "width": first_width,
+        "height": first_height,
+        "columns": columns,
+    }
 def copy_scenario_reference_files(game_dir: Path, stage_dir: Path, stage_name: str) -> dict[str, object]:
     """复制编辑器导出时需要原样保留的剧本侧参考文件。"""
 
@@ -537,23 +604,99 @@ def resolve_editor_template(root: Path) -> Path:
 
 
 
+def build_dor_stg_site_links(root: Path, stage: str, reason: str = "") -> dict[str, object]:
+    """在辅助文本缺失时，仅依据 .dor 城门和 .stg 据点坐标建立归属。"""
+
+    game_dir = find_game_dir(root)
+    dor_path = game_dir / f"{stage}.dor"
+    stg_path = game_dir / f"{stage}.stg"
+    if not dor_path.exists() or not stg_path.exists():
+        missing = dor_path.name if not dor_path.exists() else stg_path.name
+        raise FileNotFoundError(missing)
+    stg = StgFile.from_bytes(stg_path.read_bytes())
+    cities: list[dict[str, object]] = []
+    city_by_coord: dict[str, dict[str, object]] = {}
+    for force_index, force in enumerate(stg.forces):
+        for site_index, site in enumerate(force.sites):
+            body = site.part1.body
+            site_key = f"force:{force_index}/site:{site_index}"
+            city = {
+                "siteKey": site_key,
+                "cityName": body.site_name,
+                "forceIndex": force_index,
+                "forceName": force.force_name,
+                "cityIndex": body.city_index,
+                "sourceRecordIndex": site_index,
+                "mapX": body.coord_x,
+                "mapY": body.coord_y,
+                "expectedX": body.coord_x,
+                "expectedY": body.coord_y,
+                "gateIndices": [],
+                "gateCount": 0,
+            }
+            cities.append(city)
+            city_by_coord[f"{body.coord_x},{body.coord_y}"] = city
+
+    gates: list[dict[str, object]] = []
+    for group in parse_dor(dor_path):
+        group_index = int(group["group"])
+        for door in group["doors"]:
+            coord_key = f"{int(door['site_x'])},{int(door['site_y'])}"
+            city = city_by_coord.get(coord_key)
+            gate = {
+                "gateIndex": len(gates),
+                "group": group_index,
+                "doorIndex": int(door["index"]),
+                "doorX": int(door["door_x"]),
+                "doorY": int(door["door_y"]),
+                "dir": int(door["dir"]),
+                "siteX": int(door["site_x"]),
+                "siteY": int(door["site_y"]),
+                "siteKey": city["siteKey"] if city else coord_key,
+                "cityName": city["cityName"] if city else "",
+            }
+            gates.append(gate)
+            if city is not None:
+                city["gateIndices"].append(gate["gateIndex"])
+    matched_gate_count = 0
+    for city in cities:
+        city["gateCount"] = len(city["gateIndices"])
+        matched_gate_count += city["gateCount"]
+    return {
+        "available": bool(cities) and bool(gates),
+        "stage": stage,
+        "reason": reason,
+        "cityCount": len(cities),
+        "gateCount": len(gates),
+        "matchedGateCount": matched_gate_count,
+        "unmatchedGateCount": len(gates) - matched_gate_count,
+        "cities": cities,
+        "gates": gates,
+        "sources": {"dor": str(dor_path), "stg": str(stg_path), "mode": "dor-stg-fallback"},
+    }
 def build_editor_site_links(root: Path, stage: str) -> dict[str, object]:
-    """生成据点/城门联动信息，缺少辅助文本时允许编辑器降级运行。"""
+    """生成据点/城门联动信息，优先使用完整分析，失败时回退到 .dor/.stg。"""
 
     try:
-        return build_stage_site_links(root, stage)
+        payload = build_stage_site_links(root, stage)
+        if payload.get("available"):
+            return payload
+        return build_dor_stg_site_links(root, stage, str(payload.get("reason", "")))
     except (FileNotFoundError, ValueError) as exc:
-        return {
-            "available": False,
-            "reason": f"无法生成据点/城门联动：{exc}",
-            "cityCount": 0,
-            "gateCount": 0,
-            "matchedGateCount": 0,
-            "unmatchedGateCount": 0,
-            "cities": [],
-            "gates": [],
-            "sources": {},
-        }
+        try:
+            return build_dor_stg_site_links(root, stage, f"完整据点分析不可用：{exc}")
+        except (FileNotFoundError, ValueError) as fallback_exc:
+            return {
+                "available": False,
+                "reason": f"无法生成据点/城门联动：{fallback_exc}",
+                "cityCount": 0,
+                "gateCount": 0,
+                "matchedGateCount": 0,
+                "unmatchedGateCount": 0,
+                "cities": [],
+                "gates": [],
+                "sources": {},
+            }
 def write_editor_index(out_dir: Path, stages: list[dict]) -> None:
     options = "\n".join(
         f'<option value="{entry["path"]}">{entry["stage"]} ({entry["width"]}x{entry["height"]})</option>'
@@ -595,6 +738,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     scenario_files = copy_scenario_reference_files(game_dir, stage_dir, stage)
     scenario_model = build_editor_scenario_model(game_dir, stage)
     common_model = build_editor_common_model(root)
+    common_model["heads"] = export_heads_atlas(game_dir, stage_dir, palette)
 
     export_resource_catalog(blocks, palette, stage_dir, records)
     export_minimap(map_path, stage_dir / "minimap.png")
