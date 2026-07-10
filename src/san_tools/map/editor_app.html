@@ -2700,6 +2700,151 @@ function buildScenarioPatchArtifact() {
     }),
   };
 }
+
+function stageIniPatchModel() { return state.commonModel?.stageIniPatchModel?.available ? state.commonModel.stageIniPatchModel : null; }
+function stageIniRowsForKind(kind) {
+  if (kind === 'site') return scenarioRows('site').filter(site => siteKindLabel(site) === '\u57ce\u6c60');
+  if (kind === 'entity') return scenarioRows('entity').filter(isGeneralEntity);
+  return [];
+}
+function applyStageIniRowPatch(bytes, row, kind) {
+  const model = stageIniPatchModel();
+  const config = model?.fieldMap?.[kind];
+  if (!model || !config) return;
+  const rowId = String(row[config.row_key] ?? '');
+  if (!rowId) return;
+  const locations = model.fieldLocations?.[config.sheet]?.[rowId];
+  if (!locations) return;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (const [field, header] of Object.entries(config.fields || {})) {
+    if (!(field in row)) continue;
+    const location = locations[header];
+    const value = Number.parseInt(row[field], 10);
+    if (!location || !Number.isFinite(value)) continue;
+    view.setUint32(Number(location.byteOffset), value >>> 0, true);
+  }
+}
+function buildEditedStageIniBytes(originalBytes) {
+  const model = stageIniPatchModel();
+  if (!model) return originalBytes;
+  const bytes = new Uint8Array(originalBytes);
+  for (const site of stageIniRowsForKind('site')) applyStageIniRowPatch(bytes, site, 'site');
+  for (const entity of stageIniRowsForKind('entity')) applyStageIniRowPatch(bytes, entity, 'entity');
+  return bytes;
+}
+function cloneWorkbookSheets() {
+  const sheets = stageIniPatchModel()?.workbookSheets || [];
+  return sheets.map(sheet => ({
+    name: sheet.name,
+    headers: sheet.headers.slice(),
+    rows: sheet.rows.map(row => row.slice()),
+  }));
+}
+function applyWorkbookRowPatch(sheetMap, row, kind) {
+  const model = stageIniPatchModel();
+  const config = model?.fieldMap?.[kind];
+  if (!model || !config) return;
+  const sheet = sheetMap.get(config.sheet);
+  if (!sheet) return;
+  const rowId = String(row[config.row_key] ?? '');
+  const target = sheet.rows.find(item => String(item[0] ?? '') === rowId);
+  if (!target) return;
+  for (const [field, header] of Object.entries(config.fields || {})) {
+    const column = sheet.headers.indexOf(header);
+    if (column < 0 || !(field in row)) continue;
+    target[column] = String(row[field] ?? '');
+  }
+}
+function buildStageIniWorkbookBytes() {
+  const sheets = cloneWorkbookSheets();
+  if (!sheets.length) return null;
+  const sheetMap = new Map(sheets.map(sheet => [sheet.name, sheet]));
+  for (const site of stageIniRowsForKind('site')) applyWorkbookRowPatch(sheetMap, site, 'site');
+  for (const entity of stageIniRowsForKind('entity')) applyWorkbookRowPatch(sheetMap, entity, 'entity');
+  return buildXlsxBytes(sheets);
+}
+function xmlEscape(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function columnName(index) {
+  let name = '';
+  let value = index + 1;
+  while (value > 0) {
+    const mod = (value - 1) % 26;
+    name = String.fromCharCode(65 + mod) + name;
+    value = Math.floor((value - mod - 1) / 26);
+  }
+  return name;
+}
+function worksheetXml(sheet) {
+  const rows = [sheet.headers, ...sheet.rows];
+  const body = rows.map((row, rowIndex) => {
+    const cells = row.map((cell, colIndex) => {
+      const ref = `${columnName(colIndex)}${rowIndex + 1}`;
+      const text = xmlEscape(cell);
+      return `<c r="${ref}" t="inlineStr"><is><t>${text}</t></is></c>`;
+    }).join('');
+    return `<row r="${rowIndex + 1}">${cells}</row>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+}
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+function u16le(value) { return [value & 0xff, (value >>> 8) & 0xff]; }
+function u32le(value) { return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff]; }
+function concatByteArrays(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) { out.set(part, offset); offset += part.length; }
+  return out;
+}
+function textBytes(text) { return new TextEncoder().encode(text); }
+function zipStore(files) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const file of files) {
+    const nameBytes = textBytes(file.name);
+    const data = typeof file.data === 'string' ? textBytes(file.data) : file.data;
+    const crc = crc32(data);
+    const localHeader = new Uint8Array([
+      ...u32le(0x04034b50), ...u16le(20), ...u16le(0), ...u16le(0), ...u16le(0), ...u16le(0),
+      ...u32le(crc), ...u32le(data.length), ...u32le(data.length), ...u16le(nameBytes.length), ...u16le(0),
+    ]);
+    localParts.push(localHeader, nameBytes, data);
+    const centralHeader = new Uint8Array([
+      ...u32le(0x02014b50), ...u16le(20), ...u16le(20), ...u16le(0), ...u16le(0), ...u16le(0), ...u16le(0),
+      ...u32le(crc), ...u32le(data.length), ...u32le(data.length), ...u16le(nameBytes.length), ...u16le(0), ...u16le(0),
+      ...u16le(0), ...u16le(0), ...u32le(0), ...u32le(offset),
+    ]);
+    centralParts.push(centralHeader, nameBytes);
+    offset += localHeader.length + nameBytes.length + data.length;
+  }
+  const localBlob = concatByteArrays(localParts);
+  const centralBlob = concatByteArrays(centralParts);
+  const end = new Uint8Array([...u32le(0x06054b50), ...u16le(0), ...u16le(0), ...u16le(files.length), ...u16le(files.length), ...u32le(centralBlob.length), ...u32le(localBlob.length), ...u16le(0)]);
+  return concatByteArrays([localBlob, centralBlob, end]);
+}
+function buildXlsxBytes(sheets) {
+  const workbookSheets = sheets.map((sheet, index) => `<sheet name="${xmlEscape(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join('');
+  const rels = sheets.map((sheet, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join('');
+  const overrides = sheets.map((sheet, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+  const files = [
+    { name: '[Content_Types].xml', data: `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides}</Types>` },
+    { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: 'xl/workbook.xml', data: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${workbookSheets}</sheets></workbook>` },
+    { name: 'xl/_rels/workbook.xml.rels', data: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>` },
+  ];
+  sheets.forEach((sheet, index) => files.push({ name: `xl/worksheets/sheet${index + 1}.xml`, data: worksheetXml(sheet) }));
+  return zipStore(files);
+}
 function base64ToBytes(text) {
   const raw = window.atob(text);
   const bytes = new Uint8Array(raw.length);
@@ -2751,8 +2896,15 @@ async function buildExportArtifacts() {
   await appendScenarioReference(files, 'dor', 'dor');
   const stgFile = await readScenarioReference('stg', 'stg');
   if (stgFile) files.push({ ...stgFile, bytes: buildEditedStgBytes(stgFile.bytes) });
-  await appendScenarioNamedReference(files, 'stageIni', 'stage.ini');
-  await appendScenarioNamedReference(files, 'stageIniWorkbook', 'stage_ini.xlsx');
+  const stageIniEntry = state.meta.scenarioFiles?.stageIni;
+  if (stageIniEntry?.path) {
+    const response = await fetch(stageIniEntry.path, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`\u65e0\u6cd5\u8bfb\u53d6 ${stageIniEntry.path}`);
+    files.push({ name: 'stage.ini', bytes: buildEditedStageIniBytes(new Uint8Array(await response.arrayBuffer())) });
+  }
+  const workbookBytes = buildStageIniWorkbookBytes();
+  if (workbookBytes) files.push({ name: 'stage_ini.xlsx', bytes: workbookBytes });
+  else await appendScenarioNamedReference(files, 'stageIniWorkbook', 'stage_ini.xlsx');
   await appendScenarioReference(files, 'heads', 'heads.dat');
   const scenarioPatch = buildScenarioPatchArtifact();
   if (scenarioPatch) files.push(scenarioPatch);

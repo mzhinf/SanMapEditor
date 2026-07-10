@@ -13,6 +13,7 @@ from san_tools.analysis.analyze_dor import parse_dor
 from san_tools.analysis.stage_site_links import build_stage_site_links
 from san_tools.codecs import stage_ini_codec
 from san_tools.codecs.stage_ini_excel_codec import write_workbook
+from san_tools.codecs.stage_ini_txt_linkage import build_bundle as build_stage_ini_linkage_bundle
 from san_tools.map.editor_model import StgFile
 from san_tools.map.stg_editor_patch import build_stg_layout_index, build_stg_patch_index
 
@@ -45,6 +46,8 @@ try:
     from minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
 except ImportError:
     from san_tools.map.minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
+
+MAIN_HEADER_SIZE = stage_ini_codec.MAIN_HEADER_SIZE
 
 FIELD_NAMES = [
     "acwx",
@@ -607,6 +610,92 @@ def export_heads_atlas(game_dir: Path, stage_dir: Path, palette: list[int]) -> d
     }
 
 
+
+STAGE_INI_FIELD_MAP = {
+    "site": {
+        "row_key": "city_index",
+        "sheet": "castle",
+        "fields": {
+            "city_index": "\u90fd\u5e02\u7d22\u5f15",
+            "house_attr": "\u623f\u5b50\u5c6c\u6027",
+            "castle_scale": "\u57ce\u898f\u6a21",
+            "population": "\u4eba\u53e3",
+            "gold": "\u91d1",
+            "food": "\u7ce7",
+            "standby_soldier": "\u5f85\u547d\u58eb\u5175",
+            "develop": "\u958b\u767c\u503c",
+            "commerce": "\u5546\u696d\u503c",
+            "security": "\u6cbb\u5b89\u503c",
+            "coord_x": "\u5ea7\u6a19X",
+            "coord_y": "\u5ea7\u6a19Y",
+            "governor": "\u592a\u5b88",
+        },
+    },
+    "entity": {
+        "row_key": "person_id",
+        "sheet": "general",
+        "fields": {
+            "person_id": "\u4eba\u7269\u7de8\u865f",
+            "portrait_id": "\u982d\u50cf\u7de8\u865f",
+            "static_owner_id": "\u6240\u5c6c\u541b\u4e3b",
+            "static_location_id": "\u6240\u5728\u5730",
+            "command": "\u7d71\u5fa1\u529b",
+            "soldier_type_id": "\u5175\u7a2e\u865f",
+            "level": "\u7b49\u7d1a",
+            "troop_count": "\u5e36\u5175\u6578",
+            "martial_force": "\u6b66\u529b",
+            "intellect": "\u667a\u529b",
+            "loyalty": "\u5fe0\u8aa0\u503c",
+        },
+    },
+}
+
+
+def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]:
+    """\u4e3a\u6d4f\u89c8\u5668\u4fdd\u5b58 stage.ini \u51c6\u5907 dword \u7ea7\u5b57\u6bb5\u6620\u5c04\u4e0e\u5de5\u4f5c\u7c3f\u57fa\u51c6\u884c\u3002"""
+
+    txt_dir = root / "other" / "uft8-game-txt"
+    stage_ini = game_dir / "stage.ini"
+    if not stage_ini.exists() or not txt_dir.exists():
+        return {"available": False, "reason": "\u7f3a\u5c11 stage.ini \u6216 other/uft8-game-txt"}
+    try:
+        tmp_root = root / ".tmp" / "stage_ini_patch_model"
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(stage_ini, tmp_root / "stage.ini")
+        shutil.copytree(txt_dir, tmp_root / "uft8-game-txt", dirs_exist_ok=True)
+        bundle = build_stage_ini_linkage_bundle(tmp_root)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        return {"available": False, "reason": str(exc)}
+
+    payload = stage_ini_codec.build_payload(game_dir)
+    header = payload["header"]
+    section_base = {"main": MAIN_HEADER_SIZE, "tail": int(header["tail_offset"])}
+    field_locations: dict[str, dict[str, dict[str, dict[str, int]]]] = {"general": {}, "castle": {}}
+    for sheet_name in ("general", "castle"):
+        model = bundle["conversion_models"].get(sheet_name, {})
+        headers = list(model.get("value_headers", []))
+        for row_id, row_model in model.get("row_models", {}).items():
+            section = str(row_model["stream_section"])
+            base = section_base[section]
+            start_dword = int(row_model["stream_start_dword"])
+            row_locations: dict[str, dict[str, int]] = {}
+            for index, header_name in enumerate(headers[: int(row_model["numeric_count"])]):
+                row_locations[str(header_name)] = {"byteOffset": base + (start_dword + index) * 4, "size": 4}
+            field_locations[sheet_name][str(row_id)] = row_locations
+
+    workbook_sheets = []
+    for sheet in bundle["conversion_workbook_sheets"]:
+        if sheet["name"] in {"general", "castle"}:
+            workbook_sheets.append({"name": sheet["name"], "headers": sheet["headers"], "rows": sheet["rows"]})
+    return {
+        "available": True,
+        "source": "stage.ini + uft8-game-txt",
+        "fileSize": int(header["file_size"]),
+        "fieldMap": STAGE_INI_FIELD_MAP,
+        "fieldLocations": field_locations,
+        "workbookSheets": workbook_sheets,
+    }
+
 def _xlsx_cell_value(value: object) -> object:
     """把 stage.ini 解析值规整为 xlsx 可直接写入的单元格值。"""
 
@@ -874,6 +963,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     scenario_model = build_editor_scenario_model(game_dir, stage)
     common_model = build_editor_common_model(root)
     common_model["heads"] = export_heads_atlas(game_dir, stage_dir, SAN_RGB_PALETTE)
+    common_model["stageIniPatchModel"] = build_stage_ini_patch_model(root, game_dir)
 
     export_resource_catalog(blocks, palette, stage_dir, records)
     export_minimap(map_path, stage_dir / "minimap.png")

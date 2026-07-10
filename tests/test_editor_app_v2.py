@@ -7,7 +7,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, build_editor_site_links, build_stage_ini_workbook_sheets, copy_scenario_reference_files, export_heads_atlas, write_stage_json
+from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, build_editor_site_links, build_stage_ini_patch_model, build_stage_ini_workbook_sheets, copy_scenario_reference_files, export_heads_atlas, write_stage_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,6 +102,9 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn('appendGateInput', html)
         self.assertIn('buildDorPatchArtifact', html)
         self.assertIn('stageIniWorkbook', html)
+        self.assertIn('buildEditedStageIniBytes', html)
+        self.assertIn('buildStageIniWorkbookBytes', html)
+        self.assertIn('buildXlsxBytes', html)
         self.assertIn('gateChanges', html)
         self.assertIn('SCENARIO_FIELD_LABELS', html)
         self.assertIn('appendScenarioFields', html)
@@ -194,6 +197,27 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
             self.assertIn('city_master', sheet_names)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+
+    def test_stage_ini_patch_model_maps_stage_ini_offsets(self) -> None:
+        game_dir = ROOT / ''.join(chr(code) for code in (0x4e09, 0x56fd, 0x9738, 0x4e1a))
+        if not (game_dir / 'stage.ini').exists() or not (ROOT / 'other' / 'uft8-game-txt').exists():
+            self.skipTest('missing stage.ini or txt mapping sample')
+
+        model = build_stage_ini_patch_model(ROOT, game_dir)
+        self.assertTrue(model['available'], model)
+        self.assertEqual(model['fileSize'], (game_dir / 'stage.ini').stat().st_size)
+        self.assertIn('site', model['fieldMap'])
+        self.assertIn('entity', model['fieldMap'])
+        self.assertIn('general', model['fieldLocations'])
+        self.assertIn('castle', model['fieldLocations'])
+        self.assertIn('workbookSheets', model)
+        self.assertEqual([sheet['name'] for sheet in model['workbookSheets']], ['general', 'castle'])
+        command_key = ''.join(chr(code) for code in (0x7d71, 0x5fa1, 0x529b))
+        population_key = ''.join(chr(code) for code in (0x4eba, 0x53e3))
+        self.assertGreater(model['fieldLocations']['general']['1'][command_key]['byteOffset'], 0)
+        self.assertGreater(model['fieldLocations']['castle']['1'][population_key]['byteOffset'], 0)
 
 
     def test_stage01_scenario_and_common_models_use_stg_and_stage_ini(self) -> None:
