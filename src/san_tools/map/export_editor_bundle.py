@@ -23,16 +23,16 @@ except ImportError:
     from render_m_cel_map import canvas_size, make_diamond_tile, make_object, parse_counted_cel, render_stage
 
 try:
-    from .palette import PAINT_RGB_PALETTE_HEX
+    from .palette import PAINT_RGB_PALETTE_HEX, SAN_RGB_PALETTE
 except ImportError:
     try:
-        from .palette import PAINT_RGB_FLAG_PALETTE as PAINT_RGB_PALETTE_HEX
+        from .palette import PAINT_RGB_FLAG_PALETTE as PAINT_RGB_PALETTE_HEX, SAN_RGB_PALETTE
     except ImportError:
         try:
-            from palette import PAINT_RGB_PALETTE_HEX
+            from palette import PAINT_RGB_PALETTE_HEX, SAN_RGB_PALETTE
         except ImportError:
             try:
-                from palette import PAINT_RGB_FLAG_PALETTE as PAINT_RGB_PALETTE_HEX
+                from palette import PAINT_RGB_FLAG_PALETTE as PAINT_RGB_PALETTE_HEX, SAN_RGB_PALETTE
             except ImportError:
                 try:
                     from .palette import SAN_RGB_PALETTE
@@ -438,6 +438,73 @@ def _pick_master_rows(rows: list[dict[str, object]], fields: tuple[str, ...], li
     return [{field: row.get(field, "") for field in fields} for row in rows[:limit]]
 
 
+def _read_cp950_tsv(path: Path) -> list[dict[str, str]]:
+    """读取游戏目录中的 Big5/CP950 制表文本，供编辑器只读索引使用。"""
+
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="cp950", errors="replace")
+    lines = [line.rstrip("\r") for line in text.split("\n") if line.strip()]
+    if not lines:
+        return []
+    headers = [item.strip() for item in lines[0].split("\t")]
+    rows: list[dict[str, str]] = []
+    for line in lines[1:]:
+        cells = [item.strip() for item in line.split("\t")]
+        if not cells or not cells[0]:
+            continue
+        rows.append({headers[index] if index < len(headers) else f"col_{index}": value for index, value in enumerate(cells)})
+    return rows
+
+
+def _to_int(value: object, default: int = 0) -> int:
+    """把文本字段安全转为整数；空值或异常值按默认值处理。"""
+
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def build_history_general_rows(game_dir: Path, general_master: list[dict[str, object]]) -> list[dict[str, object]]:
+    """合并 History.txt 与 general.txt，导出未登场武将的只读候选列表。"""
+
+    history_rows = _read_cp950_tsv(game_dir / "History.txt")
+    general_rows = _read_cp950_tsv(game_dir / "general.txt")
+    master_by_name = {str(row.get("name", "")).strip(): row for row in general_master if row.get("name")}
+    master_by_id = {str(row.get("record_id_candidate", "")).strip(): row for row in general_master if str(row.get("record_id_candidate", "")).strip()}
+    general_by_name = {row.get("姓名", "").strip(): row for row in general_rows if row.get("姓名")}
+    general_by_id = {row.get("人物編號", "").strip(): row for row in general_rows if row.get("人物編號")}
+    result: list[dict[str, object]] = []
+    seen: set[int] = set()
+    for history in history_rows:
+        name = history.get("武將名", "").strip()
+        person_id = _to_int(history.get("編號"), 0)
+        general = general_by_id.get(str(person_id)) or general_by_name.get(name) or {}
+        master = master_by_id.get(str(person_id)) or master_by_name.get(name) or {}
+        command = _to_int(general.get("統御力"), 0)
+        if command <= 0 or person_id in seen:
+            continue
+        seen.add(person_id)
+        result.append({
+            "source": "History.txt",
+            "name": name or str(general.get("姓名", "")) or str(master.get("name", "")),
+            "person_id": person_id,
+            "portrait_id": _to_int(general.get("頭像編號"), _to_int(master.get("record_index"), person_id)),
+            "command": command,
+            "soldier_type_id": _to_int(general.get("兵種號"), 0),
+            "troop_count": _to_int(general.get("帶兵數"), 0),
+            "martial_force": _to_int(general.get("武力"), 0),
+            "intellect": _to_int(general.get("智力"), 0),
+            "history_force_id": _to_int(history.get("屬國"), 0),
+            "join_year": _to_int(history.get("加入年"), 0),
+            "join_month": _to_int(history.get("加入月"), 0),
+            "join_day": _to_int(history.get("加入日"), 0),
+            "stage_ini_record_index": master.get("record_index", ""),
+        })
+    return result
+
+
 def build_editor_common_model(root: Path) -> dict[str, object]:
     """导出 stage.ini 中可作为全局武将、技能、城池和兵种索引的轻量母表。"""
 
@@ -453,13 +520,18 @@ def build_editor_common_model(root: Path) -> dict[str, object]:
         row for row in tail_records
         if row.get("name") and (150 <= int(row.get("record_index", -1)) <= 173 or "技" in str(row.get("name")) or row.get("name") in skill_names)
     ]
-    common_strings = [str(row.get("name", "")) for rows in (tables.get("general_master", []), skill_candidates, tables.get("city_master", []), tables.get("troop_master", [])) for row in rows]
+    game_dir = find_game_dir(root)
+    general_master = tables.get("general_master", [])
+    history_generals = build_history_general_rows(game_dir, general_master)
+    common_strings = [str(row.get("name", "")) for rows in (general_master, skill_candidates, tables.get("city_master", []), tables.get("troop_master", [])) for row in rows]
+    common_strings.extend(str(row.get("name", "")) for row in history_generals)
     return {
         "available": True,
         "source": "stage.ini",
         "path": Path(str(payload.get("stage_ini_path", "stage.ini"))).name,
         "big5CharMap": build_big5_char_map(common_strings),
-        "generals": _pick_master_rows(tables.get("general_master", []), ("record_index", "record_id_candidate", "name", "label", "family_guess")),
+        "generals": _pick_master_rows(general_master, ("record_index", "record_id_candidate", "name", "label", "family_guess")),
+        "historyGenerals": history_generals,
         "skills": _pick_master_rows(skill_candidates, ("record_index", "name", "label", "family_guess")),
         "cities": _pick_master_rows(tables.get("city_master", []), ("record_index", "name", "label", "place_id_candidate_stage_ini", "family_guess")),
         "soldiers": _pick_master_rows(tables.get("troop_master", []), ("record_index", "name", "label", "family_guess")),
@@ -738,7 +810,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     scenario_files = copy_scenario_reference_files(game_dir, stage_dir, stage)
     scenario_model = build_editor_scenario_model(game_dir, stage)
     common_model = build_editor_common_model(root)
-    common_model["heads"] = export_heads_atlas(game_dir, stage_dir, palette)
+    common_model["heads"] = export_heads_atlas(game_dir, stage_dir, SAN_RGB_PALETTE)
 
     export_resource_catalog(blocks, palette, stage_dir, records)
     export_minimap(map_path, stage_dir / "minimap.png")

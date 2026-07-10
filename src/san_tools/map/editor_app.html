@@ -48,6 +48,10 @@ canvas { display: block; width: 100%; height: 100%; }
 .layer-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .layer-row.active { border-color: var(--accent); background: #ecfeff; }
 .layer-row button { text-align: left; }
+.overlay-list { display: grid; gap: 6px; }
+.overlay-toggle { display: grid; grid-template-columns: 18px 18px minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
+.overlay-toggle input { width: 16px; min-width: 16px; height: 16px; padding: 0; }
+.overlay-swatch { width: 16px; height: 16px; border: 1px solid rgba(17,24,39,.22); border-radius: 4px; }
 .field { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 8px; }
 .field label { color: var(--muted); font-size: 12px; }
 .resource-section { min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
@@ -156,6 +160,10 @@ canvas { display: block; width: 100%; height: 100%; }
       <div class="resource-list" id="resourceList"><div class="resource-spacer" id="resourceSpacer"></div></div>
     </section>
     <section class="section">
+      <div class="section-title">数据叠加显示</div>
+      <div class="overlay-list" id="overlayList"></div>
+    </section>
+    <section class="section">
       <div class="section-title">合成物件 / 区域复制</div>
       <div class="selection-actions">
         <button id="setRegionAnchor" type="button">设起点</button>
@@ -244,6 +252,11 @@ const DEFAULT_FIELD_META = [
 const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
 const RESOURCE_LAYER_OPTIONS = ['acwx', 'acwy', 'acwz'];
 const POINT_LAYER_OPTIONS = ['terrain_tag', 'blocked', 'site_trigger', 'site_area'];
+const DATA_OVERLAY_OPTIONS = [
+  { key: 'site_trigger', name: 'site_influence', label: '据点影响', color: '#0ea5e9', mode: 'fill' },
+  { key: 'site_area', name: 'site_area', label: '据点核心', color: '#f59e0b', mode: 'inner' },
+  { key: 'blocked', name: 'blocked', label: '阻挡', color: '#ef4444', mode: 'blocked' },
+];
 const PAINT_LAYER_OPTIONS = [...RESOURCE_LAYER_OPTIONS, ...POINT_LAYER_OPTIONS];
 const MAX_BASE_IMAGE_EDGE = 8192;
 const MAX_BASE_IMAGE_PIXELS = 100000000;
@@ -286,12 +299,15 @@ const state = {
   scenarioPatches: new Map(),
   activeForceKey: '',
   activeEntityKey: '',
+  activeHistoryGeneralKey: '',
+  dataOverlayVisible: Object.fromEntries(DATA_OVERLAY_OPTIONS.map(item => [item.key, true])),
 };
 const els = {
   status: document.getElementById('status'), title: document.getElementById('stageTitle'), stageInfo: document.getElementById('stageInfo'),
   cellInfo: document.getElementById('cellInfo'), recordList: document.getElementById('recordList'), tool: document.getElementById('tool'),
   layer: document.getElementById('layer'), patchCount: document.getElementById('patchCount'),
   patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceSpacer: document.getElementById('resourceSpacer'), resourceMeta: document.getElementById('resourceMeta'), resourceFilter: document.getElementById('resourceFilter'),
+  overlayList: document.getElementById('overlayList'),
   resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
   exportFiles: document.getElementById('exportFiles'),
@@ -502,6 +518,7 @@ function normalizeCommonModel(model) {
     skills: Array.isArray(model?.skills) ? model.skills.slice() : [],
     cities: Array.isArray(model?.cities) ? model.cities.slice() : [],
     soldiers: Array.isArray(model?.soldiers) ? model.soldiers.slice() : [],
+    historyGenerals: Array.isArray(model?.historyGenerals) ? model.historyGenerals.slice() : [],
     heads: model?.heads || { available: false },
   };
 }
@@ -804,6 +821,25 @@ function drawActiveSiteOverlay() {
 function pointPaletteColor(value) {
   return state.meta?.pointPalette?.[value] || '#0f766e';
 }
+function renderDataOverlayControls() {
+  if (!els.overlayList) return;
+  els.overlayList.textContent = '';
+  for (const option of DATA_OVERLAY_OPTIONS) {
+    const label = document.createElement('label');
+    label.className = 'overlay-toggle';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = state.dataOverlayVisible[option.key] !== false;
+    input.addEventListener('change', () => { state.dataOverlayVisible[option.key] = input.checked; scheduleDraw(); });
+    const swatch = document.createElement('span');
+    swatch.className = 'overlay-swatch';
+    swatch.style.background = option.color;
+    const text = document.createElement('span');
+    text.textContent = `${option.name} / ${option.label}`;
+    label.append(input, swatch, text);
+    els.overlayList.append(label);
+  }
+}
 function ensureSelectedResource(layer) {
   const field = canonicalFieldName(layer);
   if (Number.isFinite(state.selectedResource[field])) return;
@@ -877,35 +913,78 @@ function scheduleDraw() {
   });
 }
 function diamondPath(col, row) { const p = cellToWorld(col, row); ctx.beginPath(); ctx.moveTo(p.x + 20, p.y); ctx.lineTo(p.x + 40, p.y + 10); ctx.lineTo(p.x + 20, p.y + 20); ctx.lineTo(p.x, p.y + 10); ctx.closePath(); }
+function hexToRgba(hex, alpha) {
+  const clean = String(hex || '#0f766e').replace('#', '');
+  const value = Number.parseInt(clean.length === 3 ? clean.split('').map(ch => ch + ch).join('') : clean, 16);
+  if (!Number.isFinite(value)) return `rgba(15,118,110,${alpha})`;
+  return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
+}
+function overlayPaletteColor(option, value, alpha) {
+  if (option.key === 'site_trigger') return hexToRgba(pointPaletteColor(value & 0xFF), alpha);
+  return hexToRgba(option.color, alpha);
+}
+function innerDiamondPath(col, row, pad = 6) {
+  const p = cellToWorld(col, row);
+  ctx.beginPath();
+  ctx.moveTo(p.x + 20, p.y + pad);
+  ctx.lineTo(p.x + 40 - pad, p.y + 10);
+  ctx.lineTo(p.x + 20, p.y + 20 - pad);
+  ctx.lineTo(p.x + pad, p.y + 10);
+  ctx.closePath();
+}
+function drawCellDataOverlay(option, col, row, value) {
+  if (option.mode === 'fill') {
+    diamondPath(col, row);
+    ctx.fillStyle = overlayPaletteColor(option, value, 0.26);
+    ctx.fill();
+    return;
+  }
+  if (option.mode === 'inner') {
+    innerDiamondPath(col, row, 7);
+    ctx.fillStyle = overlayPaletteColor(option, value, 0.26);
+    ctx.strokeStyle = overlayPaletteColor(option, value, 0.92);
+    ctx.lineWidth = 1.4 / state.transform.scale;
+    ctx.fill();
+    ctx.stroke();
+    const p = cellToWorld(col, row);
+    ctx.beginPath();
+    ctx.arc(p.x + 20, p.y + 10, Math.max(1.8, 3 / state.transform.scale), 0, Math.PI * 2);
+    ctx.fillStyle = overlayPaletteColor(option, value, 0.95);
+    ctx.fill();
+    return;
+  }
+  diamondPath(col, row);
+  ctx.strokeStyle = overlayPaletteColor(option, value, 0.95);
+  ctx.lineWidth = 1.8 / state.transform.scale;
+  ctx.stroke();
+  const p = cellToWorld(col, row);
+  ctx.beginPath();
+  ctx.moveTo(p.x + 7, p.y + 7);
+  ctx.lineTo(p.x + 33, p.y + 13);
+  ctx.moveTo(p.x + 7, p.y + 13);
+  ctx.lineTo(p.x + 33, p.y + 7);
+  ctx.stroke();
+}
 function drawVisiblePointOverlay(viewWidth, viewHeight) {
-  const layer = visiblePointLayer();
-  if (!layer || !state.meta) return;
-  const fi = fieldIndex(layer);
-  if (fi < 0) return;
-  const left = -state.transform.x / state.transform.scale;
-  const top = -state.transform.y / state.transform.scale;
-  const right = left + viewWidth / state.transform.scale;
-  const bottom = top + viewHeight / state.transform.scale;
-  const minRow = Math.max(0, Math.floor((top - state.meta.origin[1] - 24) / 10) - 2);
-  const maxRow = Math.min(state.meta.height - 1, Math.ceil((bottom - state.meta.origin[1] + 24) / 10) + 2);
-  const screenRadius = Math.min(10, Math.max(3, state.transform.scale * 2));
-  const radius = screenRadius / state.transform.scale;
+  if (!state.meta) return;
+  const options = DATA_OVERLAY_OPTIONS.filter(option => state.dataOverlayVisible[option.key]);
+  if (!options.length) return;
+  const range = visibleCellRange(viewWidth, viewHeight);
+  if (!range) return;
   ctx.save();
-  ctx.lineWidth = Math.max(1, screenRadius * 0.2) / state.transform.scale;
-  for (let row = minRow; row <= maxRow; row++) {
-    const rowStartX = state.meta.origin[0] + (row & 1 ? 20 : 0);
-    const minCol = Math.max(0, Math.floor((left - rowStartX - 24) / 40) - 1);
-    const maxCol = Math.min(state.meta.width - 1, Math.ceil((right - rowStartX + 24) / 40) + 1);
+  for (let row = range.minRow; row <= range.maxRow; row++) {
+    const rowStartX = range.originX + (row & 1 ? 20 : 0);
+    const minCol = Math.max(0, Math.floor((range.left - rowStartX - 24) / 40) - 1);
+    const maxCol = Math.min(state.meta.width - 1, Math.ceil((range.right - rowStartX + 24) / 40) + 1);
     for (let col = minCol; col <= maxCol; col++) {
-      const value = state.meta.records[row * state.meta.width + col][fi];
-      if (!value) continue;
-      const p = cellToWorld(col, row);
-      ctx.beginPath();
-      ctx.fillStyle = pointPaletteColor(value & 0xFF);
-      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-      ctx.arc(p.x + 20, p.y + 10, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      const record = state.meta.records[row * state.meta.width + col];
+      for (const option of options) {
+        const fi = fieldIndex(option.key);
+        if (fi < 0) continue;
+        const value = record[fi];
+        if (!value) continue;
+        drawCellDataOverlay(option, col, row, value);
+      }
     }
   }
   ctx.restore();
@@ -1021,7 +1100,7 @@ function describeRegion() {
 }
 function captureRegionSnapshot(name = '区域复制') {
   const selectedCells = selectedCellList();
-  if (selectedCells.length) {
+  if (selectedCells.length > 1 || (selectedCells.length === 1 && !state.regionAnchor)) {
     const bounds = selectedCellBounds();
     const active = state.selected || selectedCells[0];
     const anchor = { dx: active.col - bounds.left, dy: active.row - bounds.top };
@@ -1044,8 +1123,10 @@ function captureRegionSnapshot(name = '区域复制') {
 function pasteRegionSnapshot(snapshot) {
   if (!snapshot || !state.selected) return false;
   const changes = [];
+  const pastedCells = new Map();
   const pushRecord = (target, source) => {
-    if (target.col >= state.meta.width || target.row >= state.meta.height) return;
+    if (target.col >= state.meta.width || target.row >= state.meta.height || target.col < 0 || target.row < 0) return;
+    pastedCells.set(`${target.col},${target.row}`, { col: target.col, row: target.row });
     for (const field of snapshot.fields) {
       const sourceIndex = snapshot.fields.indexOf(field);
       if (sourceIndex < 0) continue;
@@ -1060,7 +1141,14 @@ function pasteRegionSnapshot(snapshot) {
       for (let col = 0; col < snapshot.width; col++) pushRecord({ col: state.selected.col + col, row: state.selected.row + row }, snapshot.rows[row][col]);
     }
   }
-  return applyChangeSet(changes);
+  const changed = applyChangeSet(changes);
+  if (pastedCells.size) {
+    state.selectedCells = pastedCells;
+    state.selected = [...pastedCells.values()][0] || state.selected;
+    refreshCompositeList();
+    scheduleDraw();
+  }
+  return changed;
 }
 function refreshCompositeList() {
   els.selectionInfo.textContent = `${describeRegion()}${state.regionClipboard ? `；剪贴板 ${state.regionClipboard.width} x ${state.regionClipboard.height}` : ''}`;
@@ -1257,16 +1345,28 @@ function renderScenarioCollection(node, titleAction, rows, emptyText, buildRow) 
   }
   for (const item of rows) node.append(buildRow(item));
 }
+function isGeneralEntity(entity) { return Number(entity?.command || 0) > 0; }
+function historyGeneralKey(row) { return `history:${row.person_id}`; }
+function historyGeneralRows() { return (state.commonModel?.historyGenerals || []).filter(row => Number(row.command || 0) > 0); }
+function scenarioGeneralRows() { return scenarioRows('entity').filter(isGeneralEntity); }
+function inactiveHistoryGeneralRows() {
+  const activePersonIds = new Set(scenarioGeneralRows().map(entity => Number(entity.person_id || 0)).filter(Boolean));
+  return historyGeneralRows().filter(row => !activePersonIds.has(Number(row.person_id || 0)));
+}
 function ensureActiveScenarioKeys() {
   const forces = scenarioRows('force');
   const sites = scenarioRows('site');
-  const entities = scenarioRows('entity');
+  const entities = scenarioGeneralRows();
+  const inactive = inactiveHistoryGeneralRows();
   if (!forces.some(force => force.forceKey === state.activeForceKey)) state.activeForceKey = forces[0]?.forceKey || '';
   if (!sites.some(site => site.siteKey === state.activeSiteKey)) state.activeSiteKey = sites[0]?.siteKey || '';
   if (!entities.some(entity => entity.entityKey === state.activeEntityKey)) state.activeEntityKey = entities[0]?.entityKey || '';
+  if (state.activeEntityKey) state.activeHistoryGeneralKey = '';
+  else if (!inactive.some(row => historyGeneralKey(row) === state.activeHistoryGeneralKey)) state.activeHistoryGeneralKey = inactive[0] ? historyGeneralKey(inactive[0]) : '';
 }
 function activeForce() { return state.scenario?.forceByKey.get(state.activeForceKey) || scenarioRows('force')[0] || null; }
-function activeEntity() { return state.scenario?.entityByKey.get(state.activeEntityKey) || scenarioRows('entity')[0] || null; }
+function activeEntity() { return state.activeHistoryGeneralKey ? null : (state.scenario?.entityByKey.get(state.activeEntityKey) || scenarioGeneralRows()[0] || null); }
+function activeHistoryGeneral() { return inactiveHistoryGeneralRows().find(row => historyGeneralKey(row) === state.activeHistoryGeneralKey) || null; }
 function commonName(rows, keys, value) {
   const text = String(value ?? '');
   const row = rows.find(item => keys.some(key => String(item[key] ?? '') === text));
@@ -1371,7 +1471,8 @@ function renderDomainManagers() {
   }
   forceSplit.append(forceItems, forceDetail);
   els.forceList.append(forceSplit);
-  const entityRows = scenarioRows('entity');
+  const entityRows = scenarioGeneralRows();
+  const inactiveRows = inactiveHistoryGeneralRows();
   els.entityList.textContent = '';
   const entityToolbar = document.createElement('div');
   entityToolbar.className = 'manager-toolbar';
@@ -1385,10 +1486,14 @@ function renderDomainManagers() {
   entitySplit.className = 'manager-split';
   const entityItems = document.createElement('div');
   entityItems.className = 'manager-items';
-  for (const entity of entityRows.slice(0, 240)) {
-    entityItems.append(buildScenarioListRow(`${entity.entity_name} / ${entity.parent_site_name || '-'} / ${entity.actual_force_name || '-'}`, entity.entityKey === state.activeEntityKey, () => { state.activeEntityKey = entity.entityKey; renderDomainManagers(); }));
+  for (const entity of entityRows) {
+    entityItems.append(buildScenarioListRow(`${entity.entity_name} / ${entity.parent_site_name || '-'} / ${entity.actual_force_name || '-'} / \u7edf\u5fa1 ${entity.command || 0}`, entity.entityKey === state.activeEntityKey, () => { state.activeEntityKey = entity.entityKey; state.activeHistoryGeneralKey = ''; renderDomainManagers(); }));
   }
-  if (!entityRows.length) {
+  for (const row of inactiveRows) {
+    const key = historyGeneralKey(row);
+    entityItems.append(buildScenarioListRow(`${row.name} / \u672a\u52a0\u5165\u5267\u672c / \u7edf\u5fa1 ${row.command || 0}`, key === state.activeHistoryGeneralKey, () => { state.activeEntityKey = ''; state.activeHistoryGeneralKey = key; renderDomainManagers(); }, '\u67e5\u770b'));
+  }
+  if (!entityRows.length && !inactiveRows.length) {
     const empty = document.createElement('div');
     empty.className = 'placeholder';
     empty.textContent = '当前 .stg 没有武将 Entity。';
@@ -1397,6 +1502,7 @@ function renderDomainManagers() {
   const entityDetail = document.createElement('div');
   entityDetail.className = 'manager-detail';
   const entity = activeEntity();
+  const historyGeneral = entity ? null : activeHistoryGeneral();
   if (entity) {
     const card = document.createElement('div');
     card.className = 'entity-card';
@@ -1416,6 +1522,7 @@ function renderDomainManagers() {
     appendScenarioInput(entityDetail, entity, 'entity', 'entity_name', false, 'entity_name');
     appendScenarioInput(entityDetail, entity, 'entity', 'person_id', true, 'person_id');
     appendScenarioInput(entityDetail, entity, 'entity', 'portrait_id', true, 'portrait_id');
+    appendScenarioInput(entityDetail, entity, 'entity', 'command', true, 'command');
     appendScenarioInput(entityDetail, entity, 'entity', 'soldier_type_id', true, 'soldier_type_id');
     appendScenarioInput(entityDetail, entity, 'entity', 'troop_count', true, 'troop_count');
     appendScenarioSelect(entityDetail, entity, 'entity', 'parentSiteKey', scenarioRows('site').map(site => ({ value: site.siteKey, label: `${site.site_name} / ${site.parent_force_name || '-'}` })), 'parentSiteKey');
@@ -1424,6 +1531,22 @@ function renderDomainManagers() {
     del.textContent = '删除武将';
     del.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
     entityDetail.append(del);
+  } else if (historyGeneral) {
+    const card = document.createElement('div');
+    card.className = 'entity-card';
+    const portrait = document.createElement('div');
+    portrait.className = 'portrait';
+    portrait.setAttribute('style', entityPortraitStyle({ portrait_id: historyGeneral.portrait_id }));
+    const fields = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'record-name';
+    title.textContent = historyGeneral.name;
+    const note = document.createElement('div');
+    note.className = 'record-note';
+    note.textContent = `History.txt \u672a\u52a0\u5165\u5267\u672c person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0} \u52a0\u5165=${historyGeneral.join_year || '-'}-${historyGeneral.join_month || '-'}-${historyGeneral.join_day || '-'}`;
+    fields.append(title, note);
+    card.append(portrait, fields);
+    entityDetail.append(card);
   }
   entitySplit.append(entityItems, entityDetail);
   els.entityList.append(entitySplit);
@@ -1960,9 +2083,11 @@ function resetEditState(meta) {
   state.activeSiteKey = '';
   state.activeForceKey = '';
   state.activeEntityKey = '';
+  state.activeHistoryGeneralKey = '';
   refreshScenarioRelations();
   renderSitePicker();
   renderDomainManagers();
+  renderDataOverlayControls();
   rebuildLayerStats();
   recomputeRedrawConfig();
   rebuildEditedImage();
