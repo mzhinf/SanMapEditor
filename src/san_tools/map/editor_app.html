@@ -85,14 +85,14 @@ canvas { display: block; width: 100%; height: 100%; }
 .manager-toolbar { display: flex; gap: 6px; align-items: center; }
 .manager-split { display: grid; grid-template-rows: minmax(96px, auto) auto; gap: 8px; }
 .manager-items { display: grid; gap: 6px; max-height: 220px; overflow: auto; }
-.manager-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
+.manager-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, auto); gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
 .manager-row.active { border-color: var(--accent); background: var(--accent-weak); }
 .manager-detail { display: grid; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .manager-sublist { display: grid; gap: 4px; max-height: 160px; overflow: auto; }
 .manager-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 5px 6px; border: 1px solid var(--soft); border-radius: 6px; background: #fbfaf7; font-size: 12px; }
 .entity-card { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: start; }
 .portrait { width: 52px; height: 58px; border: 1px solid var(--line); border-radius: 6px; background: #111 center / cover no-repeat; image-rendering: pixelated; }
-.manager-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
+.manager-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, auto); gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
 .record-list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--soft); background: #fff; }
 .record-row:first-child { border-top: 0; }
@@ -169,7 +169,7 @@ canvas { display: block; width: 100%; height: 100%; }
         <button id="setRegionAnchor" type="button">设起点</button>
         <button id="copyRegion" type="button">复制区域</button>
         <button id="pasteRegion" type="button">粘贴区域</button>
-        <button id="saveComposite" type="button">存为物件</button>
+        <button id="saveComposite" type="button">存为对象</button>
       </div>
       <div class="hint" id="selectionInfo">未设置区域。</div>
       <div class="composite-list" id="compositeList"></div>
@@ -257,6 +257,63 @@ const DATA_OVERLAY_OPTIONS = [
   { key: 'site_area', name: 'site_area', label: '据点核心', color: '#f59e0b', mode: 'center' },
   { key: 'blocked', name: 'blocked', label: '阻挡', color: '#ef4444', mode: 'outline' },
 ];
+const SCENARIO_FIELD_LABELS = {
+  force: {
+    force_name: '\u52bf\u529b\u540d\u79f0',
+    force_lord_person_id: '\u541b\u4e3b\u6b66\u5c06ID',
+    force_slot_or_index_14: '\u52bf\u529b\u69fd\u4f4d',
+    force_index_1based: '\u52bf\u529b\u5e8f\u53f7',
+    site_count: '\u636e\u70b9\u6570',
+  },
+  site: {
+    site_name: '\u636e\u70b9\u540d\u79f0',
+    city_index: '\u57ce\u6c60\u7d22\u5f15',
+    house_attr: '\u623f\u5c4b\u5c5e\u6027',
+    castle_scale: '\u57ce\u6c60\u89c4\u6a21',
+    population: '\u4eba\u53e3',
+    gold: '\u91d1\u94b1',
+    food: '\u7cae\u8349',
+    standby_soldier: '\u5f85\u547d\u58eb\u5175',
+    develop: '\u5f00\u53d1',
+    commerce: '\u5546\u4e1a',
+    security: '\u6cbb\u5b89',
+    coord_x: '\u5750\u6807X',
+    coord_y: '\u5750\u6807Y',
+    governor: '\u592a\u5b88',
+    primary_entity_count: '\u9a7b\u5b88\u6570',
+    parentForceKey: '\u6240\u5c5e\u52bf\u529b',
+  },
+  entity: {
+    entity_name: '\u6b66\u5c06\u540d\u79f0',
+    person_id: '\u4eba\u7269ID',
+    portrait_id: '\u5934\u50cfID',
+    static_owner_id: '\u9759\u6001\u6240\u5c5e',
+    static_location_id: '\u9759\u6001\u6240\u5728\u5730',
+    command: '\u7edf\u5fa1',
+    soldier_type_id: '\u5175\u79cd',
+    level: '\u7b49\u7ea7',
+    troop_count: '\u5e26\u5175\u6570',
+    martial_force: '\u6b66\u529b',
+    intellect: '\u667a\u529b',
+    loyalty: '\u5fe0\u8bda',
+    parentSiteKey: '\u6240\u5728\u636e\u70b9',
+  },
+  gate: {
+    doorX: '\u57ce\u95e8X',
+    doorY: '\u57ce\u95e8Y',
+    siteX: '\u636e\u70b9X',
+    siteY: '\u636e\u70b9Y',
+    dir: '\u65b9\u5411',
+    group: '\u7ec4\u53f7',
+    doorIndex: '\u95e8\u5e8f\u53f7',
+  },
+};
+const SCENARIO_FIELD_GROUPS = {
+  force: ['force_name', 'force_lord_person_id', 'force_slot_or_index_14', 'force_index_1based', 'site_count'],
+  site: ['site_name', 'city_index', 'house_attr', 'castle_scale', 'population', 'gold', 'food', 'standby_soldier', 'develop', 'commerce', 'security', 'coord_x', 'coord_y', 'governor', 'primary_entity_count', 'parentForceKey'],
+  entity: ['entity_name', 'person_id', 'portrait_id', 'static_owner_id', 'static_location_id', 'command', 'soldier_type_id', 'level', 'troop_count', 'martial_force', 'intellect', 'loyalty', 'parentSiteKey'],
+};
+const SCENARIO_NUMERIC_FIELDS = new Set(['force_lord_person_id', 'force_slot_or_index_14', 'force_index_1based', 'site_count', 'city_index', 'house_attr', 'castle_scale', 'population', 'gold', 'food', 'standby_soldier', 'develop', 'commerce', 'security', 'coord_x', 'coord_y', 'governor', 'primary_entity_count', 'person_id', 'portrait_id', 'static_owner_id', 'static_location_id', 'command', 'soldier_type_id', 'level', 'troop_count', 'martial_force', 'intellect', 'loyalty']);
 const PAINT_LAYER_OPTIONS = [...RESOURCE_LAYER_OPTIONS, ...POINT_LAYER_OPTIONS];
 const MAX_BASE_IMAGE_EDGE = 8192;
 const MAX_BASE_IMAGE_PIXELS = 100000000;
@@ -643,15 +700,7 @@ function renderActiveSiteEditor(siteView) {
   if (!site) return;
   const wrap = document.createElement('div');
   wrap.className = 'manager-detail';
-  appendScenarioInput(wrap, site, 'site', 'site_name', false, 'site_name');
-  appendScenarioInput(wrap, site, 'site', 'coord_x', true, 'coord_x');
-  appendScenarioInput(wrap, site, 'site', 'coord_y', true, 'coord_y');
-  appendScenarioInput(wrap, site, 'site', 'city_index', true, 'city_index');
-  appendScenarioInput(wrap, site, 'site', 'population', true, 'population');
-  appendScenarioInput(wrap, site, 'site', 'gold', true, 'gold');
-  appendScenarioInput(wrap, site, 'site', 'food', true, 'food');
-  appendScenarioInput(wrap, site, 'site', 'standby_soldier', true, 'standby_soldier');
-  appendScenarioSelect(wrap, site, 'site', 'parentForceKey', scenarioRows('force').map(force => ({ value: force.forceKey, label: force.force_name })), 'parentForceKey');
+  appendScenarioFields(wrap, site, 'site');
   const gateTitle = document.createElement('div');
   gateTitle.className = 'record-name';
   gateTitle.textContent = `\u57ce\u95e8 ${siteView.gates?.length || 0}`;
@@ -670,13 +719,13 @@ function renderActiveSiteEditor(siteView) {
     head.className = 'record-name';
     head.textContent = `\u95e8 ${gate.gateIndex} / .dor group ${gate.group}`;
     gateCard.append(head);
-    appendGateInput(gateCard, gate, 'doorX', '\u57ce\u95e8X');
-    appendGateInput(gateCard, gate, 'doorY', '\u57ce\u95e8Y');
-    appendGateInput(gateCard, gate, 'siteX', '\u636e\u70b9X');
-    appendGateInput(gateCard, gate, 'siteY', '\u636e\u70b9Y');
-    appendGateInput(gateCard, gate, 'dir', '\u65b9\u5411');
-    appendGateInput(gateCard, gate, 'group', '\u7ec4\u53f7');
-    appendGateInput(gateCard, gate, 'doorIndex', '\u95e8\u5e8f\u53f7');
+    appendGateInput(gateCard, gate, 'doorX', scenarioFieldLabel('gate', 'doorX'));
+    appendGateInput(gateCard, gate, 'doorY', scenarioFieldLabel('gate', 'doorY'));
+    appendGateInput(gateCard, gate, 'siteX', scenarioFieldLabel('gate', 'siteX'));
+    appendGateInput(gateCard, gate, 'siteY', scenarioFieldLabel('gate', 'siteY'));
+    appendGateInput(gateCard, gate, 'dir', scenarioFieldLabel('gate', 'dir'));
+    appendGateInput(gateCard, gate, 'group', scenarioFieldLabel('gate', 'group'));
+    appendGateInput(gateCard, gate, 'doorIndex', scenarioFieldLabel('gate', 'doorIndex'));
     const actions = document.createElement('div');
     actions.className = 'manager-row';
     const locate = document.createElement('button');
@@ -1400,6 +1449,49 @@ function addScenarioEntity() {
   storeScenarioPatch('entity', entity.entityKey, 'add', '', null, { ...entity });
   renderDomainManagers();
 }
+function scenarioFieldLabel(kind, field) {
+  return SCENARIO_FIELD_LABELS[kind]?.[field] || field;
+}
+function scenarioSelectOptions(kind, field) {
+  if (kind === 'site' && field === 'parentForceKey') {
+    return scenarioRows('force').map(force => ({ value: force.forceKey, label: force.force_name }));
+  }
+  if (kind === 'entity' && field === 'parentSiteKey') {
+    return scenarioRows('site').map(site => ({ value: site.siteKey, label: `${site.site_name} / ${site.parent_force_name || '-'}` }));
+  }
+  return null;
+}
+function appendScenarioField(parent, row, kind, field) {
+  if (!(field in row)) return;
+  const options = scenarioSelectOptions(kind, field);
+  if (options) {
+    appendScenarioSelect(parent, row, kind, field, options, scenarioFieldLabel(kind, field));
+    return;
+  }
+  appendScenarioInput(parent, row, kind, field, SCENARIO_NUMERIC_FIELDS.has(field), scenarioFieldLabel(kind, field));
+}
+function appendScenarioFields(parent, row, kind) {
+  const fields = SCENARIO_FIELD_GROUPS[kind] || [];
+  for (const field of fields) appendScenarioField(parent, row, kind, field);
+}
+function assignExistingSiteToForce(siteKey, forceKey) {
+  const site = state.scenario?.siteByKey.get(siteKey);
+  const force = state.scenario?.forceByKey.get(forceKey);
+  if (!site || !force || site.deleted) return;
+  updateScenarioField('site', site.siteKey, 'parentForceKey', force.forceKey);
+  setActiveSite(site.siteKey, { focus: true, skipDraw: true });
+}
+function removeSiteFromForce(siteKey) {
+  const site = state.scenario?.siteByKey.get(siteKey);
+  if (!site || site.deleted) return;
+  updateScenarioField('site', site.siteKey, 'parentForceKey', '');
+}
+function siteKindLabel(site) {
+  const cityId = String(site?.city_index ?? '');
+  const cities = state.commonModel?.cities || [];
+  const matched = cities.some(city => String(city.record_index ?? '') === cityId || String(city.place_id_candidate_stage_ini ?? '') === cityId);
+  return matched ? '\u57ce\u6c60' : '\u519b\u5be8/\u5c71\u5be8';
+}
 function appendScenarioInput(parent, row, kind, field, numeric = false, label = field) {
   const wrap = document.createElement('label');
   wrap.className = 'record-note';
@@ -1560,8 +1652,7 @@ function renderDomainManagers() {
     title.className = 'record-name';
     title.textContent = force.force_name;
     forceDetail.append(title);
-    appendScenarioInput(forceDetail, force, 'force', 'force_name', false, 'force_name');
-    appendScenarioInput(forceDetail, force, 'force', 'force_lord_person_id', true, 'force_lord_person_id');
+    appendScenarioFields(forceDetail, force, 'force');
     const siteToolbar = document.createElement('div');
     siteToolbar.className = 'manager-toolbar';
     const addSiteForForce = document.createElement('button');
@@ -1569,11 +1660,40 @@ function renderDomainManagers() {
     addSiteForForce.textContent = '新增据点';
     addSiteForForce.addEventListener('click', () => addScenarioSite(force.forceKey));
     siteToolbar.append(addSiteForForce);
+    const receiveSite = document.createElement('select');
+    const receiveEmpty = document.createElement('option');
+    receiveEmpty.value = '';
+    receiveEmpty.textContent = '\u63a5\u6536\u5df2\u6709\u636e\u70b9';
+    receiveSite.append(receiveEmpty);
+    for (const site of scenarioRows('site').filter(site => site.parentForceKey !== force.forceKey)) {
+      const option = document.createElement('option');
+      option.value = site.siteKey;
+      option.textContent = `${site.site_name} / ${siteKindLabel(site)} / ${site.parent_force_name || '-'}`;
+      receiveSite.append(option);
+    }
+    const receiveButton = document.createElement('button');
+    receiveButton.type = 'button';
+    receiveButton.textContent = '\u52a0\u5165';
+    receiveButton.addEventListener('click', () => assignExistingSiteToForce(receiveSite.value, force.forceKey));
+    siteToolbar.append(receiveSite, receiveButton);
     forceDetail.append(siteToolbar);
     const siteList = document.createElement('div');
     siteList.className = 'manager-sublist';
     for (const site of scenarioRows('site').filter(site => site.parentForceKey === force.forceKey)) {
-      siteList.append(buildScenarioListRow(`${site.site_name} (${site.coord_x},${site.coord_y})`, site.siteKey === state.activeSiteKey, () => { setActiveSite(site.siteKey, { focus: true }); switchInspectorTab('sites'); }, '定位'));
+      const siteRow = document.createElement('div');
+      siteRow.className = 'manager-row' + (site.siteKey === state.activeSiteKey ? ' active' : '');
+      const label = document.createElement('div');
+      label.textContent = `${site.site_name} / ${siteKindLabel(site)} (${site.coord_x},${site.coord_y})`;
+      const locate = document.createElement('button');
+      locate.type = 'button';
+      locate.textContent = '\u5b9a\u4f4d';
+      locate.addEventListener('click', () => { setActiveSite(site.siteKey, { focus: true }); switchInspectorTab('sites'); });
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '\u79fb\u51fa';
+      remove.addEventListener('click', () => removeSiteFromForce(site.siteKey));
+      siteRow.append(label, locate, remove);
+      siteList.append(siteRow);
     }
     forceDetail.append(siteList);
     const del = document.createElement('button');
@@ -1632,13 +1752,7 @@ function renderDomainManagers() {
     fields.append(title, note);
     card.append(portrait, fields);
     entityDetail.append(card);
-    appendScenarioInput(entityDetail, entity, 'entity', 'entity_name', false, 'entity_name');
-    appendScenarioInput(entityDetail, entity, 'entity', 'person_id', true, 'person_id');
-    appendScenarioInput(entityDetail, entity, 'entity', 'portrait_id', true, 'portrait_id');
-    appendScenarioInput(entityDetail, entity, 'entity', 'command', true, 'command');
-    appendScenarioInput(entityDetail, entity, 'entity', 'soldier_type_id', true, 'soldier_type_id');
-    appendScenarioInput(entityDetail, entity, 'entity', 'troop_count', true, 'troop_count');
-    appendScenarioSelect(entityDetail, entity, 'entity', 'parentSiteKey', scenarioRows('site').map(site => ({ value: site.siteKey, label: `${site.site_name} / ${site.parent_force_name || '-'}` })), 'parentSiteKey');
+    appendScenarioFields(entityDetail, entity, 'entity');
     const del = document.createElement('button');
     del.type = 'button';
     del.textContent = '删除武将';
