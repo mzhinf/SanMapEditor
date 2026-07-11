@@ -244,5 +244,68 @@ if (edited.length !== original.length || edited.some((value, index) => value !==
 """
         self.run_node(harness + functions + checks)
 
+    def test_patch_import_restores_all_editor_domains_atomically(self) -> None:
+        """验证 Patch 可恢复全部数据域、重复导入幂等且冲突时不产生部分修改。"""
+
+        source = script_source()
+        functions = function_range(source, "patchValuesEqual", "localScenarioFileKey")
+        harness = """
+const force = { forceKey: 'force:0', force_name: '旧势力', deleted: false };
+const gate = { gateKey: 'gate:0', doorX: 10, deleted: false };
+const historyBase = { rowKey: '1', 加入年: '190' };
+const generalBase = { stageIniRowKey: '1', stageIniValues: { 统御力: '70' } };
+const state = {
+  meta: { stage: 'stage01', width: 1, height: 1, fields: ['terrain_tag'], records: [[1]], siteLinks: {} },
+  originalRecords: [[1]], patches: new Map(), undoStack: [], redoStack: [],
+  scenario: { available: true, forces: [force], sites: [], entities: [] },
+  scenarioPatches: new Map(), gates: [gate], gatePatches: new Map(),
+  historyEdits: new Map(), historyPatches: new Map(),
+  newStageIniGenerals: [], stageIniGeneralEdits: new Map(), stageIniGeneralPatches: new Map()
+};
+const els = { status: { textContent: '' } };
+function canonicalFieldName(value) { return value; }
+function fieldIndex(field) { return state.meta.fields.indexOf(field); }
+function recordFieldBounds() { return { min: 0, max: 255 }; }
+function applyChangeSet(changes) { for (const change of changes) state.meta.records[change.y * state.meta.width + change.x][fieldIndex(change.field)] = change.after; return !!changes.length; }
+function scenarioPatchKey(kind, key, op, field = '') { return `${kind}:${op}:${key}:${field}`; }
+function gateKey(row) { return row.gateKey; }
+function normalizeGateRows(rows) { return rows.map(row => ({ ...row })); }
+function historyTableRows() { return [{ ...historyBase, ...(state.historyEdits.get('1') || {}) }]; }
+function stageIniGeneralRows() { return [{ ...generalBase, stageIniValues: { ...generalBase.stageIniValues, ...(state.stageIniGeneralEdits.get('1') || {}) } }]; }
+function refreshScenarioRelations() {
+  state.scenario.forceByKey = new Map(state.scenario.forces.map(row => [row.forceKey, row]));
+  state.scenario.siteByKey = new Map(); state.scenario.entityByKey = new Map();
+}
+function buildSiteIndex() { return null; }
+function renderSitePicker() {}
+function renderDomainManagers() {}
+function refreshSide() {}
+function refreshPatches() {}
+function scheduleDraw() {}
+"""
+        checks = """
+const payload = {
+  format: 'san-editor-patch-v1', stage: 'stage01', width: 1, height: 1,
+  changes: [{ x: 0, y: 0, field: 'terrain_tag', before: 1, after: 9 }],
+  scenarioChanges: [{ kind: 'force', key: 'force:0', op: 'update', field: 'force_name', before: '旧势力', after: '新势力' }],
+  gateChanges: [{ kind: 'gate', key: 'gate:0', op: 'update', field: 'doorX', before: 10, after: 11 }],
+  historyChanges: [{ kind: 'history', key: '1', field: '加入年', before: '190', after: '191' }],
+  stageIniGeneralChanges: [{ kind: 'stageIniGeneral', key: '1', field: '统御力', before: '70', after: '80' }]
+};
+applyImportedPatchPayload(payload, 'all_patch.json');
+if (state.meta.records[0][0] !== 9) throw new Error('地图 Patch 未恢复');
+if (state.scenario.forces[0].force_name !== '新势力') throw new Error('场景 Patch 未恢复');
+if (state.gates[0].doorX !== 11) throw new Error('城门 Patch 未恢复');
+if (state.historyEdits.get('1').加入年 !== '191') throw new Error('History Patch 未恢复');
+if (state.stageIniGeneralEdits.get('1').统御力 !== '80') throw new Error('ini Patch 未恢复');
+applyImportedPatchPayload(payload, 'all_patch.json');
+const conflict = { ...payload, changes: [{ x: 0, y: 0, field: 'terrain_tag', before: 1, after: 8 }], scenarioChanges: [{ kind: 'force', key: 'force:0', op: 'update', field: 'force_name', before: '新势力', after: '不应写入' }] };
+let rejected = false;
+try { applyImportedPatchPayload(conflict, 'conflict.json'); } catch (err) { rejected = String(err.message).includes('地图冲突'); }
+if (!rejected) throw new Error('冲突 Patch 未被拒绝');
+if (state.meta.records[0][0] !== 9 || state.scenario.forces[0].force_name !== '新势力') throw new Error('冲突后产生了部分修改');
+"""
+        self.run_node(harness + functions + checks)
+
 if __name__ == "__main__":
     unittest.main()

@@ -151,8 +151,8 @@ canvas { display: block; width: 100%; height: 100%; }
       <select id="stagePicker"><option value="">当前</option></select>
     </div>
     <div class="toolbar-group">
-      <input id="loadMFile" type="file" accept=".m,.dor,.stg,.ini,.dat,.txt,.xlsx" multiple hidden>
-      <button id="openMFile" title="读取单个 .m；完整工程建议使用导出的关卡页面。">导入</button>
+      <input id="loadMFile" type="file" accept=".m,.dor,.stg,.ini,.dat,.txt,.xlsx,.json" multiple hidden>
+      <button id="openMFile" title="导入 stageXX.m 及配套文件，或重新载入以前导出的 Patch JSON。">导入</button>
       <button id="exportFiles" class="primary">导出</button>
       <button id="exportPatch" class="secondary">Patch</button>
     </div>
@@ -1481,7 +1481,9 @@ function gateRowsForSite(siteKey) {
 }
 function storeGatePatch(gate, op, field, before, after) {
   const key = gateKey(gate);
-  state.gatePatches.set(`gate:${op}:${key}:${field || ''}`, { kind: 'gate', key, op, field, before, after });
+  const patchKeyValue = `gate:${op}:${key}:${field || ''}`;
+  const existing = state.gatePatches.get(patchKeyValue);
+  state.gatePatches.set(patchKeyValue, { kind: 'gate', key, op, field, before: existing?.before ?? before, after });
   schedulePatchRefresh();
 }
 function refreshGateViews() {
@@ -1561,7 +1563,9 @@ function scenarioRows(kind) {
 }
 function scenarioPatchKey(kind, key, op, field = '') { return `${kind}:${op}:${key}:${field}`; }
 function storeScenarioPatch(kind, key, op, field, before, after) {
-  state.scenarioPatches.set(scenarioPatchKey(kind, key, op, field), { kind, key, op, field, before, after });
+  const patchKeyValue = scenarioPatchKey(kind, key, op, field);
+  const existing = state.scenarioPatches.get(patchKeyValue);
+  state.scenarioPatches.set(patchKeyValue, { kind, key, op, field, before: existing?.before ?? before, after });
   schedulePatchRefresh();
 }
 function syncSiteGateCoordinates(site, trackChanges = false) {
@@ -2075,7 +2079,9 @@ function updateStageIniGeneralHeader(rowKey, header, rawValue) {
   const edits = { ...(state.stageIniGeneralEdits.get(key) || {}) };
   edits[header] = after;
   state.stageIniGeneralEdits.set(key, edits);
-  state.stageIniGeneralPatches.set(`stageini:${key}:${header}`, { kind: 'stageIniGeneral', key, field: header, before, after });
+  const patchKeyValue = `stageini:${key}:${header}`;
+  const existing = state.stageIniGeneralPatches.get(patchKeyValue);
+  state.stageIniGeneralPatches.set(patchKeyValue, { kind: 'stageIniGeneral', key, field: header, before: existing?.before ?? before, after });
   schedulePatchRefresh();
   if (header === 'title' || header === stageIniGeneralFieldHeaders().command || header === stageIniGeneralFieldHeaders().portrait_id) renderDomainManagers();
 }
@@ -2122,7 +2128,9 @@ function updateHistoryField(rowKey, field, rawValue) {
   const edits = { ...(state.historyEdits.get(key) || {}) };
   edits[field] = after;
   state.historyEdits.set(key, edits);
-  state.historyPatches.set(`history:${key}:${field}`, { kind: 'history', key, field, before, after });
+  const patchKeyValue = `history:${key}:${field}`;
+  const existing = state.historyPatches.get(patchKeyValue);
+  state.historyPatches.set(patchKeyValue, { kind: 'history', key, field, before: existing?.before ?? before, after });
   schedulePatchRefresh();
 }
 function appendHistoryFields(parent, personId) {
@@ -3096,6 +3104,215 @@ function parseStageM(buffer, name = 'local.m') {
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
   });
 }
+function patchValuesEqual(left, right) {
+  if (left === right) return true;
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+function normalizedImportedPatch(payload) {
+  const format = String(payload?.format || '');
+  if (format === 'san-editor-patch-v1') return payload;
+  if (format === 'san-editor-scenario-patch-v1') return { format: 'san-editor-patch-v1', stage: payload.stage, scenarioChanges: payload.scenarioChanges || [] };
+  if (format === 'san-editor-dor-patch-v1') return { format: 'san-editor-patch-v1', stage: payload.stage, gateChanges: payload.gateChanges || [] };
+  if (format === 'san-editor-history-patch-v1') return { format: 'san-editor-patch-v1', stage: payload.stage, historyChanges: payload.historyChanges || [] };
+  throw new Error('不支持的 Patch 格式：' + (format || '未标记'));
+}
+function importedPatchChanges(payload, field) {
+  const value = payload?.[field];
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error('Patch 字段 ' + field + ' 必须是数组。');
+  return value;
+}
+function planImportedMapChanges(payload, conflicts) {
+  const planned = [];
+  for (const change of importedPatchChanges(payload, 'changes')) {
+    const x = Number(change?.x);
+    const y = Number(change?.y);
+    const field = canonicalFieldName(String(change?.field || ''));
+    const after = Number(change?.after);
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= state.meta.width || y >= state.meta.height) {
+      conflicts.push('地图格子越界：' + x + ',' + y);
+      continue;
+    }
+    const fi = fieldIndex(field);
+    const bounds = recordFieldBounds(field);
+    if (fi < 0 || !Number.isFinite(after) || after < bounds.min || after > bounds.max) {
+      conflicts.push('地图字段无效：' + field + ' @ ' + x + ',' + y);
+      continue;
+    }
+    const current = state.meta.records[y * state.meta.width + x][fi];
+    if (patchValuesEqual(current, after)) continue;
+    if (!patchValuesEqual(current, change.before)) {
+      conflicts.push('地图冲突：' + x + ',' + y + ' ' + field + ' 当前=' + current + '，Patch before=' + change.before);
+      continue;
+    }
+    planned.push({ x, y, field, after });
+  }
+  return planned;
+}
+function planImportedScenarioChanges(payload, conflicts) {
+  const changes = importedPatchChanges(payload, 'scenarioChanges');
+  if (!changes.length) return null;
+  if (!state.scenario?.available) { conflicts.push('当前版本没有可用的 .stg 场景模型。'); return null; }
+  const plan = {
+    forces: state.scenario.forces.map(row => ({ ...row })),
+    sites: state.scenario.sites.map(row => ({ ...row })),
+    entities: state.scenario.entities.map(row => ({ ...row })),
+  };
+  const maps = {
+    force: new Map(plan.forces.map(row => [row.forceKey, row])),
+    site: new Map(plan.sites.map(row => [row.siteKey, row])),
+    entity: new Map(plan.entities.map(row => [row.entityKey, row])),
+  };
+  const collection = { force: plan.forces, site: plan.sites, entity: plan.entities };
+  const ordered = changes.slice().sort((left, right) => (left.op === 'add' ? 0 : left.op === 'delete' ? 2 : 1) - (right.op === 'add' ? 0 : right.op === 'delete' ? 2 : 1));
+  for (const change of ordered) {
+    const kind = String(change?.kind || '');
+    const key = String(change?.key || '');
+    if (!maps[kind] || !key) { conflicts.push('场景 Patch 对象无效：' + kind + ' ' + key); continue; }
+    let row = maps[kind].get(key);
+    if (change.op === 'add') {
+      if (row) continue;
+      if (!change.after || typeof change.after !== 'object') { conflicts.push('场景新增对象缺少 after：' + key); continue; }
+      row = { ...change.after, deleted: false, isNew: true };
+      collection[kind].push(row);
+      maps[kind].set(key, row);
+      continue;
+    }
+    if (!row) { conflicts.push('场景对象不存在：' + key); continue; }
+    if (change.op === 'update') {
+      const field = String(change.field || '');
+      if (!field) { conflicts.push('场景更新缺少字段：' + key); continue; }
+      if (patchValuesEqual(row[field], change.after)) continue;
+      if (!patchValuesEqual(row[field], change.before)) { conflicts.push('场景冲突：' + key + '.' + field); continue; }
+      row[field] = change.after;
+    } else if (change.op === 'delete') {
+      row.deleted = true;
+    } else {
+      conflicts.push('不支持的场景操作：' + change.op);
+    }
+  }
+  return plan;
+}
+function planImportedGateChanges(payload, conflicts) {
+  const changes = importedPatchChanges(payload, 'gateChanges');
+  if (!changes.length) return null;
+  const rows = state.gates.map(gate => ({ ...gate }));
+  const byKey = new Map(rows.map(gate => [gateKey(gate), gate]));
+  const ordered = changes.slice().sort((left, right) => (left.op === 'add' ? 0 : left.op === 'delete' ? 2 : 1) - (right.op === 'add' ? 0 : right.op === 'delete' ? 2 : 1));
+  for (const change of ordered) {
+    const key = String(change?.key || '');
+    let gate = byKey.get(key);
+    if (change.op === 'add') {
+      if (gate) continue;
+      if (!change.after || typeof change.after !== 'object') { conflicts.push('城门新增对象缺少 after：' + key); continue; }
+      gate = { ...change.after, gateKey: key, isNew: true, deleted: false };
+      rows.push(gate);
+      byKey.set(key, gate);
+      continue;
+    }
+    if (!gate) { conflicts.push('城门对象不存在：' + key); continue; }
+    if (change.op === 'update') {
+      const field = String(change.field || '');
+      if (patchValuesEqual(gate[field], change.after)) continue;
+      if (!patchValuesEqual(gate[field], change.before)) { conflicts.push('城门冲突：' + key + '.' + field); continue; }
+      gate[field] = change.after;
+    } else if (change.op === 'delete') gate.deleted = true;
+    else conflicts.push('不支持的城门操作：' + change.op);
+  }
+  return normalizeGateRows(rows);
+}
+function planImportedHistoryChanges(payload, conflicts) {
+  const changes = importedPatchChanges(payload, 'historyChanges');
+  if (!changes.length) return null;
+  const edits = new Map([...state.historyEdits].map(([key, value]) => [key, { ...value }]));
+  const rows = new Map(historyTableRows().map(row => [String(row.rowKey), row]));
+  for (const change of changes) {
+    const key = String(change?.key || '');
+    const field = String(change?.field || '');
+    const row = rows.get(key);
+    if (!row || !field) { conflicts.push('History.txt 对象不存在：' + key + '.' + field); continue; }
+    const current = edits.get(key)?.[field] ?? row[field] ?? '';
+    if (patchValuesEqual(String(current), String(change.after ?? ''))) continue;
+    if (!patchValuesEqual(String(current), String(change.before ?? ''))) { conflicts.push('History.txt 冲突：' + key + '.' + field); continue; }
+    edits.set(key, { ...(edits.get(key) || {}), [field]: String(change.after ?? '') });
+  }
+  return edits;
+}
+function planImportedStageIniGeneralChanges(payload, conflicts) {
+  const changes = importedPatchChanges(payload, 'stageIniGeneralChanges');
+  if (!changes.length) return null;
+  const additions = state.newStageIniGenerals.map(row => ({ ...row, stageIniValues: { ...(row.stageIniValues || {}) } }));
+  const edits = new Map([...state.stageIniGeneralEdits].map(([key, value]) => [key, { ...value }]));
+  const baseRows = new Map(stageIniGeneralRows().map(row => [String(row.stageIniRowKey), row]));
+  for (const change of changes) {
+    const key = String(change?.key || '').replace(/^stageini:/, '');
+    if (change.op === 'add') {
+      if (baseRows.has(key) || additions.some(row => String(row.stageIniRowKey) === key)) continue;
+      if (!change.after || typeof change.after !== 'object') { conflicts.push('stage.ini 新增武将缺少 after：' + key); continue; }
+      const row = { ...change.after, isNew: true, stageIniRowKey: key, stageIniValues: { ...(change.after.stageIniValues || {}) } };
+      additions.push(row);
+      baseRows.set(key, row);
+      continue;
+    }
+    const field = String(change.field || '');
+    const row = baseRows.get(key);
+    if (!row || !field) { conflicts.push('stage.ini 武将对象不存在：' + key + '.' + field); continue; }
+    const current = edits.get(key)?.[field] ?? row.stageIniValues?.[field] ?? '';
+    if (patchValuesEqual(String(current), String(change.after ?? ''))) continue;
+    if (!patchValuesEqual(String(current), String(change.before ?? ''))) { conflicts.push('stage.ini 冲突：' + key + '.' + field); continue; }
+    edits.set(key, { ...(edits.get(key) || {}), [field]: change.after });
+  }
+  return { additions, edits };
+}
+function applyImportedPatchPayload(rawPayload, fileName = 'patch.json') {
+  const payload = normalizedImportedPatch(rawPayload);
+  if (payload.stage && String(payload.stage) !== String(state.meta.stage)) throw new Error('Patch 关卡为 ' + payload.stage + '，当前关卡为 ' + state.meta.stage);
+  if (payload.width !== undefined && Number(payload.width) !== state.meta.width) throw new Error('Patch 地图宽度与当前版本不一致。');
+  if (payload.height !== undefined && Number(payload.height) !== state.meta.height) throw new Error('Patch 地图高度与当前版本不一致。');
+  const conflicts = [];
+  const mapChanges = planImportedMapChanges(payload, conflicts);
+  const scenarioPlan = planImportedScenarioChanges(payload, conflicts);
+  const gatePlan = planImportedGateChanges(payload, conflicts);
+  const historyPlan = planImportedHistoryChanges(payload, conflicts);
+  const stageIniPlan = planImportedStageIniGeneralChanges(payload, conflicts);
+  if (conflicts.length) throw new Error('Patch 导入失败：\n' + conflicts.slice(0, 12).join('\n') + (conflicts.length > 12 ? '\n其余 ' + (conflicts.length - 12) + ' 项' : ''));
+  if (mapChanges.length) applyChangeSet(mapChanges);
+  if (scenarioPlan) {
+    state.scenario.forces = scenarioPlan.forces;
+    state.scenario.sites = scenarioPlan.sites;
+    state.scenario.entities = scenarioPlan.entities;
+    for (const change of importedPatchChanges(payload, 'scenarioChanges')) state.scenarioPatches.set(scenarioPatchKey(change.kind, change.key, change.op, change.field || ''), { ...change });
+  }
+  if (gatePlan) {
+    state.gates = gatePlan;
+    for (const change of importedPatchChanges(payload, 'gateChanges')) state.gatePatches.set('gate:' + change.op + ':' + change.key + ':' + (change.field || ''), { ...change });
+  }
+  if (historyPlan) {
+    state.historyEdits = historyPlan;
+    for (const change of importedPatchChanges(payload, 'historyChanges')) state.historyPatches.set('history:' + change.key + ':' + change.field, { ...change });
+  }
+  if (stageIniPlan) {
+    state.newStageIniGenerals = stageIniPlan.additions;
+    state.stageIniGeneralEdits = stageIniPlan.edits;
+    for (const change of importedPatchChanges(payload, 'stageIniGeneralChanges')) state.stageIniGeneralPatches.set('stageini:import:' + change.key + ':' + (change.field || change.op || ''), { ...change });
+  }
+  refreshScenarioRelations();
+  state.siteIndex = buildSiteIndex(state.meta.siteLinks);
+  renderSitePicker();
+  renderDomainManagers();
+  refreshSide();
+  refreshPatches();
+  scheduleDraw();
+  const counts = [mapChanges.length, importedPatchChanges(payload, 'scenarioChanges').length, importedPatchChanges(payload, 'gateChanges').length, importedPatchChanges(payload, 'historyChanges').length, importedPatchChanges(payload, 'stageIniGeneralChanges').length];
+  els.status.textContent = '已导入 ' + fileName + '（地图/场景/城门/History/ini：' + counts.join('/') + '）';
+  return counts;
+}
+async function loadPatchFile(file) {
+  let payload;
+  try { payload = JSON.parse(await file.text()); }
+  catch (err) { throw new Error(file.name + ' 不是有效 JSON：' + String(err.message || err)); }
+  return applyImportedPatchPayload(payload, file.name);
+}
 function localScenarioFileKey(file, stageName) {
   const name = String(file?.name || '').toLowerCase();
   const stage = String(stageName || '').toLowerCase();
@@ -3109,51 +3326,48 @@ function localScenarioFileKey(file, stageName) {
 }
 async function loadLocalProjectFiles(fileList) {
   const files = Array.from(fileList || []);
-  const mapFile = files.find(file => /.m$/i.test(file.name));
-  if (!mapFile) throw new Error('请选择一个 stageXX.m 文件。');
-  const stageName = mapFile.name.replace(/.m$/i, '');
-  state.localScenarioFiles.clear();
-  for (const file of files) {
-    if (file === mapFile) continue;
-    const key = localScenarioFileKey(file, stageName);
-    if (!key) continue;
-    state.localScenarioFiles.set(key, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
-  }
-  await loadLocalMFile(mapFile);
-  const localDor = state.localScenarioFiles.get('dor');
-  if (localDor?.bytes && state.scenario?.available) {
-    const siteByCoord = new Map(scenarioRows('site').map(site => [String(site.coord_x) + ',' + String(site.coord_y), site]));
-    const gates = [];
-    for (const group of parseDorBytes(localDor.bytes)) {
-      for (const record of group.records) {
-        const raw = record.raw;
-        const site = siteByCoord.get(String(raw[12]) + ',' + String(raw[13])) || null;
-        gates.push({
-          gateKey: 'gate:local:' + group.group + ':' + record.doorIndex,
-          gateIndex: gates.length,
-          group: group.group,
-          doorIndex: record.doorIndex,
-          originalGroup: group.group,
-          originalDoorIndex: record.doorIndex,
-          originalDorKey: dorRecordKey(group.group, record.doorIndex),
-          doorX: raw[0],
-          doorY: raw[1] * 2 + 4,
-          dir: raw[2],
-          siteX: raw[12],
-          siteY: raw[13],
-          siteKey: site?.siteKey || '',
-          cityName: site?.site_name || '',
-          deleted: false,
-        });
-      }
+  const mapFile = files.find(file => /\.m$/i.test(file.name));
+  const patchFiles = files.filter(file => /\.json$/i.test(file.name));
+  if (!mapFile && !patchFiles.length) throw new Error('请选择 stageXX.m 或 Patch JSON 文件。');
+  if (mapFile) {
+    const stageName = mapFile.name.replace(/\.m$/i, '');
+    state.localScenarioFiles.clear();
+    for (const file of files) {
+      if (file === mapFile || patchFiles.includes(file)) continue;
+      const key = localScenarioFileKey(file, stageName);
+      if (!key) continue;
+      state.localScenarioFiles.set(key, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
     }
-    state.gates = normalizeGateRows(gates);
-    refreshScenarioRelations();
-    renderSitePicker();
-    renderDomainManagers();
+    await loadLocalMFile(mapFile);
+    const localDor = state.localScenarioFiles.get('dor');
+    if (localDor?.bytes && state.scenario?.available) {
+      const siteByCoord = new Map(scenarioRows('site').map(site => [String(site.coord_x) + ',' + String(site.coord_y), site]));
+      const gates = [];
+      for (const group of parseDorBytes(localDor.bytes)) {
+        for (const record of group.records) {
+          const raw = record.raw;
+          const site = siteByCoord.get(String(raw[12]) + ',' + String(raw[13])) || null;
+          gates.push({
+            gateKey: 'gate:local:' + group.group + ':' + record.doorIndex,
+            gateIndex: gates.length, group: group.group, doorIndex: record.doorIndex,
+            originalGroup: group.group, originalDoorIndex: record.doorIndex,
+            originalDorKey: dorRecordKey(group.group, record.doorIndex),
+            doorX: raw[0], doorY: raw[1] * 2 + 4, dir: raw[2], siteX: raw[12], siteY: raw[13],
+            siteKey: site?.siteKey || '', cityName: site?.site_name || '', deleted: false,
+          });
+        }
+      }
+      state.gates = normalizeGateRows(gates);
+      refreshScenarioRelations();
+      renderSitePicker();
+      renderDomainManagers();
+    }
   }
-  const loaded = [...state.localScenarioFiles.values()].map(item => item.name);
-  els.status.textContent = '已加载 ' + mapFile.name + (loaded.length ? '，配套文件：' + loaded.join('、') : '');
+  for (const patchFile of patchFiles) await loadPatchFile(patchFile);
+  if (!patchFiles.length && mapFile) {
+    const loaded = [...state.localScenarioFiles.values()].map(item => item.name);
+    els.status.textContent = '已加载 ' + mapFile.name + (loaded.length ? '，配套文件：' + loaded.join('、') : '');
+  }
 }
 async function loadLocalMFile(file) {
   if (!file) return;
@@ -3191,11 +3405,15 @@ function downloadPatch() {
   const payload = {
     format: 'san-editor-patch-v1',
     stage: state.meta.stage,
+    width: state.meta.width,
+    height: state.meta.height,
     fields: state.meta.fields,
     minimap: { dirtyCells: [...state.patches.values()].filter(patch => patch.minimapDirty).map(patch => [patch.x, patch.y]) },
     changes: [...state.patches.values()],
     scenarioChanges: [...state.scenarioPatches.values()],
     gateChanges: [...state.gatePatches.values()],
+    historyChanges: [...state.historyPatches.values()],
+    stageIniGeneralChanges: [...state.stageIniGeneralPatches.values()],
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -4043,7 +4261,7 @@ async function boot() {
   resetEditState(state.meta);
   await loadStagePicker();
 }
-window.sanEditor = { state, els, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, pasteRegionSnapshot, validationIssues };
+window.sanEditor = { state, els, applyImportedPatchPayload, loadPatchFile, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, pasteRegionSnapshot, validationIssues };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>

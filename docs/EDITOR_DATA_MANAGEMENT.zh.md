@@ -62,6 +62,17 @@
 原版 `stage.ini` 的城池和武将二进制行具有已确认的固定偏移。新增对象若没有可复用的原始行，编辑器不能仅增加 xlsx 行后继续导出；这会使 `.stg` 产生越界的 `city_index` 或 `person_id`。校验面板必须把它列为错误，文件导出入口必须阻断。
 
 `stage.ini` 只回写用户在 ini 页实际修改过的字段。加载场景或只编辑 `.stg` 归属，不得把所有 `.stg` 当前值批量覆盖到母表，以免未操作的数据也发生变化。
+## Patch 跨版本迁移
+
+编辑器导出的 `san-editor-patch-v1` 可以通过顶部“导入”重新加载。推荐迁移顺序：
+
+1. 在新版本编辑器中加载目标版本的 `stageXX.m`，并同时选择 `stageXX.dor`、`stageXX.stg`、`stage.ini`、`History.txt` 等配套文件。
+2. 再选择旧版本导出的 `stageXX_patch.json`；也可以把 `.m`、配套文件和 Patch JSON 一次选中。
+3. 检查底部修改数量和校验页，再导出新的数据文件。
+
+组合 Patch 保存地图 Cell、场景、城门、`History.txt` 和 `stage.ini` 武将修改。编辑器也兼容导入独立的 `san-editor-scenario-patch-v1`、`san-editor-dor-patch-v1`、`san-editor-history-patch-v1`。
+
+导入使用 `before -> after` 冲突校验：当前值等于 `before` 时应用，等于 `after` 时视为已经应用；两者都不相等时整体拒绝该 Patch，不允许只落入部分数据域。导入后继续编辑同一字段时保留最初 `before`，只更新最终 `after`，确保下一版本仍能从原始基线重放。
 ## UI 与补丁状态
 
 `activeForceKey`、`activeSiteKey`、`activeEntityKey`、页签状态和列表滚动位置仅属于 UI。选择记录不得改变源数据，也不得重置同一列表的滚动位置。
