@@ -1575,7 +1575,7 @@ function markScenarioDeleted(kind, key) {
 function addScenarioForce() {
   if (!state.scenario) return;
   const index = state.scenario.forces.length;
-  const force = { forceKey: `force:new:${Date.now()}`, forceIndex: index, force_name: `新势力 ${index + 1}`, force_lord_person_id: 0, site_count: 0, siteKeys: [], deleted: false };
+  const force = { forceKey: `force:new:${Date.now()}:${state.scenario.forces.length}`, forceIndex: index, force_name: `新势力 ${index + 1}`, force_lord_person_id: 0, site_count: 0, siteKeys: [], deleted: false };
   state.scenario.forces.push(force);
   state.activeForceKey = force.forceKey;
   refreshScenarioRelations();
@@ -1587,7 +1587,7 @@ function addScenarioSite(forceKey = '') {
   const force = state.scenario.forceByKey.get(forceKey || state.activeForceKey) || scenarioRows('force')[0] || null;
   const cell = state.selected || { col: 0, row: 0 };
   const index = state.scenario.sites.length;
-  const site = { siteKey: `site:new:${Date.now()}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, house_attr: 1, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
+  const site = { siteKey: `site:new:${Date.now()}:${state.scenario.sites.length}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, house_attr: 1, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
   state.scenario.sites.push(site);
   if (force) force.siteKeys.push(site.siteKey);
   refreshScenarioRelations();
@@ -1606,7 +1606,7 @@ function addExistingGeneralToSite(siteKey, rowKey) {
   const force = state.scenario.forceByKey.get(site.parentForceKey) || null;
   const index = state.scenario.entities.length;
   const entity = {
-    entityKey: `entity:new:${Date.now()}:general`,
+    entityKey: `entity:new:${Date.now()}:${state.scenario.entities.length}:general`,
     entityIndex: index,
     entityGroup: 'primary',
     entity_name: general.name || `\u6b66\u5c06 ${general.person_id || index + 1}`,
