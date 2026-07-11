@@ -668,6 +668,7 @@ function buildSiteIndex(siteLinks) {
         forceIndex: site.parent_force_index,
         forceName: site.parent_force_name,
         cityIndex: site.city_index,
+        house_attr: site.house_attr,
         sourceRecordIndex: site.siteIndex,
         mapX: site.coord_x,
         mapY: site.coord_y,
@@ -907,13 +908,18 @@ function renderSitePicker() {
     refreshSiteInfo();
     return;
   }
-  const sites = [...state.siteIndex.cityByKey.values()].sort((a, b) => a.mapY - b.mapY || a.mapX - b.mapX || a.cityName.localeCompare(b.cityName, 'zh-CN'));
-  for (const site of sites) {
-    const option = document.createElement('option');
-    option.value = site.siteKey;
-    option.textContent = `${site.cityName} (${site.mapX},${site.mapY}) / ${site.gateCount} 门`;
-    if (site.siteKey === state.activeSiteKey) option.selected = true;
-    els.sitePicker.append(option);
+  const sites = [...state.siteIndex.cityByKey.values()].sort((a, b) => siteHouseAttrValue(a) - siteHouseAttrValue(b) || a.mapY - b.mapY || a.mapX - b.mapX || a.cityName.localeCompare(b.cityName, 'zh-CN'));
+  for (const group of siteKindGroups(sites)) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = `${group.label} (${group.rows.length})`;
+    for (const site of group.rows) {
+      const option = document.createElement('option');
+      option.value = site.siteKey;
+      option.textContent = `${site.cityName} (${site.mapX},${site.mapY}) / ${site.gateCount} \u95e8`;
+      if (site.siteKey === state.activeSiteKey) option.selected = true;
+      optgroup.append(option);
+    }
+    els.sitePicker.append(optgroup);
   }
   els.sitePicker.disabled = false;
   els.clearSite.disabled = !state.activeSiteKey;
@@ -1565,7 +1571,7 @@ function addScenarioSite(forceKey = '') {
   const force = state.scenario.forceByKey.get(forceKey || state.activeForceKey) || scenarioRows('force')[0] || null;
   const cell = state.selected || { col: 0, row: 0 };
   const index = state.scenario.sites.length;
-  const site = { siteKey: `site:new:${Date.now()}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
+  const site = { siteKey: `site:new:${Date.now()}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, house_attr: 1, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
   state.scenario.sites.push(site);
   if (force) force.siteKeys.push(site.siteKey);
   refreshScenarioRelations();
@@ -1701,6 +1707,20 @@ function siteKindLabel(site) {
   if (houseAttr === 2) return '\u519b\u5be8';
   if (houseAttr === 3) return '\u5c71\u5be8';
   return houseAttr ? `\u672a\u77e5(${houseAttr})` : '\u672a\u5206\u7c7b';
+}
+function siteKindGroups(sites) {
+  const groups = [
+    { value: 1, label: '\u57ce\u6c60', rows: [] },
+    { value: 2, label: '\u519b\u5be8', rows: [] },
+    { value: 3, label: '\u5c71\u5be8', rows: [] },
+    { value: 0, label: '\u672a\u5206\u7c7b', rows: [] },
+  ];
+  const byValue = new Map(groups.map(group => [group.value, group]));
+  for (const site of sites) {
+    const value = siteHouseAttrValue(site);
+    (byValue.get(value) || byValue.get(0)).rows.push(site);
+  }
+  return groups.filter(group => group.rows.length);
 }
 function appendScenarioInput(parent, row, kind, field, numeric = false, label = field) {
   const wrap = document.createElement('label');
