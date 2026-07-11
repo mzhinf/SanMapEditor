@@ -132,6 +132,7 @@ function renderDomainManagers() {}
 addExistingGeneralToSite(site.siteKey, general.stageIniGeneralKey);
 if (state.scenario.entities.length !== 1 || site.entityKeys.length !== 1) throw new Error('武将关系未立即生效');
 if (state.scenario.entities[0].person_id !== 88 || siteRefreshes !== 1) throw new Error('据点 UI 未同步刷新');
+if ('stageIniValues' in state.scenario.entities[0] || 'stageIniGeneralKey' in state.scenario.entities[0]) throw new Error('母表 UI 元数据泄漏到 STG Entity');
 """
         self.run_node(harness + functions + checks)
 
@@ -183,6 +184,63 @@ const added = state.gates[1];
 if (!added || added.doorIndex !== 4 || added.doorX !== 30 || added.doorY !== 40) throw new Error('新增城门初值错误');
 updateGateField(added.gateKey, 'doorX', '99', true);
 if (added.doorX !== 99 || existing.doorX !== 10) throw new Error('新增城门编辑串改已有城门');
+"""
+        self.run_node(harness + functions + checks)
+    def test_new_master_rows_block_binary_export(self) -> None:
+        """验证无二进制母表槽位的新城与新武将会阻断导出。"""
+
+        source = script_source()
+        functions = function_range(source, "validationIssues", "renderValidationPanel")
+        harness = """
+const model = { available: true, fieldLocations: { castle: {}, general: {} } };
+const state = {
+  meta: {
+    records: [[0]], width: 1, height: 1,
+    sidecars: { available: true }, siteLinks: { available: true },
+    scenarioFiles: {
+      dor: { path: 'stage01.dor' }, stg: { path: 'stage01.stg' },
+      stageIni: { path: 'stage.ini' }, stageIniWorkbook: { path: 'stage_ini.xlsx' }
+    }
+  },
+  commonModel: { stageIniPatchModel: model },
+  scenario: { sites: [{ isNew: true, siteKey: 'site:new', house_attr: 0, city_index: 43, stageIniRowKey: '43', deleted: false }] },
+  newStageIniGenerals: [{ isNew: true, stageIniRowKey: '273' }],
+  patches: new Map()
+};
+function canBuildStageIniWorkbook() { return true; }
+function stageIniPatchModel() { return model; }
+function scenarioRows(kind) { return kind === 'site' ? state.scenario.sites : []; }
+function siteHouseAttrValue(site) { return Number(site.house_attr || 0); }
+function unsupportedScenarioChanges() { return []; }
+function recordFieldBounds() { return { min: 0, max: 255 }; }
+"""
+        checks = """
+const errors = validationIssues().filter(issue => issue.level === 'error');
+if (errors.length !== 2) throw new Error('未阻断越界母表引用：' + JSON.stringify(errors));
+if (!errors.some(issue => issue.text.includes('city_index')) || !errors.some(issue => issue.text.includes('person_id'))) throw new Error('错误信息不明确');
+"""
+        self.run_node(harness + functions + checks)
+
+    def test_unedited_stage_ini_stays_byte_identical(self) -> None:
+        """验证仅加载剧本不会把 STG 当前值批量覆盖回 stage.ini。"""
+
+        source = script_source()
+        functions = function_range(source, "stageIniPatchModel", "cloneWorkbookSheets")
+        harness = """
+const model = { available: true, fieldMap: {}, fieldLocations: {} };
+const state = {
+  commonModel: { stageIniPatchModel: model },
+  scenarioPatches: new Map(),
+  stageIniGeneralEdits: new Map(),
+  scenario: { siteByKey: new Map() }
+};
+const SITE_INI_FIELDS = [];
+function stageIniGeneralRows() { return []; }
+"""
+        checks = """
+const original = new Uint8Array([1, 2, 3, 4, 5]);
+const edited = buildEditedStageIniBytes(original);
+if (edited.length !== original.length || edited.some((value, index) => value !== original[index])) throw new Error('未编辑 stage.ini 被污染');
 """
         self.run_node(harness + functions + checks)
 

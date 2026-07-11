@@ -46,6 +46,9 @@ class TestStgEditorPatch(unittest.TestCase):
         self.assertIn('force:0/site:0/entity:0', layout['entities'])
         self.assertIn('siteCountOffset', layout['forces']['force:0'])
         self.assertIn('primaryEntityCountOffset', layout['sites']['force:0/site:0'])
+        self.assertIn('sitePart2PayloadOffset', layout['sites']['force:0/site:0'])
+        self.assertIn('entityPart1PayloadOffset', layout['entities']['force:0/site:0/entity:0'])
+        self.assertGreaterEqual(layout['entities']['force:0/site:0/entity:0']['entityPart1PayloadSize'], 0x30)
         self.assertEqual(
             sorted(layout['sites']['force:0/site:0']['optionalEntityFlagOffsets']),
             ['optional_entity_27c', 'optional_entity_280', 'optional_entity_284', 'optional_entity_288', 'optional_entity_28c'],

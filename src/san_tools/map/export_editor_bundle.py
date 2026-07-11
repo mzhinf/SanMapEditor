@@ -400,6 +400,7 @@ def build_editor_scenario_model(game_dir: Path, stage_name: str) -> dict[str, ob
                 "coord_x": site_body.coord_x,
                 "coord_y": site_body.coord_y,
                 "governor": site_body.governor,
+                "site_serial_010": site.part2.body.site_serial_010,
                 "primary_entity_count": site.primary_entity_count,
                 "entityKeys": entity_keys,
                 "patchFields": patch_index.get(site_key, {}),

@@ -59,9 +59,24 @@
 
 本地导入允许一次选择 stageXX.m 及同名 .dor/.stg、stage.ini、History.txt、heads.dat、stage_ini.xlsx。导出优先使用本次导入的本地二进制；同关卡页面继续使用 bundle 中已经按 KSY 解析的 .stg 场景模型。
 
-原版 stage.ini 的城池和武将二进制行具有已确认的固定偏移。新增对象若没有可复用的原始行，编辑器会把新行写入生成的 xlsx 并保留补丁记录，但不会伪造未知的二进制偏移；校验面板必须显示这一限制。
+原版 `stage.ini` 的城池和武将二进制行具有已确认的固定偏移。新增对象若没有可复用的原始行，编辑器不能仅增加 xlsx 行后继续导出；这会使 `.stg` 产生越界的 `city_index` 或 `person_id`。校验面板必须把它列为错误，文件导出入口必须阻断。
+
+`stage.ini` 只回写用户在 ini 页实际修改过的字段。加载场景或只编辑 `.stg` 归属，不得把所有 `.stg` 当前值批量覆盖到母表，以免未操作的数据也发生变化。
 ## UI 与补丁状态
 
 `activeForceKey`、`activeSiteKey`、`activeEntityKey`、页签状态和列表滚动位置仅属于 UI。选择记录不得改变源数据，也不得重置同一列表的滚动位置。
 
 删除操作先标记 `deleted` 并记录补丁，所有派生数量和关系查询必须排除已删除记录。新增、更新、删除在导出前统一经过校验和二进制重写流程。
+
+## 新增 STG 对象
+
+新增据点不能直接复制对象流中的第一个据点。模板按“同势力且同 `house_attr`、同 `house_attr`、任意据点”的顺序选择；新增 Entity 按“同势力且同武将/士兵类别、同类别、任意 Entity”的顺序选择。
+
+根据 `stg.ksy` 的字段定义，新增据点必须重建 `site_part2_payload` 中的运行坐标、势力组和全局据点序号：
+
+- `runtime_coord_or_spawn_x_004 = coord_x + 1`
+- `runtime_coord_or_spawn_y_008 = floor(coord_y / 2) + 5`
+- `site_kind_or_force_group_00c = parent force index + 1`
+- `site_serial_010 = 重写后对象流中的全局 1-based 据点序号`
+
+新增 Entity 的 `entity_part1_payload.runtime_force_or_ai_side_30` 在该 payload 具有 `0x34` 字节时同步为父势力的 1-based 序号。武将最大兵力、最大武力和最大智力默认取对应当前属性，不能保留模板武将的数值。

@@ -198,7 +198,7 @@ def build_stg_layout_index(blob: bytes) -> dict[str, object]:
             site_key = f"{force_key}/site:{site_index}"
             site_keys.append(site_key)
             site_start = offset
-            _site_part1_payload, _site_part1_size, offset = _read_sized_payload(blob, offset, f"{site_key}.part1")
+            site_part1_payload, site_part1_size, offset = _read_sized_payload(blob, offset, f"{site_key}.part1")
             site_part2_payload, _site_part2_size, offset = _read_sized_payload(blob, offset, f"{site_key}.part2")
             primary_entity_count_offset = offset
             primary_entity_count = _read_u4(blob, offset, f"{site_key}.primary_entity_count")
@@ -207,9 +207,8 @@ def build_stg_layout_index(blob: bytes) -> dict[str, object]:
             entity_keys: list[str] = []
             for entity_index in range(primary_entity_count):
                 entity_key = f"{site_key}/entity:{entity_index}"
-                entity_start = offset
-                _entity_key, offset = _scan_entity_patch_index(blob, offset, entity_key, {})
-                entities[entity_key] = {"span": [entity_start, offset], "kind": "primary"}
+                entity_layout, offset = _scan_entity_layout(blob, offset, entity_key, "primary")
+                entities[entity_key] = entity_layout
                 entity_keys.append(entity_key)
             optional_entity_flag_offsets = {
                 "optional_entity_27c": site_part2_payload + 0x27C,
@@ -221,13 +220,15 @@ def build_stg_layout_index(blob: bytes) -> dict[str, object]:
             for suffix, flag_offset in optional_entity_flag_offsets.items():
                 if _read_u4(blob, flag_offset, f"{site_key}.{suffix}_flag") != 0:
                     entity_key = f"{site_key}/{suffix}"
-                    entity_start = offset
-                    _entity_key, offset = _scan_entity_patch_index(blob, offset, entity_key, {})
-                    entities[entity_key] = {"span": [entity_start, offset], "kind": suffix}
+                    entity_layout, offset = _scan_entity_layout(blob, offset, entity_key, suffix)
+                    entities[entity_key] = entity_layout
                     entity_keys.append(entity_key)
             sites[site_key] = {
                 "span": [site_start, offset],
                 "headerSpan": [site_start, site_header_end],
+                "sitePart1PayloadOffset": site_part1_payload,
+                "sitePart1PayloadSize": site_part1_size,
+                "sitePart2PayloadOffset": site_part2_payload,
                 "primaryEntityCountOffset": primary_entity_count_offset,
                 "optionalEntityFlagOffsets": optional_entity_flag_offsets,
                 "entityKeys": entity_keys,
@@ -250,6 +251,22 @@ def build_stg_layout_index(blob: bytes) -> dict[str, object]:
         "sites": sites,
         "entities": entities,
     }
+
+
+def _scan_entity_layout(blob: bytes, offset: int, entity_key: str, kind: str) -> tuple[dict[str, object], int]:
+    """扫描一个 Entity，并保留按 KSY 重建运行字段所需的块偏移。"""
+
+    entity_start = offset
+    part1_payload, part1_size, offset = _read_sized_payload(blob, offset, f"{entity_key}.part1")
+    part2_payload, part2_size, offset = _read_sized_payload(blob, offset, f"{entity_key}.part2")
+    return {
+        "span": [entity_start, offset],
+        "kind": kind,
+        "entityPart1PayloadOffset": part1_payload,
+        "entityPart1PayloadSize": part1_size,
+        "entityPart2PayloadOffset": part2_payload,
+        "entityPart2PayloadSize": part2_size,
+    }, offset
 
 
 def encode_big5_fixed(text: str, size: int) -> bytes:

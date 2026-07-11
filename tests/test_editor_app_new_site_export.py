@@ -49,6 +49,21 @@ class TestEditorNewSiteExport(unittest.TestCase):
             )
             rebuilt = StgFile.from_bytes(out_path.read_bytes())
             self.assertEqual(sum(len(force.sites) for force in rebuilt.forces), len(scenario["sites"]) + 1)
+            added = next(site for force in rebuilt.forces for site in force.sites if site.site_name == "Site 84")
+            runtime = added.part2.body
+            self.assertEqual((runtime.runtime_coord_or_spawn_x_004, runtime.runtime_coord_or_spawn_y_008), (41, 30))
+            self.assertEqual(runtime.site_kind_or_force_group_00c, 8)
+            self.assertEqual(runtime.site_serial_010, 84)
+            self.assertNotEqual(
+                (runtime.runtime_coord_or_spawn_x_004, runtime.runtime_coord_or_spawn_y_008, runtime.site_serial_010),
+                (187, 120, 1),
+            )
+            self.assertEqual(added.primary_entity_count, 1)
+            general = added.entities[0]
+            self.assertEqual(general.entity_name, "HUANG_SHENG")
+            self.assertEqual(general.part1.body.runtime_force_or_ai_side_30, 8)
+            self.assertEqual(general.part2.body.max_martial_force, 90)
+            self.assertEqual(general.part2.body.max_intellect, 90)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -66,11 +81,22 @@ const entities = meta.scenarioModel.entities.map(row => ({ ...row, deleted: fals
 const first = sites[0];
 const added = {
   ...first,
+  isNew: true,
   siteKey: 'site:new:test', siteIndex: sites.length, site_name: 'Site 84', city_index: 43,
   castle_scale: 1, population: 0, gold: 0, food: 0, coord_x: 40, coord_y: 50,
-  parentForceKey: forces[0].forceKey, entityKeys: [], patchFields: {}, stgLayout: {}, deleted: false
+  parentForceKey: forces[7].forceKey, entityKeys: [], patchFields: {}, stgLayout: {}, deleted: false
 };
 sites.push(added);
+const entityTemplate = entities.find(row => row.parentForceKey === forces[7].forceKey && Number(row.command || 0) > 0);
+entities.push({
+  ...entityTemplate,
+  isNew: true,
+  entityKey: 'entity:new:test', entityIndex: entities.length, entityGroup: 'primary',
+  entity_name: 'HUANG_SHENG', person_id: 278, portrait_id: 10, command: 90,
+  martial_force: 90, intellect: 90, max_martial_force: 90, max_intellect: 90,
+  parentSiteKey: added.siteKey, parentForceKey: forces[7].forceKey,
+  patchFields: {}, stgLayout: {}, deleted: false
+});
 const state = {
   meta,
   scenario: {

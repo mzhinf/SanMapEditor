@@ -1742,6 +1742,8 @@ function addExistingGeneralToSite(siteKey, rowKey) {
   const force = state.scenario.forceByKey.get(site.parentForceKey) || null;
   const index = state.scenario.entities.length;
   const entity = {
+    ...general,
+    isNew: true,
     entityKey: `entity:new:${Date.now()}:${state.scenario.entities.length}:general`,
     entityIndex: index,
     entityGroup: 'primary',
@@ -1757,6 +1759,10 @@ function addExistingGeneralToSite(siteKey, rowKey) {
     martial_force: Number(general.martial_force || 0),
     intellect: Number(general.intellect || 0),
     loyalty: Number(general.loyalty || 0),
+    experience: Number(general.experience || 0),
+    max_troop_count: Number(general.max_troop_count ?? general.troop_count ?? 0),
+    max_martial_force: Number(general.max_martial_force ?? general.martial_force ?? 0),
+    max_intellect: Number(general.max_intellect ?? general.intellect ?? 0),
     parentSiteKey: site.siteKey,
     parent_site_name: site.site_name || '',
     parentForceKey: force?.forceKey || '',
@@ -1764,6 +1770,7 @@ function addExistingGeneralToSite(siteKey, rowKey) {
     actual_force_name: force?.force_name || '',
     deleted: false,
   };
+  for (const field of ['stageIniOnly', 'stageIniReadonly', 'stageIniRowKey', 'stageIniGeneralKey', 'stageIniValues', 'name', 'source', 'rowKey']) delete entity[field];
   state.scenario.entities.push(entity);
   site.entityKeys.push(entity.entityKey);
   state.activeEntityKey = entity.entityKey;
@@ -2433,8 +2440,8 @@ function validationIssues() {
   const stageIniModel = stageIniPatchModel();
   const newSiteWithoutBinaryRow = scenarioRows('site').filter(site => site.isNew && siteHouseAttrValue(site) === 0 && !stageIniModel?.fieldLocations?.castle?.[String(site.stageIniRowKey || site.city_index)]);
   const newGeneralWithoutBinaryRow = state.newStageIniGenerals.filter(row => !stageIniModel?.fieldLocations?.general?.[String(row.stageIniRowKey)]);
-  if (newSiteWithoutBinaryRow.length) issues.push({ level: 'warn', text: '新增城池没有原始 stage.ini 二进制行，将写入 xlsx 与补丁，但不会伪造未知偏移。' });
-  if (newGeneralWithoutBinaryRow.length) issues.push({ level: 'warn', text: '新增武将没有原始 stage.ini 二进制行，将写入 xlsx 与补丁，但不会伪造未知偏移。' });
+  if (newSiteWithoutBinaryRow.length) issues.push({ level: 'error', text: '新增城池没有可写的 stage.ini 二进制母表行，继续导出会产生越界 city_index。' });
+  if (newGeneralWithoutBinaryRow.length) issues.push({ level: 'error', text: '新增武将没有可写的 stage.ini 二进制母表行，继续导出会产生越界 person_id。' });
   const unsupportedScenario = unsupportedScenarioChanges();
   if (unsupportedScenario.length) issues.push({ level: 'warn', text: '.stg 对象新增、删除或归属移动暂未写回二进制：' + unsupportedScenario.length + ' 项会保留在 patch。' });
   for (const patch of state.patches.values()) {
@@ -3298,6 +3305,21 @@ function spanBytes(source, span) {
 function firstTemplate(kind) {
   return scenarioRows(kind).find(row => Array.isArray(row.stgLayout?.span)) || null;
 }
+function siteTemplateFor(row) {
+  const templates = scenarioRows('site').filter(item => Array.isArray(item.stgLayout?.headerSpan));
+  return templates.find(item => item.parentForceKey === row.parentForceKey && Number(item.house_attr || 0) === Number(row.house_attr || 0))
+    || templates.find(item => Number(item.house_attr || 0) === Number(row.house_attr || 0))
+    || templates[0]
+    || null;
+}
+function entityTemplateFor(row) {
+  const templates = scenarioRows('entity').filter(item => Array.isArray(item.stgLayout?.span));
+  const general = Number(row.command || 0) > 0;
+  return templates.find(item => item.parentForceKey === row.parentForceKey && (Number(item.command || 0) > 0) === general)
+    || templates.find(item => (Number(item.command || 0) > 0) === general)
+    || templates[0]
+    || null;
+}
 function relativePatchFields(row, template = null) {
   const source = Object.keys(row.patchFields || {}).length ? row : template;
   const spanStart = Number(source?.stgLayout?.span?.[0]);
@@ -3341,20 +3363,39 @@ function concatBytes(parts) {
   return output;
 }
 function buildEntityChunk(originalBytes, row) {
-  const template = firstTemplate('entity');
+  const template = entityTemplateFor(row);
   const source = Array.isArray(row.stgLayout?.span) ? row : template;
   if (!source) throw new Error('缺少可克隆的 Entity 模板。');
   const chunk = spanBytes(originalBytes, source.stgLayout.span);
-  return patchChunkFields(chunk, row, source);
+  patchChunkFields(chunk, row, source);
+  if (row.isNew || !Array.isArray(row.stgLayout?.span)) {
+    const base = Number(source.stgLayout.span[0]);
+    const payload = Number(source.stgLayout.entityPart1PayloadOffset) - base;
+    const payloadSize = Number(source.stgLayout.entityPart1PayloadSize || 0);
+    if (Number.isFinite(payload) && payloadSize >= 0x34) {
+      const force = state.scenario.forceByKey.get(row.parentForceKey);
+      new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength).setUint32(payload + 0x30, Number(force?.forceIndex ?? 0) + 1, true);
+    }
+  }
+  return chunk;
 }
-function buildSiteChunk(originalBytes, row, entityRows) {
-  const template = firstTemplate('site');
+function buildSiteChunk(originalBytes, row, entityRows, siteSerial) {
+  const template = siteTemplateFor(row);
   const source = Array.isArray(row.stgLayout?.headerSpan) ? row : template;
   if (!source) throw new Error('缺少可克隆的 Site 模板。');
   const header = spanBytes(originalBytes, source.stgLayout.headerSpan);
   patchChunkFields(header, row, source);
   const base = Number(source.stgLayout.span[0]);
   const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  if (row.isNew || !Array.isArray(row.stgLayout?.headerSpan)) {
+    const payload = Number(source.stgLayout.sitePart2PayloadOffset) - base;
+    const force = state.scenario.forceByKey.get(row.parentForceKey);
+    if (!Number.isFinite(payload)) throw new Error('Site 模板缺少 site_part2 payload 偏移。');
+    view.setInt32(payload + 0x004, Number(row.coord_x || 0) + 1, true);
+    view.setInt32(payload + 0x008, Math.floor(Number(row.coord_y || 0) / 2) + 5, true);
+    view.setUint32(payload + 0x00C, Number(force?.forceIndex ?? 0) + 1, true);
+    view.setUint32(payload + 0x010, Number(siteSerial), true);
+  }
   const primaryRows = entityRows.filter(entity => entity.entityGroup === 'primary');
   view.setUint32(Number(source.stgLayout.primaryEntityCountOffset) - base, primaryRows.length, true);
   const primary = primaryRows.map(entity => buildEntityChunk(originalBytes, entity));
@@ -3369,7 +3410,7 @@ function buildSiteChunk(originalBytes, row, entityRows) {
   }
   return concatBytes([header, ...primary, ...optional]);
 }
-function buildForceChunk(originalBytes, row, siteRows, entitiesBySite) {
+function buildForceChunk(originalBytes, row, siteRows, entitiesBySite, siteSerialByKey) {
   const template = firstTemplate('force');
   const source = Array.isArray(row.stgLayout?.headerSpan) ? row : template;
   if (!source) throw new Error('缺少可克隆的 Force 模板。');
@@ -3379,7 +3420,7 @@ function buildForceChunk(originalBytes, row, siteRows, entitiesBySite) {
   const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
   view.setUint32(Number(source.stgLayout.siteCountOffset) - base, siteRows.length, true);
   view.setUint32(Number(source.stgLayout.siteListPreCountOffset) - base, siteRows.length, true);
-  const siteChunks = siteRows.map(site => buildSiteChunk(originalBytes, site, entitiesBySite.get(site.siteKey) || []));
+  const siteChunks = siteRows.map(site => buildSiteChunk(originalBytes, site, entitiesBySite.get(site.siteKey) || [], siteSerialByKey.get(site.siteKey)));
   return concatBytes([header, ...siteChunks]);
 }
 function buildRewrittenStgBytes(originalBytes) {
@@ -3398,11 +3439,19 @@ function buildRewrittenStgBytes(originalBytes) {
     if (!entitiesBySite.has(entity.parentSiteKey)) entitiesBySite.set(entity.parentSiteKey, []);
     entitiesBySite.get(entity.parentSiteKey).push(entity);
   }
+  const siteSerialByKey = new Map();
+  let nextSiteSerial = Math.max(0, ...sites.filter(site => Array.isArray(site.stgLayout?.span)).map(site => Number(site.site_serial_010 || 0))) + 1;
+  for (const force of forces) {
+    for (const site of sitesByForce.get(force.forceKey) || []) {
+      const serial = Array.isArray(site.stgLayout?.span) ? Number(site.site_serial_010 || 0) : nextSiteSerial++;
+      siteSerialByKey.set(site.siteKey, serial);
+    }
+  }
   const prefix = spanBytes(originalBytes, layout.prefixSpan);
   const prefixView = new DataView(prefix.buffer, prefix.byteOffset, prefix.byteLength);
   prefixView.setUint32(Number(layout.forceCountOffset), forces.length, true);
   prefixView.setUint32(Number(layout.root2ForceCountOffset), forces.length, true);
-  const forceChunks = forces.map(force => buildForceChunk(originalBytes, force, sitesByForce.get(force.forceKey) || [], entitiesBySite));
+  const forceChunks = forces.map(force => buildForceChunk(originalBytes, force, sitesByForce.get(force.forceKey) || [], entitiesBySite, siteSerialByKey));
   const tail = spanBytes(originalBytes, layout.tailSpan);
   return concatBytes([prefix, ...forceChunks, tail]);
 }
@@ -3494,8 +3543,21 @@ function buildEditedHistoryBytes(originalBytes) {
 function stageIniPatchModel() { return state.commonModel?.stageIniPatchModel?.available ? state.commonModel.stageIniPatchModel : null; }
 function canBuildStageIniWorkbook() { return !!stageIniPatchModel()?.workbookSheets?.length; }
 function stageIniRowsForKind(kind) {
-  if (kind === 'site') return scenarioRows('site').filter(site => siteHouseAttrValue(site) === 0);
-  if (kind === 'entity') return stageIniGeneralSaveRows().length ? stageIniGeneralSaveRows() : scenarioRows('entity').filter(isGeneralEntity);
+  if (kind === 'site') {
+    const rows = new Map();
+    for (const change of state.scenarioPatches.values()) {
+      if (change.kind !== 'site' || change.op !== 'update' || !SITE_INI_FIELDS.includes(change.field)) continue;
+      const source = state.scenario.siteByKey.get(change.key);
+      if (!source || source.deleted) continue;
+      const rowKey = String(source.stageIniRowKey || source.city_index || '');
+      if (!rows.has(rowKey)) rows.set(rowKey, { stageIniRowKey: rowKey });
+      rows.get(rowKey)[change.field] = source[change.field];
+    }
+    return [...rows.values()];
+  }
+  if (kind === 'entity') {
+    return stageIniGeneralRows().filter(row => row.isNew || state.stageIniGeneralEdits.has(String(row.stageIniRowKey)));
+  }
   return [];
 }
 function applyStageIniRowPatch(bytes, row, kind) {
@@ -3778,6 +3840,8 @@ async function appendScenarioNamedReference(files, key, name) {
   return file;
 }
 async function buildExportArtifacts() {
+  const blocking = validationIssues().filter(issue => issue.level === 'error');
+  if (blocking.length) throw new Error('导出已阻止：' + blocking.map(issue => issue.text).join('；'));
   const stageName = state.meta.stage;
   const files = [{ name: `${stageName}.m`, bytes: buildStageBytes() }];
   const sidecarFlags = [];
