@@ -348,8 +348,11 @@ const state = {
   dragging: false,
   dragStart: null,
   drawQueued: false,
+  sideRefreshQueued: false,
+  patchRefreshQueued: false,
   redrawConfig: { maxLeft: 20, maxRight: 40, maxUp: 20, maxDown: 20, colRadius: 2, rowRadius: 2 },
   patches: new Map(),
+  recentMapPatchKeys: [],
   originalRecords: null,
   undoStack: [],
   fieldMetaByName: new Map(),
@@ -1079,6 +1082,22 @@ function scheduleDraw() {
   window.requestAnimationFrame(() => {
     state.drawQueued = false;
     draw();
+  });
+}
+function scheduleSideRefresh() {
+  if (state.sideRefreshQueued) return;
+  state.sideRefreshQueued = true;
+  window.requestAnimationFrame(() => {
+    state.sideRefreshQueued = false;
+    refreshSide();
+  });
+}
+function schedulePatchRefresh() {
+  if (state.patchRefreshQueued) return;
+  state.patchRefreshQueued = true;
+  window.requestAnimationFrame(() => {
+    state.patchRefreshQueued = false;
+    refreshPatches();
   });
 }
 function diamondPath(col, row) { const p = cellToWorld(col, row); ctx.beginPath(); ctx.moveTo(p.x + 20, p.y); ctx.lineTo(p.x + 40, p.y + 10); ctx.lineTo(p.x + 20, p.y + 20); ctx.lineTo(p.x, p.y + 10); ctx.closePath(); }
@@ -2370,19 +2389,35 @@ function refreshSide() {
   renderRecordEditor();
 }
 function hasSelectedLayerPatch() { return !!state.selected && state.patches.has(patchKey(state.selected, els.layer.value)); }
+function recentMapPatchPreview(limit = 8) {
+  const seen = new Set();
+  const patches = [];
+  for (let i = state.recentMapPatchKeys.length - 1; i >= 0 && patches.length < limit; i--) {
+    const key = state.recentMapPatchKeys[i];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const patch = state.patches.get(key);
+    if (patch) patches.push(patch);
+  }
+  patches.reverse();
+  return patches;
+}
+function recentMapValues(map, limit = 6) {
+  const values = [];
+  for (const value of map.values()) {
+    values.push(value);
+    if (values.length > limit) values.shift();
+  }
+  return values;
+}
 function refreshPatches() {
-  const mapChanges = [...state.patches.values()];
-  const scenarioChanges = [...state.scenarioPatches.values()];
-  const gateChanges = [...state.gatePatches.values()];
-  const stageIniGeneralChanges = [...state.stageIniGeneralPatches.values()];
-  const historyChanges = [...state.historyPatches.values()];
-  const totalChanges = mapChanges.length + scenarioChanges.length + gateChanges.length + stageIniGeneralChanges.length + historyChanges.length;
+  const totalChanges = state.patches.size + state.scenarioPatches.size + state.gatePatches.size + state.stageIniGeneralPatches.size + state.historyPatches.size;
   els.patchCount.value = String(totalChanges);
-  const mapLines = mapChanges.slice(-8).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`);
-  const scenarioLines = scenarioChanges.slice(-6).map(change => `${change.kind} ${change.op} ${change.field || '-'} ${change.key}`);
-  const gateLines = gateChanges.slice(-6).map(change => `gate ${change.op} ${change.field || '-'} ${change.key}`);
-  const stageIniLines = stageIniGeneralChanges.slice(-6).map(change => `stage.ini general ${change.field || '-'} ${change.key}`);
-  const historyLines = historyChanges.slice(-6).map(change => `History.txt ${change.field || '-'} ${change.key}`);
+  const mapLines = recentMapPatchPreview(8).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`);
+  const scenarioLines = recentMapValues(state.scenarioPatches, 6).map(change => `${change.kind} ${change.op} ${change.field || '-'} ${change.key}`);
+  const gateLines = recentMapValues(state.gatePatches, 6).map(change => `gate ${change.op} ${change.field || '-'} ${change.key}`);
+  const stageIniLines = recentMapValues(state.stageIniGeneralPatches, 6).map(change => `stage.ini general ${change.field || '-'} ${change.key}`);
+  const historyLines = recentMapValues(state.historyPatches, 6).map(change => `History.txt ${change.field || '-'} ${change.key}`);
   els.patchList.textContent = [...mapLines, ...scenarioLines, ...gateLines, ...stageIniLines, ...historyLines].join('\n');
   els.status.textContent = totalChanges ? `\u5df2\u4fee\u6539\uff08${totalChanges}\uff09` : (state.baseImageNote || '\u5c31\u7eea');
   els.undoEdit.disabled = !state.undoStack.length;
@@ -2596,14 +2631,18 @@ function syncPatchFor(cell, field) {
   const after = state.meta.records[idx][fi];
   const key = patchKey(cell, normalized);
   if (before === after) state.patches.delete(key);
-  else state.patches.set(key, { x: cell.col, y: cell.row, field: normalized, before, after, minimapDirty: true });
+  else {
+    state.patches.set(key, { x: cell.col, y: cell.row, field: normalized, before, after, minimapDirty: true });
+    state.recentMapPatchKeys.push(key);
+    if (state.recentMapPatchKeys.length > 2000) state.recentMapPatchKeys.splice(0, state.recentMapPatchKeys.length - 2000);
+  }
 }
 function refreshAfterRecordEdit(cell = null, editedCells = null, changedFields = []) {
   if (cell) state.selected = cell;
   if (editedCells && editedCells.length) rebuildEditedImage(editedCells);
   if (isPointLayer(currentLayerName()) && changedFields.includes(currentLayerName())) renderResourceList(false);
-  refreshSide();
-  refreshPatches();
+  scheduleSideRefresh();
+  schedulePatchRefresh();
   scheduleDraw();
 }
 function applyChangeSet(changes) {
@@ -2699,6 +2738,7 @@ function resetEditState(meta) {
   renderLayerOptions();
   state.originalRecords = state.meta.records.map(record => record.slice());
   state.patches.clear();
+  state.recentMapPatchKeys = [];
   state.scenarioPatches.clear();
   state.stageIniGeneralEdits.clear();
   state.stageIniGeneralPatches.clear();
