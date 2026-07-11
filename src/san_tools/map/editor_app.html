@@ -95,8 +95,11 @@ canvas { display: block; width: 100%; height: 100%; }
 .source-page.active { display: grid; }
 .manager-sublist { display: grid; gap: 4px; max-height: 160px; overflow: auto; }
 .manager-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 5px 6px; border: 1px solid var(--soft); border-radius: 6px; background: #fbfaf7; font-size: 12px; }
-.entity-card { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: start; }
-.portrait { width: 52px; height: 58px; border: 1px solid var(--line); border-radius: 6px; background: #111 center / cover no-repeat; image-rendering: pixelated; }
+.entity-card { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px; align-items: start; }
+.portrait { width: 105px; height: 116px; border: 1px solid var(--line); border-radius: 6px; background-color: #111; background-repeat: no-repeat; image-rendering: pixelated; }
+.field-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 8px; align-items: center; margin: 0; color: var(--muted); font-size: 12px; }
+.field-row .field-key { overflow-wrap: anywhere; }
+.field-row input, .field-row select { width: 100%; min-width: 0; }
 .manager-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, auto); gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
 .record-list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--soft); background: #fff; }
@@ -596,6 +599,7 @@ function normalizeCommonModel(model) {
     historyGenerals: Array.isArray(model?.historyGenerals) ? model.historyGenerals.slice() : [],
     historyTable: model?.historyTable || { available: false, headers: [], rawHeaders: [], rows: [] },
     heads: model?.heads || { available: false },
+    stageIniPatchModel: model?.stageIniPatchModel || { available: false },
   };
 }
 function sourceOutputSize(meta = state.meta) {
@@ -1481,16 +1485,21 @@ function deleteSiteGate(gateKeyValue) {
   storeGatePatch(gate, 'delete', '', { ...gate, deleted: false }, { ...gate });
   refreshGateViews();
 }
-function appendGateInput(parent, gate, field, label, numeric = true) {
+function appendFieldControl(parent, label, control) {
   const wrap = document.createElement('label');
-  wrap.className = 'record-note';
-  wrap.textContent = `${label} `;
+  wrap.className = 'field-row';
+  const key = document.createElement('span');
+  key.className = 'field-key';
+  key.textContent = label;
+  wrap.append(key, control);
+  parent.append(wrap);
+}
+function appendGateInput(parent, gate, field, label, numeric = true) {
   const input = document.createElement('input');
   input.type = numeric ? 'number' : 'text';
   input.value = gate[field] ?? '';
   input.addEventListener('change', () => updateGateField(gateKey(gate), field, input.value, numeric));
-  wrap.append(input);
-  parent.append(wrap);
+  appendFieldControl(parent, label, input);
 }
 function scenarioCollectionName(kind) { return kind === 'entity' ? 'entities' : kind + 's'; }
 function scenarioRows(kind) {
@@ -1587,7 +1596,7 @@ function addScenarioSite(forceKey = '') {
   const force = state.scenario.forceByKey.get(forceKey || state.activeForceKey) || scenarioRows('force')[0] || null;
   const cell = state.selected || { col: 0, row: 0 };
   const index = state.scenario.sites.length;
-  const site = { siteKey: `site:new:${Date.now()}:${state.scenario.sites.length}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, house_attr: 1, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
+  const site = { siteKey: `site:new:${Date.now()}:${state.scenario.sites.length}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, house_attr: 0, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
   state.scenario.sites.push(site);
   if (force) force.siteKeys.push(site.siteKey);
   refreshScenarioRelations();
@@ -1648,6 +1657,13 @@ function scenarioFieldLabel(kind, field) {
   return SCENARIO_FIELD_LABELS[kind]?.[field] || field;
 }
 function scenarioSelectOptions(kind, field) {
+  if (kind === 'site' && field === 'house_attr') {
+    return [
+      { value: '0', label: '\u57ce\u6c60' },
+      { value: '1', label: '\u519b\u5be8' },
+      { value: '2', label: '\u5c71\u5be8' },
+    ];
+  }
   if (kind === 'site' && field === 'parentForceKey') {
     return scenarioRows('force').map(force => ({ value: force.forceKey, label: force.force_name }));
   }
@@ -1723,35 +1739,31 @@ function siteHouseAttrValue(site) {
 }
 function siteKindLabel(site) {
   const houseAttr = siteHouseAttrValue(site);
-  if (houseAttr === 1) return '\u57ce\u6c60';
-  if (houseAttr === 2) return '\u519b\u5be8';
-  if (houseAttr === 3) return '\u5c71\u5be8';
+  if (houseAttr === 0) return '\u57ce\u6c60';
+  if (houseAttr === 1) return '\u519b\u5be8';
+  if (houseAttr === 2) return '\u5c71\u5be8';
   return houseAttr ? `\u672a\u77e5(${houseAttr})` : '\u672a\u5206\u7c7b';
 }
 function siteKindGroups(sites) {
   const groups = [
-    { value: 1, label: '\u57ce\u6c60', rows: [] },
-    { value: 2, label: '\u519b\u5be8', rows: [] },
-    { value: 3, label: '\u5c71\u5be8', rows: [] },
-    { value: 0, label: '\u672a\u5206\u7c7b', rows: [] },
+    { value: 0, label: '\u57ce\u6c60', rows: [] },
+    { value: 1, label: '\u519b\u5be8', rows: [] },
+    { value: 2, label: '\u5c71\u5be8', rows: [] },
+    { value: -1, label: '\u672a\u5206\u7c7b', rows: [] },
   ];
   const byValue = new Map(groups.map(group => [group.value, group]));
   for (const site of sites) {
     const value = siteHouseAttrValue(site);
-    (byValue.get(value) || byValue.get(0)).rows.push(site);
+    (byValue.get(value) || byValue.get(-1)).rows.push(site);
   }
   return groups.filter(group => group.rows.length);
 }
 function appendScenarioInput(parent, row, kind, field, numeric = false, label = field) {
-  const wrap = document.createElement('label');
-  wrap.className = 'record-note';
-  wrap.textContent = `${label} `;
   const input = document.createElement('input');
   input.type = numeric ? 'number' : 'text';
   input.value = row[field] ?? '';
   input.addEventListener('change', () => updateScenarioField(kind, row[`${kind}Key`], field, input.value, numeric));
-  wrap.append(input);
-  parent.append(wrap);
+  appendFieldControl(parent, label, input);
 }
 function renderManagerList(node, rows, emptyText) {
   node.textContent = '';
@@ -1895,16 +1907,12 @@ function appendStageIniGeneralFields(parent, row) {
   const key = String(row.stageIniRowKey || row.person_id || '').replace(/^stageini:/, '');
   for (const header of sheet.headers) {
     if (header === 'row_id') continue;
-    const wrap = document.createElement('label');
-    wrap.className = 'record-note';
-    wrap.textContent = `${header} `;
     const input = document.createElement('input');
     input.type = stageIniGeneralLocation(key, header) ? 'number' : 'text';
     input.value = row.stageIniValues[header] ?? '';
     input.disabled = !stageIniGeneralLocation(key, header);
     input.addEventListener('change', () => updateStageIniGeneralHeader(row.stageIniGeneralKey, header, input.value));
-    wrap.append(input);
-    parent.append(wrap);
+    appendFieldControl(parent, header, input);
   }
 }
 function isGeneralEntity(entity) { return Number(entity?.command || 0) > 0; }
@@ -1950,15 +1958,11 @@ function appendHistoryFields(parent, personId) {
     return;
   }
   for (const field of model.headers || []) {
-    const wrap = document.createElement('label');
-    wrap.className = 'record-note';
-    wrap.textContent = `${field} `;
     const input = document.createElement('input');
     input.value = row[field] ?? '';
     input.disabled = field === '\u7de8\u865f' || field === '\u7f16\u53f7' || field === '\u6b66\u5c07\u540d' || field === '\u6b66\u5c06\u540d';
     input.addEventListener('change', () => updateHistoryField(row.rowKey, field, input.value));
-    wrap.append(input);
-    parent.append(wrap);
+    appendFieldControl(parent, field, input);
   }
 }
 function scenarioGeneralRows() { return scenarioRows('entity').filter(isGeneralEntity); }
@@ -2004,16 +2008,13 @@ function entityPortraitStyle(entity) {
   const count = Number(heads.count || 0);
   const index = Math.max(0, Math.min(count ? count - 1 : Number(entity.portrait_id || 0), Number(entity.portrait_id || 0)));
   const columns = Math.max(1, Number(heads.columns || 16));
-  const tileW = Math.max(1, Math.round(Number(heads.width || 105) / 2));
-  const tileH = Math.max(1, Math.round(Number(heads.height || 116) / 2));
+  const tileW = Math.max(1, Number(heads.width || 105));
+  const tileH = Math.max(1, Number(heads.height || 116));
   const col = index % columns;
   const row = Math.floor(index / columns);
   return `background-image:url('${heads.image}');background-size:${columns * tileW}px auto;background-position:-${col * tileW}px -${row * tileH}px;`;
 }
 function appendScenarioSelect(parent, row, kind, field, options, label = field) {
-  const wrap = document.createElement('label');
-  wrap.className = 'record-note';
-  wrap.textContent = `${label} `;
   const select = document.createElement('select');
   for (const optionData of options) {
     const option = document.createElement('option');
@@ -2023,8 +2024,7 @@ function appendScenarioSelect(parent, row, kind, field, options, label = field) 
     select.append(option);
   }
   select.addEventListener('change', () => updateScenarioField(kind, row[`${kind}Key`], field, select.value));
-  wrap.append(select);
-  parent.append(wrap);
+  appendFieldControl(parent, label, select);
 }
 function buildScenarioListRow(labelText, active, onPick, actionText = '选择') {
   const row = document.createElement('div');
@@ -3230,7 +3230,7 @@ function buildEditedHistoryBytes(originalBytes) {
 function stageIniPatchModel() { return state.commonModel?.stageIniPatchModel?.available ? state.commonModel.stageIniPatchModel : null; }
 function canBuildStageIniWorkbook() { return !!stageIniPatchModel()?.workbookSheets?.length; }
 function stageIniRowsForKind(kind) {
-  if (kind === 'site') return scenarioRows('site').filter(site => siteHouseAttrValue(site) === 1);
+  if (kind === 'site') return scenarioRows('site').filter(site => siteHouseAttrValue(site) === 0);
   if (kind === 'entity') return stageIniGeneralSaveRows().length ? stageIniGeneralSaveRows() : scenarioRows('entity').filter(isGeneralEntity);
   return [];
 }
