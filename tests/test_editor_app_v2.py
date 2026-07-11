@@ -167,6 +167,8 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn('meta.scenarioFiles?.stg?.path', html)
         self.assertIn('buildEditedStageIniBytes', html)
         self.assertIn('buildStageIniWorkbookBytes', html)
+        self.assertIn('function canBuildStageIniWorkbook', html)
+        self.assertIn('if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path)', html)
         self.assertIn('buildXlsxBytes', html)
         self.assertIn('gateChanges', html)
         self.assertIn('SCENARIO_FIELD_LABELS', html)

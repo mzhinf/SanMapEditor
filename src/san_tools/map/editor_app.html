@@ -2254,7 +2254,7 @@ function validationIssues() {
   if (!state.meta.scenarioFiles?.dor?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .dor 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
   if (!state.meta.scenarioFiles?.stg?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .stg 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
   if (!state.meta.scenarioFiles?.stageIni?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage.ini\uff0c\u57ce\u6c60\u4e0e\u6b66\u5c06\u5168\u5c40\u6bcd\u8868\u53ea\u80fd\u5bfc\u51fa patch\u3002' });
-  if (!state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage_ini.xlsx\uff0c\u4fdd\u5b58\u65f6\u4e0d\u4f1a\u751f\u6210\u5de5\u4f5c\u7c3f\u3002' });
+  if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage_ini.xlsx\uff0c\u4fdd\u5b58\u65f6\u4e0d\u4f1a\u751f\u6210\u5de5\u4f5c\u7c3f\u3002' });
   const unsupportedScenario = unsupportedScenarioChanges();
   if (unsupportedScenario.length) issues.push({ level: 'warn', text: '.stg 对象新增、删除或归属移动暂未写回二进制：' + unsupportedScenario.length + ' 项会保留在 patch。' });
   for (const patch of state.patches.values()) {
@@ -3228,6 +3228,7 @@ function buildEditedHistoryBytes(originalBytes) {
 
 
 function stageIniPatchModel() { return state.commonModel?.stageIniPatchModel?.available ? state.commonModel.stageIniPatchModel : null; }
+function canBuildStageIniWorkbook() { return !!stageIniPatchModel()?.workbookSheets?.length; }
 function stageIniRowsForKind(kind) {
   if (kind === 'site') return scenarioRows('site').filter(site => siteHouseAttrValue(site) === 1);
   if (kind === 'entity') return stageIniGeneralSaveRows().length ? stageIniGeneralSaveRows() : scenarioRows('entity').filter(isGeneralEntity);
