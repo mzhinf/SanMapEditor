@@ -371,6 +371,7 @@ const state = {
   activeForceKey: '',
   activeEntityKey: '',
   activeHistoryGeneralKey: '',
+  sourceTabState: new Map(),
   dataOverlayVisible: Object.fromEntries(DATA_OVERLAY_OPTIONS.map(item => [item.key, true])),
 };
 const els = {
@@ -643,6 +644,7 @@ function isPointLayer(name) {
   return state.meta?.pointLayers?.includes(field) || POINT_LAYER_OPTIONS.includes(field);
 }
 function currentLayerName() { return canonicalFieldName(els.layer.value); }
+function shouldShowDataOverlays() { return isResourceLayer(currentLayerName()); }
 function visiblePointLayer() {
   const layer = currentLayerName();
   return isPointLayer(layer) ? layer : null;
@@ -788,10 +790,10 @@ function renderActiveSiteEditor(siteView) {
   }
   stgGeneralPage.append(entityList);
   const stgPage = createSourceTabs([
-    { label: '\u636e\u70b9\u4fe1\u606f', content: stgSitePage },
-    { label: '\u57ce\u95e8\u4fe1\u606f', content: stgGatePage },
-    { label: '\u6b66\u5c06\u4fe1\u606f', content: stgGeneralPage },
-  ]);
+    { key: 'site', label: '\u636e\u70b9\u4fe1\u606f', content: stgSitePage },
+    { key: 'gate', label: '\u57ce\u95e8\u4fe1\u606f', content: stgGatePage },
+    { key: 'general', label: '\u6b66\u5c06\u4fe1\u606f', content: stgGeneralPage },
+  ], `site:${site.siteKey}:stg`);
 
   const dorPage = document.createElement('div');
   const gateTitle = document.createElement('div');
@@ -848,10 +850,10 @@ function renderActiveSiteEditor(siteView) {
   dorPage.append(gateList);
 
   wrap.append(createSourceTabs([
-    { label: 'ini', content: iniPage },
-    { label: 'stg', content: stgPage },
-    { label: 'dor', content: dorPage },
-  ]));
+    { key: 'ini', label: 'ini', content: iniPage },
+    { key: 'stg', label: 'stg', content: stgPage },
+    { key: 'dor', label: 'dor', content: dorPage },
+  ], `site:${site.siteKey}:source`));
   const del = document.createElement('button');
   del.type = 'button';
   del.textContent = '\u5220\u9664\u636e\u70b9';
@@ -988,12 +990,15 @@ function pointPaletteColor(value) {
 function renderDataOverlayControls() {
   if (!els.overlayList) return;
   els.overlayList.textContent = '';
+  const enabled = shouldShowDataOverlays();
   for (const option of DATA_OVERLAY_OPTIONS) {
     const label = document.createElement('label');
     label.className = 'overlay-toggle';
+    label.style.opacity = enabled ? '1' : '.45';
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = state.dataOverlayVisible[option.key] !== false;
+    input.disabled = !enabled;
     input.addEventListener('change', () => { state.dataOverlayVisible[option.key] = input.checked; scheduleDraw(); });
     const swatch = document.createElement('span');
     swatch.className = 'overlay-swatch';
@@ -1144,7 +1149,7 @@ function drawCellDataOverlay(option, col, row, value) {
   ctx.stroke();
 }
 function drawVisiblePointOverlay(viewWidth, viewHeight) {
-  if (!state.meta) return;
+  if (!state.meta || !shouldShowDataOverlays()) return;
   const options = DATA_OVERLAY_OPTIONS
     .filter(option => state.dataOverlayVisible[option.key])
     .map(option => ({ ...option, fieldIndex: fieldIndex(option.key) }))
@@ -1622,22 +1627,28 @@ function appendScenarioFields(parent, row, kind) {
 function appendScenarioFieldsFor(parent, row, kind, fields) {
   for (const field of fields || []) appendScenarioField(parent, row, kind, field);
 }
-function createSourceTabs(sections) {
+function createSourceTabs(sections, stateKey = '') {
   const wrap = document.createElement('div');
   wrap.className = 'manager-detail';
   const tabs = document.createElement('div');
   tabs.className = 'source-tabs';
   const pages = document.createElement('div');
   pages.className = 'source-pages';
+  const sectionKeys = sections.map((section, index) => section.key || section.label || String(index));
+  const savedKey = stateKey ? state.sourceTabState.get(stateKey) : '';
+  const activeKey = sectionKeys.includes(savedKey) ? savedKey : sectionKeys[0];
   sections.forEach((section, index) => {
+    const sectionKey = sectionKeys[index];
+    const active = sectionKey === activeKey;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'source-tab' + (index === 0 ? ' active' : '');
+    button.className = 'source-tab' + (active ? ' active' : '');
     button.textContent = section.label;
     const page = document.createElement('div');
-    page.className = 'source-page' + (index === 0 ? ' active' : '');
+    page.className = 'source-page' + (active ? ' active' : '');
     if (section.content) page.append(section.content);
     button.addEventListener('click', () => {
+      if (stateKey) state.sourceTabState.set(stateKey, sectionKey);
       tabs.querySelectorAll('.source-tab').forEach(item => item.classList.toggle('active', item === button));
       pages.querySelectorAll('.source-page').forEach(item => item.classList.toggle('active', item === page));
     });
@@ -2115,10 +2126,10 @@ function renderDomainManagers() {
     const historyPage = document.createElement('div');
     appendHistoryFields(historyPage, entity.person_id);
     entityDetail.append(createSourceTabs([
-      { label: 'ini', content: iniPage },
-      { label: 'stg', content: stgPage },
-      { label: 'history', content: historyPage },
-    ]));
+      { key: 'ini', label: 'ini', content: iniPage },
+      { key: 'stg', label: 'stg', content: stgPage },
+      { key: 'history', label: 'history', content: historyPage },
+    ], `entity:${entity.entityKey}:source`));
     const del = document.createElement('button');
     del.type = 'button';
     del.textContent = '\u5220\u9664\u6b66\u5c06';
@@ -2150,10 +2161,10 @@ function renderDomainManagers() {
     const historyPage = document.createElement('div');
     appendHistoryFields(historyPage, historyGeneral.person_id);
     entityDetail.append(createSourceTabs([
-      { label: 'ini', content: iniPage },
-      { label: 'stg', content: stgPage },
-      { label: 'history', content: historyPage },
-    ]));
+      { key: 'ini', label: 'ini', content: iniPage },
+      { key: 'stg', label: 'stg', content: stgPage },
+      { key: 'history', label: 'history', content: historyPage },
+    ], `history:${historyGeneralKey(historyGeneral)}:source`));
   }
   entitySplit.append(entityItems, entityDetail);
   els.entityList.append(entitySplit);
@@ -2694,6 +2705,7 @@ function resetEditState(meta) {
   state.historyEdits.clear();
   state.historyPatches.clear();
   state.gatePatches.clear();
+  state.sourceTabState.clear();
   state.gates = normalizeGateRows(state.meta.siteLinks?.gates || []);
   state.scenario = normalizeScenarioModel(state.meta.scenarioModel);
   state.commonModel = normalizeCommonModel(state.meta.commonModel);
@@ -3527,7 +3539,7 @@ els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
 document.getElementById('clearFilter').addEventListener('click', () => { els.resourceFilter.value = ''; renderResourceList(); });
 els.sitePicker.addEventListener('change', () => { setActiveSite(els.sitePicker.value, { focus: !!els.sitePicker.value }); });
 els.clearSite.addEventListener('click', () => { setActiveSite('', { skipDraw: false }); });
-els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); refreshSide(); refreshPatches(); scheduleDraw(); });
+els.layer.addEventListener('change', () => { ensureSelectedResource(currentLayerName()); renderResourceList(); renderDataOverlayControls(); refreshSide(); refreshPatches(); scheduleDraw(); });
 els.resourceFilter.addEventListener('input', () => { renderResourceList(); });
 els.resourceSort.addEventListener('change', () => { renderResourceList(); });
 els.resourceList.addEventListener('scroll', scheduleResourceListRender);
