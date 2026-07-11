@@ -151,7 +151,7 @@ canvas { display: block; width: 100%; height: 100%; }
       <select id="stagePicker"><option value="">当前</option></select>
     </div>
     <div class="toolbar-group">
-      <input id="loadMFile" type="file" accept=".m" hidden>
+      <input id="loadMFile" type="file" accept=".m,.dor,.stg,.ini,.dat,.txt,.xlsx" multiple hidden>
       <button id="openMFile" title="读取单个 .m；完整工程建议使用导出的关卡页面。">导入</button>
       <button id="exportFiles" class="primary">导出</button>
       <button id="exportPatch" class="secondary">Patch</button>
@@ -164,6 +164,7 @@ canvas { display: block; width: 100%; height: 100%; }
       </select>
       <button id="resetView">定位</button>
       <button id="undoEdit">撤销</button>
+      <button id="redoEdit">重做</button>
       <button id="resetCell">恢复图层</button>
       <button id="resetAll">清空修改</button>
     </div>
@@ -376,6 +377,9 @@ const state = {
   recentMapPatchKeys: [],
   originalRecords: null,
   undoStack: [],
+  redoStack: [],
+  localScenarioFiles: new Map(),
+  newStageIniGenerals: [],
   fieldMetaByName: new Map(),
   resourceListModel: null,
   resourceRenderQueued: false,
@@ -405,7 +409,7 @@ const els = {
   layer: document.getElementById('layer'), patchCount: document.getElementById('patchCount'),
   patchList: document.getElementById('patchList'), resourceList: document.getElementById('resourceList'), resourceSpacer: document.getElementById('resourceSpacer'), resourceMeta: document.getElementById('resourceMeta'), resourceFilter: document.getElementById('resourceFilter'),
   overlayList: document.getElementById('overlayList'),
-  resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
+  resourceSort: document.getElementById('resourceSort'), undoEdit: document.getElementById('undoEdit'), redoEdit: document.getElementById('redoEdit'), resetCell: document.getElementById('resetCell'), resetAll: document.getElementById('resetAll'),
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
   exportFiles: document.getElementById('exportFiles'),
   sitePicker: document.getElementById('sitePicker'), clearSite: document.getElementById('clearSite'), siteInfo: document.getElementById('siteInfo'), siteNote: document.getElementById('siteNote'),
@@ -1202,7 +1206,7 @@ function drawCurrentPointLayer(viewWidth, viewHeight) {
   const fi = fieldIndex(layer);
   const range = visibleCellRange(viewWidth, viewHeight);
   if (fi < 0 || !range) return;
-  const radius = 3 / state.transform.scale;
+  const radius = 6 / state.transform.scale;
   ctx.save();
   ctx.lineWidth = 1 / state.transform.scale;
   for (let row = range.minRow; row <= range.maxRow; row++) {
@@ -1478,12 +1482,11 @@ function gateRowsForSite(siteKey) {
 function storeGatePatch(gate, op, field, before, after) {
   const key = gateKey(gate);
   state.gatePatches.set(`gate:${op}:${key}:${field || ''}`, { kind: 'gate', key, op, field, before, after });
-  refreshPatches();
+  schedulePatchRefresh();
 }
 function refreshGateViews() {
   state.siteIndex = buildSiteIndex(state.meta.siteLinks);
   renderSitePicker();
-  renderDomainManagers();
   scheduleDraw();
 }
 function updateGateField(gateKeyValue, field, rawValue, numeric = true) {
@@ -1501,7 +1504,8 @@ function addSiteGate(siteView) {
   if (!siteView) return;
   const index = state.gates.reduce((maxValue, gate) => Math.max(maxValue, Number(gate.gateIndex || 0)), -1) + 1;
   const group = Number.isFinite(Number(siteView.forceIndex)) ? Number(siteView.forceIndex) : 0;
-  const doorIndex = state.gates.filter(gate => !gate.deleted && Number(gate.group) === group).length;
+  const groupGates = state.gates.filter(gate => !gate.deleted && Number(gate.group) === group);
+  const doorIndex = groupGates.reduce((maxValue, gate) => Math.max(maxValue, Number(gate.doorIndex || 0)), -1) + 1;
   const selected = state.selected || { col: Number(siteView.mapX || 0), row: Number(siteView.mapY || 0) };
   const gate = {
     gateKey: `gate:new:${Date.now()}:${state.gates.length}`,
@@ -1558,7 +1562,7 @@ function scenarioRows(kind) {
 function scenarioPatchKey(kind, key, op, field = '') { return `${kind}:${op}:${key}:${field}`; }
 function storeScenarioPatch(kind, key, op, field, before, after) {
   state.scenarioPatches.set(scenarioPatchKey(kind, key, op, field), { kind, key, op, field, before, after });
-  refreshPatches();
+  schedulePatchRefresh();
 }
 function syncSiteGateCoordinates(site, trackChanges = false) {
   if (!site) return;
@@ -1630,8 +1634,9 @@ function updateScenarioField(kind, key, field, rawValue, numeric = false) {
   if (kind === 'site' && (field === 'coord_x' || field === 'coord_y')) syncSiteGateCoordinates(row, true);
   refreshScenarioRelations();
   storeScenarioPatch(kind, key, 'update', field, before, after);
-  renderSitePicker();
-  renderDomainManagers();
+  if (kind === 'site' || (kind === 'entity' && field === 'parentSiteKey')) renderSitePicker();
+  const managerFields = new Set(['force_name', 'site_name', 'parentForceKey', 'coord_x', 'coord_y', 'entity_name', 'command', 'parentSiteKey']);
+  if (kind === 'force' || managerFields.has(field)) renderDomainManagers();
   scheduleDraw();
 }
 function markScenarioDeleted(kind, key) {
@@ -1657,17 +1662,69 @@ function addScenarioForce() {
   storeScenarioPatch('force', force.forceKey, 'add', '', null, { ...force });
   renderDomainManagers();
 }
+function stageIniSiteRows() {
+  const model = stageIniPatchModel();
+  const sheet = (model?.workbookSheets || []).find(item => item.name === 'castle');
+  const config = model?.fieldMap?.site;
+  if (!sheet || !config) return [];
+  return sheet.rows.map((cells, index) => {
+    const values = {};
+    sheet.headers.forEach((header, column) => { values[header] = cells[column] ?? ''; });
+    const row = {
+      stageIniRowKey: String(cells[0] ?? index + 1),
+      stageIniValues: values,
+      title: String(values.title || ''),
+    };
+    for (const [field, header] of Object.entries(config.fields || {})) {
+      const numeric = Number.parseInt(values[header], 10);
+      row[field] = Number.isFinite(numeric) ? numeric : 0;
+    }
+    return row;
+  });
+}
+function nextAvailableStageIniSite() {
+  const used = new Set(scenarioRows('site').map(site => Number(site.city_index || 0)).filter(value => value > 0));
+  return stageIniSiteRows().find(row => Number(row.city_index || 0) > 0 && !used.has(Number(row.city_index))) || null;
+}
 function addScenarioSite(forceKey = '') {
   if (!state.scenario) return;
   const force = state.scenario.forceByKey.get(forceKey || state.activeForceKey) || scenarioRows('force')[0] || null;
   const cell = state.selected || { col: 0, row: 0 };
   const index = state.scenario.sites.length;
-  const site = { siteKey: `site:new:${Date.now()}:${state.scenario.sites.length}`, siteIndex: index, site_name: `新据点 ${index + 1}`, coord_x: cell.col, coord_y: cell.row, city_index: 0, house_attr: 0, parentForceKey: force?.forceKey || '', parent_force_index: force?.forceIndex ?? 0, parent_force_name: force?.force_name || '', primary_entity_count: 0, entityKeys: [], deleted: false };
+  const seed = nextAvailableStageIniSite();
+  const cityIndex = Number(seed?.city_index || 0) || Math.max(0, ...stageIniSiteRows().map(row => Number(row.city_index || 0))) + 1;
+  const site = {
+    siteKey: 'site:new:' + Date.now() + ':' + state.scenario.sites.length,
+    isNew: true,
+    siteIndex: index,
+    site_name: seed?.title || ('Site ' + (index + 1)),
+    city_index: cityIndex,
+    house_attr: Number(seed?.house_attr || 0),
+    castle_scale: Number(seed?.castle_scale || 1),
+    population: Number(seed?.population || 0),
+    gold: Number(seed?.gold || 0),
+    food: Number(seed?.food || 0),
+    standby_soldier: Number(seed?.standby_soldier || 0),
+    develop: Number(seed?.develop || 0),
+    commerce: Number(seed?.commerce || 0),
+    security: Number(seed?.security || 0),
+    coord_x: cell.col,
+    coord_y: cell.row,
+    governor: Number(seed?.governor || 0),
+    stageIniRowKey: seed?.stageIniRowKey || String(cityIndex),
+    stageIniValues: seed?.stageIniValues ? { ...seed.stageIniValues } : {},
+    parentForceKey: force?.forceKey || '',
+    parent_force_index: force?.forceIndex ?? 0,
+    parent_force_name: force?.force_name || '',
+    primary_entity_count: 0,
+    entityKeys: [],
+    deleted: false,
+  };
   state.scenario.sites.push(site);
-  if (force) force.siteKeys.push(site.siteKey);
   refreshScenarioRelations();
   storeScenarioPatch('site', site.siteKey, 'add', '', null, { ...site });
   setActiveSite(site.siteKey, { focus: true });
+  renderSitePicker();
   renderDomainManagers();
 }
 function stageIniGeneralByKey(rowKey) {
@@ -1713,11 +1770,42 @@ function addExistingGeneralToSite(siteKey, rowKey) {
   state.activeHistoryGeneralKey = '';
   refreshScenarioRelations();
   storeScenarioPatch('entity', entity.entityKey, 'add', '', null, { ...entity });
+  renderSitePicker();
   renderDomainManagers();
 }
 function addScenarioEntity() {
-  const general = inactiveStageIniGeneralRows().find(row => Number(row.command || 0) > 0) || null;
-  addExistingGeneralToSite(state.activeSiteKey, general?.stageIniGeneralKey || '');
+  const sheet = stageIniGeneralSheet();
+  if (!sheet) return;
+  const rows = stageIniGeneralRows();
+  const personId = Math.max(0, ...rows.map(row => Number(row.person_id || 0))) + 1;
+  const rowKey = String(personId);
+  const values = Object.fromEntries(sheet.headers.map(header => [header, '0']));
+  values.row_id = rowKey;
+  values.title = 'New General ' + personId;
+  const fieldHeaders = stageIniGeneralFieldHeaders();
+  if (fieldHeaders.person_id) values[fieldHeaders.person_id] = String(personId);
+  if (fieldHeaders.portrait_id) values[fieldHeaders.portrait_id] = '0';
+  if (fieldHeaders.command) values[fieldHeaders.command] = '1';
+  const general = {
+    isNew: true,
+    stageIniOnly: true,
+    stageIniRowKey: rowKey,
+    stageIniGeneralKey: 'stageini:' + rowKey,
+    entityKey: 'stageini:' + rowKey,
+    person_id: personId,
+    portrait_id: 0,
+    command: 1,
+    entity_name: values.title,
+    name: values.title,
+    stageIniValues: values,
+    deleted: false,
+  };
+  state.newStageIniGenerals.push(general);
+  state.activeEntityKey = '';
+  state.activeHistoryGeneralKey = general.stageIniGeneralKey;
+  state.stageIniGeneralPatches.set('stageini:add:' + rowKey, { kind: 'stageIniGeneral', key: rowKey, op: 'add', field: '', before: null, after: { ...general } });
+  schedulePatchRefresh();
+  renderDomainManagers();
 }
 function scenarioFieldLabel(kind, field) {
   return SCENARIO_FIELD_LABELS[kind]?.[field] || field;
@@ -1912,6 +2000,21 @@ function stageIniGeneralRows() {
     return row;
   }) : [];
   const known = new Set(rows.map(row => String(row.stageIniRowKey)));
+  for (const base of state.newStageIniGenerals) {
+    const rowKey = String(base.stageIniRowKey);
+    if (!rowKey || known.has(rowKey)) continue;
+    const values = { ...base.stageIniValues, ...(state.stageIniGeneralEdits.get(rowKey) || {}) };
+    const row = { ...base, stageIniValues: values };
+    row.entity_name = String(values.title || base.entity_name || '');
+    row.name = row.entity_name;
+    for (const [field, header] of Object.entries(fieldHeaders)) {
+      const raw = values[header];
+      const numeric = Number.parseInt(raw, 10);
+      row[field] = Number.isFinite(numeric) ? numeric : raw;
+    }
+    rows.push(row);
+    known.add(rowKey);
+  }
   for (const base of state.commonModel?.generals || []) {
     const rowKey = String(base.record_id_candidate ?? Number(base.record_index ?? 0) + 1);
     if (!rowKey || known.has(rowKey)) continue;
@@ -1966,8 +2069,8 @@ function updateStageIniGeneralHeader(rowKey, header, rawValue) {
   edits[header] = after;
   state.stageIniGeneralEdits.set(key, edits);
   state.stageIniGeneralPatches.set(`stageini:${key}:${header}`, { kind: 'stageIniGeneral', key, field: header, before, after });
-  refreshPatches();
-  renderDomainManagers();
+  schedulePatchRefresh();
+  if (header === 'title' || header === stageIniGeneralFieldHeaders().command || header === stageIniGeneralFieldHeaders().portrait_id) renderDomainManagers();
 }
 function appendStageIniGeneralFields(parent, row) {
   const sheet = stageIniGeneralSheet();
@@ -1976,9 +2079,10 @@ function appendStageIniGeneralFields(parent, row) {
   for (const header of sheet.headers) {
     if (header === 'row_id') continue;
     const input = document.createElement('input');
-    input.type = stageIniGeneralLocation(key, header) ? 'number' : 'text';
+    const mappedNumeric = Object.values(stageIniGeneralFieldHeaders()).includes(header);
+    input.type = stageIniGeneralLocation(key, header) || (row.isNew && mappedNumeric) ? 'number' : 'text';
     input.value = row.stageIniValues[header] ?? '';
-    input.disabled = !stageIniGeneralLocation(key, header);
+    input.disabled = !stageIniGeneralLocation(key, header) && !row.isNew;
     input.addEventListener('change', () => updateStageIniGeneralHeader(row.stageIniGeneralKey, header, input.value));
     appendFieldControl(parent, header, input);
   }
@@ -2012,8 +2116,7 @@ function updateHistoryField(rowKey, field, rawValue) {
   edits[field] = after;
   state.historyEdits.set(key, edits);
   state.historyPatches.set(`history:${key}:${field}`, { kind: 'history', key, field, before, after });
-  refreshPatches();
-  renderDomainManagers();
+  schedulePatchRefresh();
 }
 function appendHistoryFields(parent, personId) {
   const model = historyTableModel();
@@ -2327,6 +2430,11 @@ function validationIssues() {
   if (!state.meta.scenarioFiles?.stg?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .stg 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
   if (!state.meta.scenarioFiles?.stageIni?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage.ini\uff0c\u57ce\u6c60\u4e0e\u6b66\u5c06\u5168\u5c40\u6bcd\u8868\u53ea\u80fd\u5bfc\u51fa patch\u3002' });
   if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage_ini.xlsx\uff0c\u4fdd\u5b58\u65f6\u4e0d\u4f1a\u751f\u6210\u5de5\u4f5c\u7c3f\u3002' });
+  const stageIniModel = stageIniPatchModel();
+  const newSiteWithoutBinaryRow = scenarioRows('site').filter(site => site.isNew && siteHouseAttrValue(site) === 0 && !stageIniModel?.fieldLocations?.castle?.[String(site.stageIniRowKey || site.city_index)]);
+  const newGeneralWithoutBinaryRow = state.newStageIniGenerals.filter(row => !stageIniModel?.fieldLocations?.general?.[String(row.stageIniRowKey)]);
+  if (newSiteWithoutBinaryRow.length) issues.push({ level: 'warn', text: '新增城池没有原始 stage.ini 二进制行，将写入 xlsx 与补丁，但不会伪造未知偏移。' });
+  if (newGeneralWithoutBinaryRow.length) issues.push({ level: 'warn', text: '新增武将没有原始 stage.ini 二进制行，将写入 xlsx 与补丁，但不会伪造未知偏移。' });
   const unsupportedScenario = unsupportedScenarioChanges();
   if (unsupportedScenario.length) issues.push({ level: 'warn', text: '.stg 对象新增、删除或归属移动暂未写回二进制：' + unsupportedScenario.length + ' 项会保留在 patch。' });
   for (const patch of state.patches.values()) {
@@ -2550,6 +2658,7 @@ function refreshPatches() {
   els.patchList.textContent = [...mapLines, ...scenarioLines, ...gateLines, ...stageIniLines, ...historyLines].join('\n');
   els.status.textContent = totalChanges ? `\u5df2\u4fee\u6539\uff08${totalChanges}\uff09` : (state.baseImageNote || '\u5c31\u7eea');
   els.undoEdit.disabled = !state.undoStack.length;
+  els.redoEdit.disabled = !state.redoStack.length;
   els.resetCell.disabled = !hasSelectedLayerPatch();
   els.resetAll.disabled = !state.patches.size;
 }
@@ -2792,6 +2901,7 @@ function applyChangeSet(changes) {
   }
   if (!applied.length) return false;
   state.undoStack.push(applied);
+  state.redoStack = [];
   const last = applied[applied.length - 1];
   const changedFields = [...new Set(applied.map(change => change.field))];
   const needsVisualRefresh = applied.some(change => state.meta.editableLayers.includes(change.field));
@@ -2815,6 +2925,26 @@ function undoLastEdit() {
   const changedFields = [...new Set(changes.map(change => change.field))];
   const needsVisualRefresh = changes.some(change => state.meta.editableLayers.includes(change.field));
   const editedCells = needsVisualRefresh ? [...new Map(changes.map(change => [`${change.x},${change.y}`, { col: change.x, row: change.y }]))].map(([, cell]) => cell) : null;
+  state.redoStack.push(changes);
+  refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells, changedFields);
+}
+function redoLastEdit() {
+  const changes = state.redoStack.pop();
+  if (!changes) return;
+  for (const change of changes) {
+    const cell = { col: change.x, row: change.y };
+    const fi = fieldIndex(change.field);
+    const rec = recordAt(cell);
+    const before = rec[fi];
+    rec[fi] = change.after;
+    updateLayerStats(change.field, before, change.after);
+    syncPatchFor(cell, change.field);
+  }
+  state.undoStack.push(changes);
+  const last = changes[changes.length - 1];
+  const changedFields = [...new Set(changes.map(change => change.field))];
+  const needsVisualRefresh = changes.some(change => state.meta.editableLayers.includes(change.field));
+  const editedCells = needsVisualRefresh ? [...new Map(changes.map(change => [String(change.x) + ',' + String(change.y), { col: change.x, row: change.y }]))].map(([, cell]) => cell) : null;
   refreshAfterRecordEdit({ col: last.x, row: last.y }, editedCells, changedFields);
 }
 function resetSelectedLayerChange() {
@@ -2873,12 +3003,14 @@ function resetEditState(meta) {
   state.stageIniGeneralPatches.clear();
   state.historyEdits.clear();
   state.historyPatches.clear();
+  state.newStageIniGenerals = [];
   state.gatePatches.clear();
   state.sourceTabState.clear();
   state.gates = normalizeGateRows(state.meta.siteLinks?.gates || []);
   state.scenario = normalizeScenarioModel(state.meta.scenarioModel);
   state.commonModel = normalizeCommonModel(state.meta.commonModel);
   state.undoStack = [];
+  state.redoStack = [];
   state.selected = null;
   state.selectedCells.clear();
   state.regionAnchor = null;
@@ -2956,6 +3088,65 @@ function parseStageM(buffer, name = 'local.m') {
     records,
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
   });
+}
+function localScenarioFileKey(file, stageName) {
+  const name = String(file?.name || '').toLowerCase();
+  const stage = String(stageName || '').toLowerCase();
+  if (name === stage + '.dor') return 'dor';
+  if (name === stage + '.stg') return 'stg';
+  if (name === 'stage.ini') return 'stageIni';
+  if (name === 'stage_ini.xlsx') return 'stageIniWorkbook';
+  if (name === 'history.txt') return 'history';
+  if (name === 'heads.dat') return 'heads';
+  return '';
+}
+async function loadLocalProjectFiles(fileList) {
+  const files = Array.from(fileList || []);
+  const mapFile = files.find(file => /.m$/i.test(file.name));
+  if (!mapFile) throw new Error('请选择一个 stageXX.m 文件。');
+  const stageName = mapFile.name.replace(/.m$/i, '');
+  state.localScenarioFiles.clear();
+  for (const file of files) {
+    if (file === mapFile) continue;
+    const key = localScenarioFileKey(file, stageName);
+    if (!key) continue;
+    state.localScenarioFiles.set(key, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
+  }
+  await loadLocalMFile(mapFile);
+  const localDor = state.localScenarioFiles.get('dor');
+  if (localDor?.bytes && state.scenario?.available) {
+    const siteByCoord = new Map(scenarioRows('site').map(site => [String(site.coord_x) + ',' + String(site.coord_y), site]));
+    const gates = [];
+    for (const group of parseDorBytes(localDor.bytes)) {
+      for (const record of group.records) {
+        const raw = record.raw;
+        const site = siteByCoord.get(String(raw[12]) + ',' + String(raw[13])) || null;
+        gates.push({
+          gateKey: 'gate:local:' + group.group + ':' + record.doorIndex,
+          gateIndex: gates.length,
+          group: group.group,
+          doorIndex: record.doorIndex,
+          originalGroup: group.group,
+          originalDoorIndex: record.doorIndex,
+          originalDorKey: dorRecordKey(group.group, record.doorIndex),
+          doorX: raw[0],
+          doorY: raw[1] * 2 + 4,
+          dir: raw[2],
+          siteX: raw[12],
+          siteY: raw[13],
+          siteKey: site?.siteKey || '',
+          cityName: site?.site_name || '',
+          deleted: false,
+        });
+      }
+    }
+    state.gates = normalizeGateRows(gates);
+    refreshScenarioRelations();
+    renderSitePicker();
+    renderDomainManagers();
+  }
+  const loaded = [...state.localScenarioFiles.values()].map(item => item.name);
+  els.status.textContent = '已加载 ' + mapFile.name + (loaded.length ? '，配套文件：' + loaded.join('、') : '');
 }
 async function loadLocalMFile(file) {
   if (!file) return;
@@ -3355,7 +3546,12 @@ function applyWorkbookRowPatch(sheetMap, row, kind) {
   const sheet = sheetMap.get(config.sheet);
   if (!sheet) return;
   const rowId = String(row.stageIniRowKey ?? row[config.row_key] ?? '');
-  const target = sheet.rows.find(item => String(item[0] ?? '') === rowId);
+  let target = sheet.rows.find(item => String(item[0] ?? '') === rowId);
+  if (!target && row.isNew) {
+    target = sheet.headers.map(() => '');
+    target[0] = rowId;
+    sheet.rows.push(target);
+  }
   if (!target) return;
   if (row.stageIniValues) {
     for (const [header, value] of Object.entries(row.stageIniValues)) {
@@ -3553,11 +3749,13 @@ function buildSidecarBytes(suffix) {
   return { bytes: merged, usedFallbackTail: !tailEntry?.tailBase64 };
 }
 async function readScenarioReference(key, suffix) {
+  const local = state.localScenarioFiles.get(key);
+  if (local?.bytes) return { name: local.name || (state.meta.stage + '.' + suffix), bytes: local.bytes.slice() };
   const entry = state.meta.scenarioFiles?.[key];
   if (!entry?.path) return null;
   const response = await fetch(entry.path, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`无法读取 ${entry.path}`);
-  return { name: `${state.meta.stage}.${suffix}`, bytes: new Uint8Array(await response.arrayBuffer()) };
+  if (!response.ok) throw new Error('无法读取 ' + entry.path);
+  return { name: state.meta.stage + '.' + suffix, bytes: new Uint8Array(await response.arrayBuffer()) };
 }
 async function appendScenarioReference(files, key, suffix) {
   const file = await readScenarioReference(key, suffix);
@@ -3565,10 +3763,16 @@ async function appendScenarioReference(files, key, suffix) {
   return file;
 }
 async function appendScenarioNamedReference(files, key, name) {
+  const local = state.localScenarioFiles.get(key);
+  if (local?.bytes) {
+    const file = { name, bytes: local.bytes.slice() };
+    files.push(file);
+    return file;
+  }
   const entry = state.meta.scenarioFiles?.[key];
   if (!entry?.path) return null;
   const response = await fetch(entry.path, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`\u65e0\u6cd5\u8bfb\u53d6 ${entry.path}`);
+  if (!response.ok) throw new Error('无法读取 ' + entry.path);
   const file = { name, bytes: new Uint8Array(await response.arrayBuffer()) };
   files.push(file);
   return file;
@@ -3586,21 +3790,13 @@ async function buildExportArtifacts() {
   if (dorFile) files.push({ ...dorFile, bytes: buildEditedDorBytes(dorFile.bytes) });
   const stgFile = await readScenarioReference('stg', 'stg');
   if (stgFile) files.push({ ...stgFile, bytes: buildEditedStgBytes(stgFile.bytes) });
-  const stageIniEntry = state.meta.scenarioFiles?.stageIni;
-  if (stageIniEntry?.path) {
-    const response = await fetch(stageIniEntry.path, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`\u65e0\u6cd5\u8bfb\u53d6 ${stageIniEntry.path}`);
-    files.push({ name: 'stage.ini', bytes: buildEditedStageIniBytes(new Uint8Array(await response.arrayBuffer())) });
-  }
+  const stageIniFile = await readScenarioReference('stageIni', 'ini');
+  if (stageIniFile) files.push({ name: 'stage.ini', bytes: buildEditedStageIniBytes(stageIniFile.bytes) });
   const workbookBytes = buildStageIniWorkbookBytes();
   if (workbookBytes) files.push({ name: 'stage_ini.xlsx', bytes: workbookBytes });
   else await appendScenarioNamedReference(files, 'stageIniWorkbook', 'stage_ini.xlsx');
-  const historyEntry = state.meta.scenarioFiles?.history;
-  if (historyEntry?.path) {
-    const response = await fetch(historyEntry.path, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`\u65e0\u6cd5\u8bfb\u53d6 ${historyEntry.path}`);
-    files.push({ name: 'History.txt', bytes: buildEditedHistoryBytes(new Uint8Array(await response.arrayBuffer())) });
-  }
+  const historyFile = await readScenarioReference('history', 'txt');
+  if (historyFile) files.push({ name: 'History.txt', bytes: buildEditedHistoryBytes(historyFile.bytes) });
   await appendScenarioReference(files, 'heads', 'heads.dat');
   const scenarioPatch = buildScenarioPatchArtifact();
   if (scenarioPatch) files.push(scenarioPatch);
@@ -3702,10 +3898,11 @@ els.setRegionAnchor.addEventListener('click', () => { if (!state.selected) retur
 els.copyRegion.addEventListener('click', () => { const snapshot = captureRegionSnapshot('区域复制'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已复制区域 ' + snapshot.width + ' x ' + snapshot.height; });
 els.pasteRegion.addEventListener('click', () => { const snapshot = state.regionClipboard || state.compositeObjects.find(item => item.id === state.activeCompositeId); if (!snapshot || !state.selected) return; if (pasteRegionSnapshot(snapshot)) els.status.textContent = '已粘贴 ' + snapshot.name; });
 els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成对象 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
-els.loadMFile.addEventListener('change', () => { loadLocalMFile(els.loadMFile.files?.[0]); els.loadMFile.value = ''; });
+els.loadMFile.addEventListener('change', async () => { try { await loadLocalProjectFiles(els.loadMFile.files); } catch (err) { els.status.textContent = String(err?.message || err); } finally { els.loadMFile.value = ''; } });
 els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
 document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; scheduleDraw(); });
 els.undoEdit.addEventListener('click', undoLastEdit);
+els.redoEdit.addEventListener('click', redoLastEdit);
 els.resetCell.addEventListener('click', resetSelectedLayerChange);
 els.resetAll.addEventListener('click', resetAllChanges);
 document.getElementById('exportPatch').addEventListener('click', downloadPatch);
@@ -3731,6 +3928,11 @@ window.addEventListener('keydown', ev => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
     ev.preventDefault();
     undoLastEdit();
+    return;
+  }
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) {
+    ev.preventDefault();
+    redoLastEdit();
     return;
   }
   if (isEditableTarget(ev.target)) return;
@@ -3777,7 +3979,7 @@ async function boot() {
   resetEditState(state.meta);
   await loadStagePicker();
 }
-window.sanEditor = { state, els, applyPaint, undoLastEdit, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, pasteRegionSnapshot, validationIssues };
+window.sanEditor = { state, els, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, pasteRegionSnapshot, validationIssues };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>

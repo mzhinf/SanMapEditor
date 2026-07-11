@@ -51,6 +51,15 @@
 - `History.txt`：未加入当前剧本的候选武将及历史资料。
 - `heads.dat`：通过 `portrait_id` 读取头像；只提供显示资源，不改变武将关系。
 
+“武将管理 / 新增武将”只创建新的 stage.ini 母表候选，不自动加入任何据点；“据点 / 武将信息 / 添加已有武将”才创建 .stg Entity 并建立据点与势力归属。
+
+## 编辑历史与本地导入
+
+地图 Cell 修改使用独立的撤销栈和重做栈。执行新修改会清空重做栈；撤销后可通过工具栏“重做”、Ctrl+Y 或 Ctrl+Shift+Z 恢复。
+
+本地导入允许一次选择 stageXX.m 及同名 .dor/.stg、stage.ini、History.txt、heads.dat、stage_ini.xlsx。导出优先使用本次导入的本地二进制；同关卡页面继续使用 bundle 中已经按 KSY 解析的 .stg 场景模型。
+
+原版 stage.ini 的城池和武将二进制行具有已确认的固定偏移。新增对象若没有可复用的原始行，编辑器会把新行写入生成的 xlsx 并保留补丁记录，但不会伪造未知的二进制偏移；校验面板必须显示这一限制。
 ## UI 与补丁状态
 
 `activeForceKey`、`activeSiteKey`、`activeEntityKey`、页签状态和列表滚动位置仅属于 UI。选择记录不得改变源数据，也不得重置同一列表的滚动位置。
