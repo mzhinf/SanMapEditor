@@ -2843,10 +2843,12 @@ function parseStageM(buffer, name = 'local.m') {
     ]);
   }
   const stageName = name.replace(/\.m$/i, '');
-  const inheritedSidecars = state.meta?.stage === stageName ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '仅加载 .m 时无法自动读取 sidecar 参考文件' };
-  const inheritedSiteLinks = state.meta?.stage === stageName
+  const sameStage = state.meta?.stage === stageName;
+  const inheritedSidecars = sameStage ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '\u4ec5\u52a0\u8f7d .m \u65f6\u65e0\u6cd5\u81ea\u52a8\u8bfb\u53d6 sidecar \u53c2\u8003\u6587\u4ef6' };
+  const inheritedSiteLinks = sameStage
     ? state.meta.siteLinks
-    : { available: false, cities: [], gates: [], reason: '仅加载单个 .m 文件时，浏览器无法直接读取同目录 .dor / .stg；请优先使用已导出的关卡页面。' };
+    : { available: false, cities: [], gates: [], reason: '\u4ec5\u52a0\u8f7d\u5355\u4e2a .m \u6587\u4ef6\u65f6\uff0c\u6d4f\u89c8\u5668\u65e0\u6cd5\u76f4\u63a5\u8bfb\u53d6\u540c\u76ee\u5f55 .dor / .stg\uff1b\u8bf7\u4f18\u5148\u4f7f\u7528\u5df2\u5bfc\u51fa\u7684\u5173\u5361\u9875\u9762\u3002' };
+  const inheritedScenarioFiles = sameStage ? state.meta.scenarioFiles : {};
   // 仅加载 .m 时没有 bundle 图片 / 资源统计，按 ksy 字段名保留 terrain_tag/blocked/site_trigger/site_area 的统一语义
   return normalizeMeta({
     format: 'san-editor-stage-v1', stage: stageName, width, height, layout: 'stagger', origin: [64, 64],
@@ -2863,8 +2865,9 @@ function parseStageM(buffer, name = 'local.m') {
     minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' },
     sidecars: inheritedSidecars,
     siteLinks: inheritedSiteLinks,
-    scenarioModel: state.meta.stage === stageName ? state.meta.scenarioModel : { available: false, reason: '仅加载 .m 时不会重新读取 .stg。', forces: [], sites: [], entities: [] },
-    commonModel: state.meta.commonModel,
+    scenarioFiles: inheritedScenarioFiles,
+    scenarioModel: sameStage ? state.meta.scenarioModel : { available: false, reason: '\u4ec5\u52a0\u8f7d .m \u65f6\u4e0d\u4f1a\u91cd\u65b0\u8bfb\u53d6 .stg\u3002', forces: [], sites: [], entities: [] },
+    commonModel: sameStage ? state.meta.commonModel : { available: false, reason: '\u4ec5\u52a0\u8f7d .m \u65f6\u4e0d\u4f1a\u91cd\u65b0\u8bfb\u53d6 stage.ini / heads.dat\u3002', generals: [], skills: [], cities: [], soldiers: [] },
     resources: state.meta.resources,
     records,
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
@@ -2877,10 +2880,10 @@ async function loadLocalMFile(file) {
     state.image = null;
     state.minimap = null;
     state.baseImageMode = 'rebuild';
-    state.baseImageNote = '已加载本地 .m，当前视图改用资源重建';
+    state.baseImageNote = meta.scenarioFiles?.stg?.path ? '\u5df2\u52a0\u8f7d\u672c\u5730 .m\uff0c\u5e76\u6cbf\u7528\u540c\u540d .dor/.stg/stage.ini \u5f15\u7528' : '\u5df2\u52a0\u8f7d\u672c\u5730 .m\uff0c\u5f53\u524d\u89c6\u56fe\u6539\u7528\u8d44\u6e90\u91cd\u5efa';
     resetEditState(meta);
     els.stagePicker.value = '';
-    els.status.textContent = `已加载 ${file.name}`;
+    els.status.textContent = meta.scenarioFiles?.stg?.path ? `\u5df2\u52a0\u8f7d ${file.name}\uff0c\u5e76\u4fdd\u7559\u540c\u540d .dor/.stg/stage.ini` : `\u5df2\u52a0\u8f7d ${file.name}`;
   } catch (err) {
     els.status.textContent = String(err.message || err);
   }
