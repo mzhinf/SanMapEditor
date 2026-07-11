@@ -1007,7 +1007,7 @@ function renderDataOverlayControls() {
     swatch.className = 'overlay-swatch';
     swatch.style.background = option.color;
     const text = document.createElement('span');
-    text.textContent = `${option.name} / ${option.label}`;
+    text.textContent = layerOptionLabel(option.key);
     label.append(input, swatch, text);
     els.overlayList.append(label);
   }
@@ -1680,7 +1680,8 @@ function createSourceTabs(sections, stateKey = '') {
 function assignExistingSiteToForce(siteKey, forceKey) {
   const site = state.scenario?.siteByKey.get(siteKey);
   const force = state.scenario?.forceByKey.get(forceKey);
-  if (!site || !force || site.deleted) return;
+  if (!site || !force || site.deleted || force.deleted) return;
+  state.activeForceKey = force.forceKey;
   updateScenarioField('site', site.siteKey, 'parentForceKey', force.forceKey);
   setActiveSite(site.siteKey, { focus: true, skipDraw: true });
 }
@@ -1688,6 +1689,7 @@ function removeSiteFromForce(siteKey) {
   const site = state.scenario?.siteByKey.get(siteKey);
   if (!site || site.deleted) return;
   updateScenarioField('site', site.siteKey, 'parentForceKey', '');
+  if (state.activeSiteKey === site.siteKey) renderSitePicker();
 }
 function siteHouseAttrValue(site) {
   const value = Number(site?.house_attr ?? 0);
@@ -2034,15 +2036,10 @@ function renderDomainManagers() {
     appendScenarioFields(forceDetail, force, 'force');
     const siteToolbar = document.createElement('div');
     siteToolbar.className = 'manager-toolbar';
-    const addSiteForForce = document.createElement('button');
-    addSiteForForce.type = 'button';
-    addSiteForForce.textContent = '新增据点';
-    addSiteForForce.addEventListener('click', () => addScenarioSite(force.forceKey));
-    siteToolbar.append(addSiteForForce);
     const receiveSite = document.createElement('select');
     const receiveEmpty = document.createElement('option');
     receiveEmpty.value = '';
-    receiveEmpty.textContent = '\u63a5\u6536\u5df2\u6709\u636e\u70b9';
+    receiveEmpty.textContent = '\u9009\u62e9\u5df2\u6709\u636e\u70b9';
     receiveSite.append(receiveEmpty);
     for (const site of scenarioRows('site').filter(site => site.parentForceKey !== force.forceKey)) {
       const option = document.createElement('option');
@@ -2052,13 +2049,20 @@ function renderDomainManagers() {
     }
     const receiveButton = document.createElement('button');
     receiveButton.type = 'button';
-    receiveButton.textContent = '\u52a0\u5165';
+    receiveButton.textContent = '\u52a0\u5165\u5df2\u6709\u636e\u70b9';
+    receiveButton.disabled = !receiveSite.value;
+    receiveSite.addEventListener('change', () => { receiveButton.disabled = !receiveSite.value; });
     receiveButton.addEventListener('click', () => assignExistingSiteToForce(receiveSite.value, force.forceKey));
     siteToolbar.append(receiveSite, receiveButton);
     forceDetail.append(siteToolbar);
+    const siteListTitle = document.createElement('div');
+    siteListTitle.className = 'record-name';
+    siteListTitle.textContent = '\u5df2\u52a0\u5165\u636e\u70b9';
+    forceDetail.append(siteListTitle);
     const siteList = document.createElement('div');
     siteList.className = 'manager-sublist';
-    for (const site of scenarioRows('site').filter(site => site.parentForceKey === force.forceKey)) {
+    const forceSites = scenarioRows('site').filter(site => site.parentForceKey === force.forceKey);
+    for (const site of forceSites) {
       const siteRow = document.createElement('div');
       siteRow.className = 'manager-row' + (site.siteKey === state.activeSiteKey ? ' active' : '');
       const label = document.createElement('div');
@@ -2073,6 +2077,12 @@ function renderDomainManagers() {
       remove.addEventListener('click', () => removeSiteFromForce(site.siteKey));
       siteRow.append(label, locate, remove);
       siteList.append(siteRow);
+    }
+    if (!forceSites.length) {
+      const empty = document.createElement('div');
+      empty.className = 'placeholder';
+      empty.textContent = '\u5f53\u524d\u52bf\u529b\u6ca1\u6709\u52a0\u5165\u636e\u70b9\u3002';
+      siteList.append(empty);
     }
     forceDetail.append(siteList);
     const del = document.createElement('button');
