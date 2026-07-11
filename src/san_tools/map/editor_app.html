@@ -355,6 +355,8 @@ const state = {
   scenario: null,
   commonModel: null,
   scenarioPatches: new Map(),
+  stageIniGeneralEdits: new Map(),
+  stageIniGeneralPatches: new Map(),
   gates: [],
   gatePatches: new Map(),
   activeForceKey: '',
@@ -755,20 +757,50 @@ function renderActiveSiteEditor(siteView) {
   }
   wrap.append(gateList);
   const entities = scenarioRows('entity').filter(entity => entity.parentSiteKey === site.siteKey);
+  const generalCount = entities.filter(isGeneralEntity).length;
   const troopTotal = entities.reduce((sum, entity) => sum + Number(entity.troop_count || 0), 0);
   const entityTitle = document.createElement('div');
   entityTitle.className = 'record-name';
-  entityTitle.textContent = `武将 ${entities.length} / 士兵 ${troopTotal}`;
+  entityTitle.textContent = `\u6b66\u5c06 ${generalCount} / \u58eb\u5175 ${troopTotal}`;
   wrap.append(entityTitle);
+  const entityToolbar = document.createElement('div');
+  entityToolbar.className = 'manager-toolbar';
+  const addGeneral = document.createElement('button');
+  addGeneral.type = 'button';
+  addGeneral.textContent = '\u65b0\u589e\u6b66\u5c06';
+  addGeneral.addEventListener('click', () => addScenarioEntity('general'));
+  const addSoldier = document.createElement('button');
+  addSoldier.type = 'button';
+  addSoldier.textContent = '\u65b0\u589e\u58eb\u5175';
+  addSoldier.addEventListener('click', () => addScenarioEntity('soldier'));
+  entityToolbar.append(addGeneral, addSoldier);
+  wrap.append(entityToolbar);
   const entityList = document.createElement('div');
   entityList.className = 'manager-sublist';
   for (const entity of entities) {
-    entityList.append(buildScenarioListRow(`${entity.entity_name} / ${soldierName(entity.soldier_type_id)} / ${entity.troop_count || 0}`, entity.entityKey === state.activeEntityKey, () => { state.activeEntityKey = entity.entityKey; switchInspectorTab('entities'); renderDomainManagers(); }, '编辑'));
+    const row = document.createElement('div');
+    row.className = 'manager-row' + (entity.entityKey === state.activeEntityKey ? ' active' : '');
+    const label = document.createElement('div');
+    label.textContent = `${entity.entity_name} / ${isGeneralEntity(entity) ? '\u6b66\u5c06' : '\u58eb\u5175'} / ${soldierName(entity.soldier_type_id)} / ${entity.troop_count || 0}`;
+    row.append(label);
+    if (isGeneralEntity(entity)) {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = '\u7f16\u8f91';
+      edit.addEventListener('click', () => { state.activeEntityKey = entity.entityKey; state.activeHistoryGeneralKey = ''; switchInspectorTab('entities'); renderDomainManagers(); });
+      row.append(edit);
+    }
+    const delEntity = document.createElement('button');
+    delEntity.type = 'button';
+    delEntity.textContent = '\u5220\u9664';
+    delEntity.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
+    row.append(delEntity);
+    entityList.append(row);
   }
   if (!entities.length) {
     const empty = document.createElement('div');
     empty.className = 'placeholder';
-    empty.textContent = '当前据点没有武将。';
+    empty.textContent = '\u5f53\u524d\u636e\u70b9\u6ca1\u6709\u6b66\u5c06\u6216\u58eb\u5175\u3002';
     entityList.append(empty);
   }
   wrap.append(entityList);
@@ -1471,14 +1503,41 @@ function addScenarioSite(forceKey = '') {
   setActiveSite(site.siteKey, { focus: true });
   renderDomainManagers();
 }
-function addScenarioEntity() {
+function addScenarioEntity(kind = 'general') {
   if (!state.scenario) return;
   const site = state.scenario.siteByKey.get(state.activeSiteKey) || scenarioRows('site')[0] || null;
   const force = site ? state.scenario.forceByKey.get(site.parentForceKey) : null;
   const index = state.scenario.entities.length;
-  const entity = { entityKey: `entity:new:${Date.now()}`, entityIndex: index, entityGroup: 'primary', entity_name: `新武将 ${index + 1}`, person_id: 0, portrait_id: 0, soldier_type_id: 0, troop_count: 0, parentSiteKey: site?.siteKey || '', parent_site_name: site?.site_name || '', parentForceKey: force?.forceKey || '', actual_force_index: force?.forceIndex ?? 0, actual_force_name: force?.force_name || '', deleted: false };
+  const isSoldier = kind === 'soldier';
+  const entity = {
+    entityKey: `entity:new:${Date.now()}:${kind}`,
+    entityIndex: index,
+    entityGroup: 'primary',
+    entity_name: isSoldier ? `\u65b0\u58eb\u5175 ${index + 1}` : `\u65b0\u6b66\u5c06 ${index + 1}`,
+    person_id: 0,
+    portrait_id: 0,
+    static_owner_id: force?.force_lord_person_id || 0,
+    static_location_id: site?.city_index || 0,
+    command: isSoldier ? 0 : 1,
+    soldier_type_id: 0,
+    level: 1,
+    troop_count: isSoldier ? 100 : 0,
+    martial_force: 0,
+    intellect: 0,
+    loyalty: 0,
+    parentSiteKey: site?.siteKey || '',
+    parent_site_name: site?.site_name || '',
+    parentForceKey: force?.forceKey || '',
+    actual_force_index: force?.forceIndex ?? 0,
+    actual_force_name: force?.force_name || '',
+    deleted: false,
+  };
   state.scenario.entities.push(entity);
   if (site) site.entityKeys.push(entity.entityKey);
+  if (!isSoldier) {
+    state.activeEntityKey = entity.entityKey;
+    state.activeHistoryGeneralKey = '';
+  }
   refreshScenarioRelations();
   storeScenarioPatch('entity', entity.entityKey, 'add', '', null, { ...entity });
   renderDomainManagers();
@@ -1581,11 +1640,128 @@ function renderScenarioCollection(node, titleAction, rows, emptyText, buildRow) 
   }
   for (const item of rows) node.append(buildRow(item));
 }
+
+function stageIniGeneralSheet() {
+  const sheet = (stageIniPatchModel()?.workbookSheets || []).find(item => item.name === 'general');
+  return sheet && Array.isArray(sheet.headers) && Array.isArray(sheet.rows) ? sheet : null;
+}
+function stageIniGeneralFieldHeaders() {
+  return stageIniPatchModel()?.fieldMap?.entity?.fields || {};
+}
+function stageIniGeneralLocation(rowKey, header) {
+  return stageIniPatchModel()?.fieldLocations?.general?.[String(rowKey)]?.[header] || null;
+}
+function stageIniGeneralRows() {
+  const sheet = stageIniGeneralSheet();
+  const headers = sheet?.headers || [];
+  const fieldHeaders = stageIniGeneralFieldHeaders();
+  const rows = sheet ? sheet.rows.map((cells, index) => {
+    const rowKey = String(cells[0] ?? index + 1);
+    const values = {};
+    headers.forEach((header, col) => { values[header] = cells[col] ?? ''; });
+    const edits = state.stageIniGeneralEdits.get(rowKey) || {};
+    Object.assign(values, edits);
+    const row = {
+      stageIniOnly: true,
+      stageIniRowKey: rowKey,
+      stageIniGeneralKey: `stageini:${rowKey}`,
+      entityKey: `stageini:${rowKey}`,
+      person_id: Number.parseInt(values[fieldHeaders.person_id] ?? rowKey, 10) || Number.parseInt(rowKey, 10) || 0,
+      entity_name: String(values.title || values.name || `stage.ini ${rowKey}`),
+      name: String(values.title || values.name || `stage.ini ${rowKey}`),
+      stageIniValues: values,
+      deleted: false,
+    };
+    for (const [field, header] of Object.entries(fieldHeaders)) {
+      const raw = values[header];
+      const numeric = Number.parseInt(raw, 10);
+      row[field] = Number.isFinite(numeric) ? numeric : raw;
+    }
+    return row;
+  }) : [];
+  const known = new Set(rows.map(row => String(row.stageIniRowKey)));
+  for (const base of state.commonModel?.generals || []) {
+    const rowKey = String(base.record_id_candidate ?? Number(base.record_index ?? 0) + 1);
+    if (!rowKey || known.has(rowKey)) continue;
+    rows.push({
+      stageIniOnly: true,
+      stageIniReadonly: true,
+      stageIniRowKey: rowKey,
+      stageIniGeneralKey: `stageini:${rowKey}`,
+      entityKey: `stageini:${rowKey}`,
+      person_id: Number.parseInt(rowKey, 10) || 0,
+      portrait_id: Number.parseInt(base.record_index, 10) || 0,
+      command: 0,
+      entity_name: String(base.name || base.label || `stage.ini ${rowKey}`),
+      name: String(base.name || base.label || `stage.ini ${rowKey}`),
+      stageIniValues: { row_id: rowKey, title: String(base.name || base.label || '') },
+      deleted: false,
+    });
+  }
+  return rows;
+}
+
+function stageIniGeneralSaveRows() {
+  const fieldHeaders = stageIniGeneralFieldHeaders();
+  const rows = stageIniGeneralRows();
+  const byPersonId = new Map(rows.map(row => [Number(row.person_id || 0), row]));
+  for (const entity of scenarioGeneralRows()) {
+    const personId = Number(entity.person_id || 0);
+    const row = byPersonId.get(personId);
+    if (!row) continue;
+    for (const [field, header] of Object.entries(fieldHeaders)) {
+      if (!(field in entity)) continue;
+      row[field] = entity[field];
+      row.stageIniValues[header] = entity[field];
+    }
+  }
+  return rows;
+}
+function inactiveStageIniGeneralRows() {
+  const activePersonIds = new Set(scenarioGeneralRows().map(entity => Number(entity.person_id || 0)).filter(Boolean));
+  return stageIniGeneralRows().filter(row => !activePersonIds.has(Number(row.person_id || 0)));
+}
+function updateStageIniGeneralHeader(rowKey, header, rawValue) {
+  const row = stageIniGeneralRows().find(item => item.stageIniGeneralKey === rowKey || item.stageIniRowKey === String(rowKey).replace(/^stageini:/, ''));
+  if (!row) return;
+  const key = String(row.stageIniRowKey || rowKey).replace(/^stageini:/, '');
+  const location = stageIniGeneralLocation(key, header);
+  const after = location ? Number.parseInt(rawValue, 10) : String(rawValue || '');
+  if (location && !Number.isFinite(after)) return;
+  const before = row.stageIniValues?.[header] ?? '';
+  if (String(before) === String(after)) return;
+  const edits = { ...(state.stageIniGeneralEdits.get(key) || {}) };
+  edits[header] = after;
+  state.stageIniGeneralEdits.set(key, edits);
+  state.stageIniGeneralPatches.set(`stageini:${key}:${header}`, { kind: 'stageIniGeneral', key, field: header, before, after });
+  refreshPatches();
+  renderDomainManagers();
+}
+function appendStageIniGeneralFields(parent, row) {
+  const sheet = stageIniGeneralSheet();
+  if (!sheet || !row?.stageIniValues) return;
+  const key = String(row.stageIniRowKey || row.person_id || '').replace(/^stageini:/, '');
+  for (const header of sheet.headers) {
+    if (header === 'row_id') continue;
+    const wrap = document.createElement('label');
+    wrap.className = 'record-note';
+    wrap.textContent = `${header} `;
+    const input = document.createElement('input');
+    input.type = stageIniGeneralLocation(key, header) ? 'number' : 'text';
+    input.value = row.stageIniValues[header] ?? '';
+    input.disabled = !stageIniGeneralLocation(key, header);
+    input.addEventListener('change', () => updateStageIniGeneralHeader(row.stageIniGeneralKey, header, input.value));
+    wrap.append(input);
+    parent.append(wrap);
+  }
+}
 function isGeneralEntity(entity) { return Number(entity?.command || 0) > 0; }
-function historyGeneralKey(row) { return `history:${row.person_id}`; }
+function historyGeneralKey(row) { return row.stageIniGeneralKey || `history:${row.person_id}`; }
 function historyGeneralRows() { return (state.commonModel?.historyGenerals || []).filter(row => Number(row.command || 0) > 0); }
 function scenarioGeneralRows() { return scenarioRows('entity').filter(isGeneralEntity); }
 function inactiveHistoryGeneralRows() {
+  const stageIniRows = inactiveStageIniGeneralRows();
+  if (stageIniRows.length) return stageIniRows;
   const activePersonIds = new Set(scenarioGeneralRows().map(entity => Number(entity.person_id || 0)).filter(Boolean));
   return historyGeneralRows().filter(row => !activePersonIds.has(Number(row.person_id || 0)));
 }
@@ -1596,9 +1772,12 @@ function ensureActiveScenarioKeys() {
   const inactive = inactiveHistoryGeneralRows();
   if (!forces.some(force => force.forceKey === state.activeForceKey)) state.activeForceKey = forces[0]?.forceKey || '';
   if (!sites.some(site => site.siteKey === state.activeSiteKey)) state.activeSiteKey = sites[0]?.siteKey || '';
-  if (!entities.some(entity => entity.entityKey === state.activeEntityKey)) state.activeEntityKey = entities[0]?.entityKey || '';
-  if (state.activeEntityKey) state.activeHistoryGeneralKey = '';
-  else if (!inactive.some(row => historyGeneralKey(row) === state.activeHistoryGeneralKey)) state.activeHistoryGeneralKey = inactive[0] ? historyGeneralKey(inactive[0]) : '';
+  if (state.activeHistoryGeneralKey) {
+    if (!inactive.some(row => historyGeneralKey(row) === state.activeHistoryGeneralKey)) state.activeHistoryGeneralKey = inactive[0] ? historyGeneralKey(inactive[0]) : '';
+    state.activeEntityKey = '';
+  } else if (!entities.some(entity => entity.entityKey === state.activeEntityKey)) {
+    state.activeEntityKey = entities[0]?.entityKey || '';
+  }
 }
 function activeForce() { return state.scenario?.forceByKey.get(state.activeForceKey) || scenarioRows('force')[0] || null; }
 function activeEntity() { return state.activeHistoryGeneralKey ? null : (state.scenario?.entityByKey.get(state.activeEntityKey) || scenarioGeneralRows()[0] || null); }
@@ -1751,7 +1930,7 @@ function renderDomainManagers() {
   const addEntity = document.createElement('button');
   addEntity.type = 'button';
   addEntity.textContent = '新增武将';
-  addEntity.addEventListener('click', addScenarioEntity);
+  addEntity.addEventListener('click', () => addScenarioEntity('general'));
   entityToolbar.append(addEntity);
   els.entityList.append(entityToolbar);
   const entitySplit = document.createElement('div');
@@ -1763,7 +1942,7 @@ function renderDomainManagers() {
   }
   for (const row of inactiveRows) {
     const key = historyGeneralKey(row);
-    entityItems.append(buildScenarioListRow(`${row.name} / \u672a\u52a0\u5165\u5267\u672c / \u7edf\u5fa1 ${row.command || 0}`, key === state.activeHistoryGeneralKey, () => { state.activeEntityKey = ''; state.activeHistoryGeneralKey = key; renderDomainManagers(); }, '\u67e5\u770b'));
+    entityItems.append(buildScenarioListRow(`${row.name} / stage.ini / \u7edf\u5fa1 ${row.command || 0}`, key === state.activeHistoryGeneralKey, () => { state.activeEntityKey = ''; state.activeHistoryGeneralKey = key; renderDomainManagers(); }, '\u7f16\u8f91'));
   }
   if (!entityRows.length && !inactiveRows.length) {
     const empty = document.createElement('div');
@@ -1809,10 +1988,11 @@ function renderDomainManagers() {
     title.textContent = historyGeneral.name;
     const note = document.createElement('div');
     note.className = 'record-note';
-    note.textContent = `History.txt \u672a\u52a0\u5165\u5267\u672c person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0} \u52a0\u5165=${historyGeneral.join_year || '-'}-${historyGeneral.join_month || '-'}-${historyGeneral.join_day || '-'}`;
+    note.textContent = historyGeneral.stageIniOnly ? `stage.ini person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0}` : `History.txt \u672a\u52a0\u5165\u5267\u672c person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0} \u52a0\u5165=${historyGeneral.join_year || '-'}-${historyGeneral.join_month || '-'}-${historyGeneral.join_day || '-'}`;
     fields.append(title, note);
     card.append(portrait, fields);
     entityDetail.append(card);
+    if (historyGeneral.stageIniOnly) appendStageIniGeneralFields(entityDetail, historyGeneral);
   }
   entitySplit.append(entityItems, entityDetail);
   els.entityList.append(entitySplit);
@@ -2022,12 +2202,14 @@ function refreshPatches() {
   const mapChanges = [...state.patches.values()];
   const scenarioChanges = [...state.scenarioPatches.values()];
   const gateChanges = [...state.gatePatches.values()];
-  const totalChanges = mapChanges.length + scenarioChanges.length + gateChanges.length;
+  const stageIniGeneralChanges = [...state.stageIniGeneralPatches.values()];
+  const totalChanges = mapChanges.length + scenarioChanges.length + gateChanges.length + stageIniGeneralChanges.length;
   els.patchCount.value = String(totalChanges);
   const mapLines = mapChanges.slice(-8).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`);
   const scenarioLines = scenarioChanges.slice(-6).map(change => `${change.kind} ${change.op} ${change.field || '-'} ${change.key}`);
   const gateLines = gateChanges.slice(-6).map(change => `gate ${change.op} ${change.field || '-'} ${change.key}`);
-  els.patchList.textContent = [...mapLines, ...scenarioLines, ...gateLines].join('\n');
+  const stageIniLines = stageIniGeneralChanges.slice(-6).map(change => `stage.ini general ${change.field || '-'} ${change.key}`);
+  els.patchList.textContent = [...mapLines, ...scenarioLines, ...gateLines, ...stageIniLines].join('\n');
   els.status.textContent = totalChanges ? `\u5df2\u4fee\u6539\uff08${totalChanges}\uff09` : (state.baseImageNote || '\u5c31\u7eea');
   els.undoEdit.disabled = !state.undoStack.length;
   els.resetCell.disabled = !hasSelectedLayerPatch();
@@ -2344,6 +2526,8 @@ function resetEditState(meta) {
   state.originalRecords = state.meta.records.map(record => record.slice());
   state.patches.clear();
   state.scenarioPatches.clear();
+  state.stageIniGeneralEdits.clear();
+  state.stageIniGeneralPatches.clear();
   state.gatePatches.clear();
   state.gates = normalizeGateRows(state.meta.siteLinks?.gates || []);
   state.scenario = normalizeScenarioModel(state.meta.scenarioModel);
@@ -2730,18 +2914,26 @@ function buildScenarioPatchArtifact() {
 function stageIniPatchModel() { return state.commonModel?.stageIniPatchModel?.available ? state.commonModel.stageIniPatchModel : null; }
 function stageIniRowsForKind(kind) {
   if (kind === 'site') return scenarioRows('site').filter(site => siteHouseAttrValue(site) === 1);
-  if (kind === 'entity') return scenarioRows('entity').filter(isGeneralEntity);
+  if (kind === 'entity') return stageIniGeneralSaveRows().length ? stageIniGeneralSaveRows() : scenarioRows('entity').filter(isGeneralEntity);
   return [];
 }
 function applyStageIniRowPatch(bytes, row, kind) {
   const model = stageIniPatchModel();
   const config = model?.fieldMap?.[kind];
   if (!model || !config) return;
-  const rowId = String(row[config.row_key] ?? '');
+  const rowId = String(row.stageIniRowKey ?? row[config.row_key] ?? '');
   if (!rowId) return;
   const locations = model.fieldLocations?.[config.sheet]?.[rowId];
   if (!locations) return;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (row.stageIniValues) {
+    for (const [header, rawValue] of Object.entries(row.stageIniValues)) {
+      const location = locations[header];
+      const value = Number.parseInt(rawValue, 10);
+      if (!location || !Number.isFinite(value)) continue;
+      view.setUint32(Number(location.byteOffset), value >>> 0, true);
+    }
+  }
   for (const [field, header] of Object.entries(config.fields || {})) {
     if (!(field in row)) continue;
     const location = locations[header];
@@ -2772,9 +2964,15 @@ function applyWorkbookRowPatch(sheetMap, row, kind) {
   if (!model || !config) return;
   const sheet = sheetMap.get(config.sheet);
   if (!sheet) return;
-  const rowId = String(row[config.row_key] ?? '');
+  const rowId = String(row.stageIniRowKey ?? row[config.row_key] ?? '');
   const target = sheet.rows.find(item => String(item[0] ?? '') === rowId);
   if (!target) return;
+  if (row.stageIniValues) {
+    for (const [header, value] of Object.entries(row.stageIniValues)) {
+      const column = sheet.headers.indexOf(header);
+      if (column >= 0) target[column] = String(value ?? '');
+    }
+  }
   for (const [field, header] of Object.entries(config.fields || {})) {
     const column = sheet.headers.indexOf(header);
     if (column < 0 || !(field in row)) continue;

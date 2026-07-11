@@ -5,6 +5,7 @@ import base64
 import json
 import shutil
 import struct
+import uuid
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -659,11 +660,14 @@ def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]
     if not stage_ini.exists() or not txt_dir.exists():
         return {"available": False, "reason": "\u7f3a\u5c11 stage.ini \u6216 other/uft8-game-txt"}
     try:
-        tmp_root = root / ".tmp" / "stage_ini_patch_model"
-        tmp_root.mkdir(parents=True, exist_ok=True)
+        tmp_parent = root / "derived" / "test_tmp" / "stage_ini_patch_model_runs"
+        tmp_parent.mkdir(parents=True, exist_ok=True)
+        tmp_root = tmp_parent / f"stage_ini_patch_model_{uuid.uuid4().hex}"
+        tmp_root.mkdir(parents=False, exist_ok=False)
         shutil.copyfile(stage_ini, tmp_root / "stage.ini")
         shutil.copytree(txt_dir, tmp_root / "uft8-game-txt", dirs_exist_ok=True)
         bundle = build_stage_ini_linkage_bundle(tmp_root)
+        shutil.rmtree(tmp_root, ignore_errors=True)
     except (FileNotFoundError, ValueError, OSError) as exc:
         return {"available": False, "reason": str(exc)}
 
