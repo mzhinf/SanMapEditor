@@ -443,23 +443,32 @@ def _pick_master_rows(rows: list[dict[str, object]], fields: tuple[str, ...], li
     return [{field: row.get(field, "") for field in fields} for row in rows[:limit]]
 
 
-def _read_cp950_tsv(path: Path) -> list[dict[str, str]]:
-    """读取游戏目录中的 Big5/CP950 制表文本，供编辑器只读索引使用。"""
+def _read_cp950_tsv_table(path: Path) -> dict[str, object]:
+    """读取 Big5/CP950 制表文本，并保留原始表头顺序以支持浏览器端回写。"""
 
     if not path.exists():
-        return []
+        return {"available": False, "headers": [], "rawHeaders": [], "rows": [], "reason": f"缺少 {path.name}"}
     text = path.read_text(encoding="cp950", errors="replace")
     lines = [line.rstrip("\r") for line in text.split("\n") if line.strip()]
     if not lines:
-        return []
-    headers = [item.strip() for item in lines[0].split("\t")]
+        return {"available": False, "headers": [], "rawHeaders": [], "rows": [], "reason": f"{path.name} 为空"}
+    raw_headers = [item for item in lines[0].split("\t")]
+    headers = [item.strip() or f"col_{index}" for index, item in enumerate(raw_headers)]
     rows: list[dict[str, str]] = []
     for line in lines[1:]:
         cells = [item.strip() for item in line.split("\t")]
         if not cells or not cells[0]:
             continue
-        rows.append({headers[index] if index < len(headers) else f"col_{index}": value for index, value in enumerate(cells)})
-    return rows
+        row = {headers[index] if index < len(headers) else f"col_{index}": value for index, value in enumerate(cells)}
+        rows.append(row)
+    return {"available": True, "headers": headers, "rawHeaders": raw_headers, "rows": rows}
+
+
+def _read_cp950_tsv(path: Path) -> list[dict[str, str]]:
+    """读取游戏目录中的 Big5/CP950 制表文本，供编辑器索引使用。"""
+
+    table = _read_cp950_tsv_table(path)
+    return list(table.get("rows", []))
 
 
 def _to_int(value: object, default: int = 0) -> int:
@@ -510,6 +519,28 @@ def build_history_general_rows(game_dir: Path, general_master: list[dict[str, ob
     return result
 
 
+def build_history_table_model(game_dir: Path) -> dict[str, object]:
+    """导出 History.txt 的原始列模型，供前端按 history 数据源编辑加入时间等字段。"""
+
+    table = _read_cp950_tsv_table(game_dir / "History.txt")
+    if not table.get("available"):
+        return table
+    rows = []
+    for index, row in enumerate(table.get("rows", [])):
+        values = dict(row)
+        row_key = str(values.get("編號", values.get("编号", ""))).strip() or str(index + 1)
+        values["rowKey"] = row_key
+        rows.append(values)
+    return {
+        "available": True,
+        "source": "History.txt",
+        "path": "History.txt",
+        "headers": table.get("headers", []),
+        "rawHeaders": table.get("rawHeaders", []),
+        "rows": rows,
+    }
+
+
 def build_editor_common_model(root: Path) -> dict[str, object]:
     """导出 stage.ini 中可作为全局武将、技能、城池和兵种索引的轻量母表。"""
 
@@ -528,8 +559,11 @@ def build_editor_common_model(root: Path) -> dict[str, object]:
     game_dir = find_game_dir(root)
     general_master = tables.get("general_master", [])
     history_generals = build_history_general_rows(game_dir, general_master)
+    history_table = build_history_table_model(game_dir)
     common_strings = [str(row.get("name", "")) for rows in (general_master, skill_candidates, tables.get("city_master", []), tables.get("troop_master", [])) for row in rows]
     common_strings.extend(str(row.get("name", "")) for row in history_generals)
+    common_strings.extend(str(header) for header in history_table.get("rawHeaders", []))
+    common_strings.extend(str(value) for row in history_table.get("rows", []) for value in row.values())
     return {
         "available": True,
         "source": "stage.ini",
@@ -537,6 +571,7 @@ def build_editor_common_model(root: Path) -> dict[str, object]:
         "big5CharMap": build_big5_char_map(common_strings),
         "generals": _pick_master_rows(general_master, ("record_index", "record_id_candidate", "name", "label", "family_guess")),
         "historyGenerals": history_generals,
+        "historyTable": history_table,
         "skills": _pick_master_rows(skill_candidates, ("record_index", "name", "label", "family_guess")),
         "cities": _pick_master_rows(tables.get("city_master", []), ("record_index", "name", "label", "place_id_candidate_stage_ini", "family_guess")),
         "soldiers": _pick_master_rows(tables.get("troop_master", []), ("record_index", "name", "label", "family_guess")),
@@ -754,6 +789,7 @@ def copy_scenario_reference_files(game_dir: Path, stage_dir: Path, stage_name: s
         ("dor", f"{stage_name}.dor", f"{stage_name}.dor"),
         ("stg", f"{stage_name}.stg", f"{stage_name}.stg"),
         ("heads", "heads.dat", "heads.dat"),
+        ("history", "History.txt", "History.txt"),
     ):
         source = game_dir / source_name
         if not source.exists():

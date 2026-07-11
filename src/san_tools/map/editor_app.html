@@ -364,6 +364,8 @@ const state = {
   scenarioPatches: new Map(),
   stageIniGeneralEdits: new Map(),
   stageIniGeneralPatches: new Map(),
+  historyEdits: new Map(),
+  historyPatches: new Map(),
   gates: [],
   gatePatches: new Map(),
   activeForceKey: '',
@@ -588,6 +590,7 @@ function normalizeCommonModel(model) {
     cities: Array.isArray(model?.cities) ? model.cities.slice() : [],
     soldiers: Array.isArray(model?.soldiers) ? model.soldiers.slice() : [],
     historyGenerals: Array.isArray(model?.historyGenerals) ? model.historyGenerals.slice() : [],
+    historyTable: model?.historyTable || { available: false, headers: [], rawHeaders: [], rows: [] },
     heads: model?.heads || { available: false },
   };
 }
@@ -1836,6 +1839,56 @@ function isGeneralEntity(entity) { return Number(entity?.command || 0) > 0; }
 function historyGeneralKey(row) { return row.stageIniGeneralKey || `history:${row.person_id}`; }
 function historyGeneralRows() { return (state.commonModel?.historyGenerals || []).filter(row => Number(row.command || 0) > 0); }
 function historyGeneralForPerson(personId) { return historyGeneralRows().find(row => Number(row.person_id || 0) === Number(personId || 0)) || null; }
+
+function historyTableModel() { return state.commonModel?.historyTable?.available ? state.commonModel.historyTable : null; }
+function historyTableRows() {
+  const model = historyTableModel();
+  if (!model) return [];
+  return (model.rows || []).map((row, index) => {
+    const key = String(row.rowKey || (row['\u7de8\u865f'] ?? row['\u7f16\u53f7']) || index + 1);
+    return { ...row, ...(state.historyEdits.get(key) || {}), rowKey: key };
+  });
+}
+function historyTableRowForPerson(personId) {
+  return historyTableRows().find(row => Number((row['\u7de8\u865f'] ?? row['\u7f16\u53f7']) || row.rowKey || 0) === Number(personId || 0)) || null;
+}
+function updateHistoryField(rowKey, field, rawValue) {
+  const key = String(rowKey || '');
+  if (!key || field === 'rowKey') return;
+  const row = historyTableRows().find(item => item.rowKey === key);
+  if (!row) return;
+  const before = row[field] ?? '';
+  const after = String(rawValue ?? '');
+  if (String(before) === after) return;
+  const edits = { ...(state.historyEdits.get(key) || {}) };
+  edits[field] = after;
+  state.historyEdits.set(key, edits);
+  state.historyPatches.set(`history:${key}:${field}`, { kind: 'history', key, field, before, after });
+  refreshPatches();
+  renderDomainManagers();
+}
+function appendHistoryFields(parent, personId) {
+  const model = historyTableModel();
+  const row = historyTableRowForPerson(personId);
+  if (!model || !row) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '\u672a\u5339\u914d\u5230 History.txt \u52a0\u5165\u65f6\u95f4\u3002';
+    parent.append(empty);
+    return;
+  }
+  for (const field of model.headers || []) {
+    const wrap = document.createElement('label');
+    wrap.className = 'record-note';
+    wrap.textContent = `${field} `;
+    const input = document.createElement('input');
+    input.value = row[field] ?? '';
+    input.disabled = field === '\u7de8\u865f' || field === '\u7f16\u53f7' || field === '\u6b66\u5c07\u540d' || field === '\u6b66\u5c06\u540d';
+    input.addEventListener('change', () => updateHistoryField(row.rowKey, field, input.value));
+    wrap.append(input);
+    parent.append(wrap);
+  }
+}
 function scenarioGeneralRows() { return scenarioRows('entity').filter(isGeneralEntity); }
 function inactiveHistoryGeneralRows() {
   const stageIniRows = inactiveStageIniGeneralRows();
@@ -2060,24 +2113,7 @@ function renderDomainManagers() {
     const stgPage = document.createElement('div');
     appendScenarioFields(stgPage, entity, 'entity');
     const historyPage = document.createElement('div');
-    const historyRow = historyGeneralForPerson(entity.person_id);
-    if (historyRow) {
-      for (const [key, value] of Object.entries(historyRow)) {
-        const line = document.createElement('label');
-        line.className = 'record-note';
-        line.textContent = `${key} `;
-        const input = document.createElement('input');
-        input.value = value ?? '';
-        input.disabled = true;
-        line.append(input);
-        historyPage.append(line);
-      }
-    } else {
-      const empty = document.createElement('div');
-      empty.className = 'placeholder';
-      empty.textContent = '\u672a\u5339\u914d\u5230 History.txt \u52a0\u5165\u65f6\u95f4\u3002';
-      historyPage.append(empty);
-    }
+    appendHistoryFields(historyPage, entity.person_id);
     entityDetail.append(createSourceTabs([
       { label: 'ini', content: iniPage },
       { label: 'stg', content: stgPage },
@@ -2112,19 +2148,7 @@ function renderDomainManagers() {
     stgEmpty.textContent = '\u672a\u52a0\u5165\u5267\u672c\uff0c\u6682\u65e0 .stg \u5f52\u5c5e\u4e0e\u636e\u70b9\u5b57\u6bb5\u3002';
     stgPage.append(stgEmpty);
     const historyPage = document.createElement('div');
-    const historyRow = historyGeneralForPerson(historyGeneral.person_id);
-    if (historyRow) {
-      for (const [key, value] of Object.entries(historyRow)) {
-        const line = document.createElement('label');
-        line.className = 'record-note';
-        line.textContent = `${key} `;
-        const input = document.createElement('input');
-        input.value = value ?? '';
-        input.disabled = true;
-        line.append(input);
-        historyPage.append(line);
-      }
-    }
+    appendHistoryFields(historyPage, historyGeneral.person_id);
     entityDetail.append(createSourceTabs([
       { label: 'ini', content: iniPage },
       { label: 'stg', content: stgPage },
@@ -2340,13 +2364,15 @@ function refreshPatches() {
   const scenarioChanges = [...state.scenarioPatches.values()];
   const gateChanges = [...state.gatePatches.values()];
   const stageIniGeneralChanges = [...state.stageIniGeneralPatches.values()];
-  const totalChanges = mapChanges.length + scenarioChanges.length + gateChanges.length + stageIniGeneralChanges.length;
+  const historyChanges = [...state.historyPatches.values()];
+  const totalChanges = mapChanges.length + scenarioChanges.length + gateChanges.length + stageIniGeneralChanges.length + historyChanges.length;
   els.patchCount.value = String(totalChanges);
   const mapLines = mapChanges.slice(-8).map(patch => `${patch.x},${patch.y} ${patch.field}: ${patch.before} -> ${patch.after}`);
   const scenarioLines = scenarioChanges.slice(-6).map(change => `${change.kind} ${change.op} ${change.field || '-'} ${change.key}`);
   const gateLines = gateChanges.slice(-6).map(change => `gate ${change.op} ${change.field || '-'} ${change.key}`);
   const stageIniLines = stageIniGeneralChanges.slice(-6).map(change => `stage.ini general ${change.field || '-'} ${change.key}`);
-  els.patchList.textContent = [...mapLines, ...scenarioLines, ...gateLines, ...stageIniLines].join('\n');
+  const historyLines = historyChanges.slice(-6).map(change => `History.txt ${change.field || '-'} ${change.key}`);
+  els.patchList.textContent = [...mapLines, ...scenarioLines, ...gateLines, ...stageIniLines, ...historyLines].join('\n');
   els.status.textContent = totalChanges ? `\u5df2\u4fee\u6539\uff08${totalChanges}\uff09` : (state.baseImageNote || '\u5c31\u7eea');
   els.undoEdit.disabled = !state.undoStack.length;
   els.resetCell.disabled = !hasSelectedLayerPatch();
@@ -2665,6 +2691,8 @@ function resetEditState(meta) {
   state.scenarioPatches.clear();
   state.stageIniGeneralEdits.clear();
   state.stageIniGeneralPatches.clear();
+  state.historyEdits.clear();
+  state.historyPatches.clear();
   state.gatePatches.clear();
   state.gates = normalizeGateRows(state.meta.siteLinks?.gates || []);
   state.scenario = normalizeScenarioModel(state.meta.scenarioModel);
@@ -2854,6 +2882,20 @@ function encodeBig5Fixed(text, size) {
   while (bytes.length < size) bytes.push(0);
   return bytes;
 }
+function encodeBig5Text(text) {
+  const table = mergedBig5CharMap();
+  const bytes = [];
+  for (const char of String(text || '')) {
+    if (char === '\n') { bytes.push(10); continue; }
+    if (char === '\r') { bytes.push(13); continue; }
+    if (char === '\t') { bytes.push(9); continue; }
+    const encoded = table[char];
+    if (!encoded) throw new Error(`\u7f3a\u5c11 Big5 \u7f16\u7801\u6620\u5c04\uff1a${char}`);
+    bytes.push(...encoded);
+  }
+  return new Uint8Array(bytes);
+}
+
 function scenarioRowForPatch(change) {
   if (!state.scenario) return null;
   if (change.kind === 'force') return state.scenario.forceByKey.get(change.key) || null;
@@ -3047,6 +3089,31 @@ function buildScenarioPatchArtifact() {
     }),
   };
 }
+function buildHistoryPatchArtifact() {
+  if (!state.historyPatches.size) return null;
+  return {
+    name: 'history_patch.json',
+    bytes: jsonBytes({
+      format: 'san-editor-history-patch-v1',
+      stage: state.meta.stage,
+      historyChanges: [...state.historyPatches.values()],
+      rows: historyTableRows(),
+    }),
+  };
+}
+function buildEditedHistoryBytes(originalBytes) {
+  const model = historyTableModel();
+  if (!model) return originalBytes;
+  const rawHeaders = model.rawHeaders?.length ? model.rawHeaders : (model.headers || []);
+  const headers = model.headers || rawHeaders.map(item => String(item || '').trim());
+  const lines = [];
+  lines.push(rawHeaders.join('\t'));
+  for (const row of historyTableRows()) {
+    lines.push(headers.map(header => row[header] ?? '').join('\t'));
+  }
+  return encodeBig5Text(lines.join('\r\n') + '\r\n');
+}
+
 
 function stageIniPatchModel() { return state.commonModel?.stageIniPatchModel?.available ? state.commonModel.stageIniPatchModel : null; }
 function stageIniRowsForKind(kind) {
@@ -3342,11 +3409,19 @@ async function buildExportArtifacts() {
   const workbookBytes = buildStageIniWorkbookBytes();
   if (workbookBytes) files.push({ name: 'stage_ini.xlsx', bytes: workbookBytes });
   else await appendScenarioNamedReference(files, 'stageIniWorkbook', 'stage_ini.xlsx');
+  const historyEntry = state.meta.scenarioFiles?.history;
+  if (historyEntry?.path) {
+    const response = await fetch(historyEntry.path, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`\u65e0\u6cd5\u8bfb\u53d6 ${historyEntry.path}`);
+    files.push({ name: 'History.txt', bytes: buildEditedHistoryBytes(new Uint8Array(await response.arrayBuffer())) });
+  }
   await appendScenarioReference(files, 'heads', 'heads.dat');
   const scenarioPatch = buildScenarioPatchArtifact();
   if (scenarioPatch) files.push(scenarioPatch);
   const dorPatch = buildDorPatchArtifact();
   if (dorPatch) files.push(dorPatch);
+  const historyPatch = buildHistoryPatchArtifact();
+  if (historyPatch) files.push(historyPatch);
   return { files, usedFallbackTail: sidecarFlags.some(Boolean) };
 }
 async function writeFilesToDirectory(dirHandle, files) {
