@@ -208,6 +208,30 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIsNotNone(reset_body)
         self.assertIn('renderDomainManagers();', reset_body.group(1))
 
+    def test_editor_app_preserves_manager_state_and_derives_relations(self) -> None:
+        """验证管理页滚动、直属页签、关系派生和点图层编辑显示。"""
+        html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
+        for marker in (
+            'Array.from(tabs.children)',
+            'Array.from(pages.children)',
+            "appendGateInput(gateCard, gate, 'siteX', scenarioFieldLabel('gate', 'siteX'), true, true)",
+            "appendGateInput(gateCard, gate, 'siteY', scenarioFieldLabel('gate', 'siteY'), true, true)",
+            'syncSiteGateCoordinates(row, true)',
+            'force.site_count = force.siteKeys.length',
+            'site.primary_entity_count += 1',
+            "const SCENARIO_DERIVED_FIELDS = new Set(['site_count', 'primary_entity_count'])",
+            'entityListScrollTop: 0',
+            'state.entityListScrollTop = currentEntityItems.scrollTop',
+            'entityItems.scrollTop = state.entityListScrollTop',
+            'function drawCurrentPointLayer',
+            'Number(row.command || 0) > 0 && !activePersonIds.has',
+            'drawCurrentPointLayer(rect.width, rect.height)',
+            'ctx.arc(p.x + 20, p.y + 10, radius',
+        ):
+            self.assertIn(marker, html)
+        self.assertNotIn("tabs.querySelectorAll('.source-tab')", html)
+        self.assertNotIn("pages.querySelectorAll('.source-page')", html)
+
 class TestEditorBundleScenarioFiles(unittest.TestCase):
     """验证编辑器 bundle 会携带剧本侧参考文件信息。"""
 

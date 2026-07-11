@@ -79,6 +79,10 @@ canvas { display: block; width: 100%; height: 100%; }
 .inspector-body { min-height: 0; overflow: auto; padding: 12px; }
 .inspector-page { display: none; }
 .inspector-page.active { display: grid; gap: 12px; }
+.inspector-page[data-page="sites"], .inspector-page[data-page="entities"] { min-height: 0; height: 100%; }
+.inspector-page[data-page="sites"] > .section, .inspector-page[data-page="entities"] > .section { min-height: 0; display: grid; }
+.inspector-page[data-page="sites"] > .section { grid-template-rows: auto auto auto minmax(0, 1fr); }
+.inspector-page[data-page="entities"] > .section { grid-template-rows: auto minmax(0, 1fr); }
 .kv { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 6px 10px; font-size: 13px; }
 .kv .k { color: var(--muted); }
 .manager-list { display: grid; gap: 8px; }
@@ -88,11 +92,24 @@ canvas { display: block; width: 100%; height: 100%; }
 .manager-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, auto); gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
 .manager-row.active { border-color: var(--accent); background: var(--accent-weak); }
 .manager-detail { display: grid; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.site-note, #entityList { min-height: 0; }
+.site-note > .manager-detail { min-height: 0; height: 100%; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
+.site-note .source-pages, .site-note .source-page { height: 100%; }
+.site-note .source-page > div { min-height: 0; height: 100%; }
+.site-note .source-page > div:not(.source-tab-panel) { overflow: auto; }
+.site-note .manager-sublist { max-height: none; }
+#entityList { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
+#entityList > .manager-split { min-height: 0; grid-template-rows: minmax(96px, 140px) minmax(0, 1fr); }
+#entityList .manager-detail { min-height: 0; overflow: hidden; }
+#entityList .entity-detail { grid-template-rows: auto minmax(0, 1fr) auto; }
+#entityList .source-pages, #entityList .source-page { height: 100%; }
 .source-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .source-tab { height: 28px; padding: 0 8px; font-size: 12px; }
 .source-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.source-tab-panel { min-height: 0; overflow: hidden; grid-template-rows: auto minmax(0, 1fr); }
+.source-pages { min-height: 0; overflow: hidden; }
 .source-page { display: none; gap: 8px; }
-.source-page.active { display: grid; }
+.source-page.active { display: grid; min-height: 0; overflow: auto; align-content: start; }
 .manager-sublist { display: grid; gap: 4px; max-height: 160px; overflow: auto; }
 .manager-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 5px 6px; border: 1px solid var(--soft); border-radius: 6px; background: #fbfaf7; font-size: 12px; }
 .entity-card { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px; align-items: start; }
@@ -325,6 +342,7 @@ const SCENARIO_FIELD_GROUPS = {
 const SITE_INI_FIELDS = ['city_index', 'house_attr', 'castle_scale', 'population', 'gold', 'food', 'standby_soldier', 'develop', 'commerce', 'security', 'governor'];
 const SITE_STG_FIELDS = ['site_name', 'coord_x', 'coord_y', 'primary_entity_count', 'parentForceKey'];
 const SCENARIO_NUMERIC_FIELDS = new Set(['force_lord_person_id', 'force_slot_or_index_14', 'force_index_1based', 'site_count', 'city_index', 'house_attr', 'castle_scale', 'population', 'gold', 'food', 'standby_soldier', 'develop', 'commerce', 'security', 'coord_x', 'coord_y', 'governor', 'primary_entity_count', 'person_id', 'portrait_id', 'static_owner_id', 'static_location_id', 'command', 'soldier_type_id', 'level', 'troop_count', 'martial_force', 'intellect', 'loyalty']);
+const SCENARIO_DERIVED_FIELDS = new Set(['site_count', 'primary_entity_count']);
 const PAINT_LAYER_OPTIONS = [...RESOURCE_LAYER_OPTIONS, ...POINT_LAYER_OPTIONS];
 const MAX_BASE_IMAGE_EDGE = 8192;
 const MAX_BASE_IMAGE_PIXELS = 100000000;
@@ -377,6 +395,7 @@ const state = {
   activeForceKey: '',
   activeEntityKey: '',
   activeHistoryGeneralKey: '',
+  entityListScrollTop: 0,
   sourceTabState: new Map(),
   dataOverlayVisible: Object.fromEntries(DATA_OVERLAY_OPTIONS.map(item => [item.key, true])),
 };
@@ -824,8 +843,8 @@ function renderActiveSiteEditor(siteView) {
     gateCard.append(head);
     appendGateInput(gateCard, gate, 'doorX', scenarioFieldLabel('gate', 'doorX'));
     appendGateInput(gateCard, gate, 'doorY', scenarioFieldLabel('gate', 'doorY'));
-    appendGateInput(gateCard, gate, 'siteX', scenarioFieldLabel('gate', 'siteX'));
-    appendGateInput(gateCard, gate, 'siteY', scenarioFieldLabel('gate', 'siteY'));
+    appendGateInput(gateCard, gate, 'siteX', scenarioFieldLabel('gate', 'siteX'), true, true);
+    appendGateInput(gateCard, gate, 'siteY', scenarioFieldLabel('gate', 'siteY'), true, true);
     appendGateInput(gateCard, gate, 'dir', scenarioFieldLabel('gate', 'dir'));
     appendGateInput(gateCard, gate, 'group', scenarioFieldLabel('gate', 'group'));
     appendGateInput(gateCard, gate, 'doorIndex', scenarioFieldLabel('gate', 'doorIndex'));
@@ -1177,6 +1196,33 @@ function drawCellDataOverlay(option, col, row, value) {
   ctx.lineWidth = 1.8 / state.transform.scale;
   ctx.stroke();
 }
+function drawCurrentPointLayer(viewWidth, viewHeight) {
+  const layer = visiblePointLayer();
+  if (!layer || !state.meta) return;
+  const fi = fieldIndex(layer);
+  const range = visibleCellRange(viewWidth, viewHeight);
+  if (fi < 0 || !range) return;
+  const radius = 3 / state.transform.scale;
+  ctx.save();
+  ctx.lineWidth = 1 / state.transform.scale;
+  for (let row = range.minRow; row <= range.maxRow; row++) {
+    const rowStartX = range.originX + (row & 1 ? 20 : 0);
+    const minCol = Math.max(0, Math.floor((range.left - rowStartX - 24) / 40) - 1);
+    const maxCol = Math.min(state.meta.width - 1, Math.ceil((range.right - rowStartX + 24) / 40) + 1);
+    for (let col = minCol; col <= maxCol; col++) {
+      const value = state.meta.records[row * state.meta.width + col][fi];
+      if (!value) continue;
+      const p = cellToWorld(col, row);
+      ctx.beginPath();
+      ctx.fillStyle = pointPaletteColor(value & 0xFF);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.arc(p.x + 20, p.y + 10, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
 function drawVisiblePointOverlay(viewWidth, viewHeight) {
   if (!state.meta || !shouldShowDataOverlays()) return;
   const options = DATA_OVERLAY_OPTIONS
@@ -1251,6 +1297,7 @@ function draw() {
   ctx.imageSmoothingEnabled = false;
   if (useCompositedImage) ctx.drawImage(image, 0, 0);
   else drawVisibleMapResources(rect.width, rect.height);
+  drawCurrentPointLayer(rect.width, rect.height);
   drawVisiblePointOverlay(rect.width, rect.height);
   drawActiveSiteOverlay();
   ctx.lineWidth = 1 / state.transform.scale;
@@ -1494,11 +1541,13 @@ function appendFieldControl(parent, label, control) {
   wrap.append(key, control);
   parent.append(wrap);
 }
-function appendGateInput(parent, gate, field, label, numeric = true) {
+function appendGateInput(parent, gate, field, label, numeric = true, readonly = false) {
   const input = document.createElement('input');
   input.type = numeric ? 'number' : 'text';
   input.value = gate[field] ?? '';
-  input.addEventListener('change', () => updateGateField(gateKey(gate), field, input.value, numeric));
+  input.disabled = readonly;
+  if (readonly) input.title = '\u5173\u7cfb\u6d3e\u751f\u5b57\u6bb5\uff0c\u4e0e\u5f53\u524d\u636e\u70b9\u5750\u6807\u540c\u6b65';
+  else input.addEventListener('change', () => updateGateField(gateKey(gate), field, input.value, numeric));
   appendFieldControl(parent, label, input);
 }
 function scenarioCollectionName(kind) { return kind === 'entity' ? 'entities' : kind + 's'; }
@@ -1511,13 +1560,25 @@ function storeScenarioPatch(kind, key, op, field, before, after) {
   state.scenarioPatches.set(scenarioPatchKey(kind, key, op, field), { kind, key, op, field, before, after });
   refreshPatches();
 }
+function syncSiteGateCoordinates(site, trackChanges = false) {
+  if (!site) return;
+  const pairs = [['siteX', Number(site.coord_x || 0)], ['siteY', Number(site.coord_y || 0)]];
+  for (const gate of state.gates.filter(item => !item.deleted && item.siteKey === site.siteKey)) {
+    for (const [field, after] of pairs) {
+      const before = Number(gate[field] || 0);
+      if (before === after) continue;
+      gate[field] = after;
+      if (trackChanges) storeGatePatch(gate, 'update', field, before, after);
+    }
+  }
+}
 function refreshScenarioRelations() {
   if (!state.scenario) return;
   state.scenario.forceByKey = new Map(state.scenario.forces.map(force => [force.forceKey, force]));
   state.scenario.siteByKey = new Map(state.scenario.sites.map(site => [site.siteKey, site]));
   state.scenario.entityByKey = new Map(state.scenario.entities.map(entity => [entity.entityKey, entity]));
-  for (const force of state.scenario.forces) force.siteKeys = [];
-  for (const site of state.scenario.sites) site.entityKeys = [];
+  for (const force of state.scenario.forces) { force.siteKeys = []; force.site_count = 0; }
+  for (const site of state.scenario.sites) { site.entityKeys = []; site.primary_entity_count = 0; syncSiteGateCoordinates(site); }
   for (const site of state.scenario.sites) {
     const force = state.scenario.forceByKey.get(site.parentForceKey);
     if (force) {
@@ -1529,13 +1590,17 @@ function refreshScenarioRelations() {
       site.parent_force_name = '';
     }
   }
+  for (const force of state.scenario.forces) force.site_count = force.siteKeys.length;
   for (const entity of state.scenario.entities) {
     const site = state.scenario.siteByKey.get(entity.parentSiteKey);
     const force = site ? state.scenario.forceByKey.get(site.parentForceKey) : null;
     if (site) {
       entity.parent_site_name = site.site_name;
       entity.parentForceKey = site.parentForceKey;
-      if (!entity.deleted && !site.deleted) site.entityKeys.push(entity.entityKey);
+      if (!entity.deleted && !site.deleted) {
+        site.entityKeys.push(entity.entityKey);
+        if (entity.entityGroup === 'primary') site.primary_entity_count += 1;
+      }
     } else {
       entity.parent_site_name = '';
       entity.parentForceKey = '';
@@ -1562,6 +1627,7 @@ function updateScenarioField(kind, key, field, rawValue, numeric = false) {
   const before = row[field];
   if (before === after) return;
   row[field] = after;
+  if (kind === 'site' && (field === 'coord_x' || field === 'coord_y')) syncSiteGateCoordinates(row, true);
   refreshScenarioRelations();
   storeScenarioPatch(kind, key, 'update', field, before, after);
   renderSitePicker();
@@ -1679,7 +1745,7 @@ function appendScenarioField(parent, row, kind, field) {
     appendScenarioSelect(parent, row, kind, field, options, scenarioFieldLabel(kind, field));
     return;
   }
-  appendScenarioInput(parent, row, kind, field, SCENARIO_NUMERIC_FIELDS.has(field), scenarioFieldLabel(kind, field));
+  appendScenarioInput(parent, row, kind, field, SCENARIO_NUMERIC_FIELDS.has(field), scenarioFieldLabel(kind, field), SCENARIO_DERIVED_FIELDS.has(field));
 }
 function appendScenarioFields(parent, row, kind) {
   const fields = SCENARIO_FIELD_GROUPS[kind] || [];
@@ -1690,7 +1756,7 @@ function appendScenarioFieldsFor(parent, row, kind, fields) {
 }
 function createSourceTabs(sections, stateKey = '') {
   const wrap = document.createElement('div');
-  wrap.className = 'manager-detail';
+  wrap.className = 'manager-detail source-tab-panel';
   const tabs = document.createElement('div');
   tabs.className = 'source-tabs';
   const pages = document.createElement('div');
@@ -1710,8 +1776,8 @@ function createSourceTabs(sections, stateKey = '') {
     if (section.content) page.append(section.content);
     button.addEventListener('click', () => {
       if (stateKey) state.sourceTabState.set(stateKey, sectionKey);
-      tabs.querySelectorAll('.source-tab').forEach(item => item.classList.toggle('active', item === button));
-      pages.querySelectorAll('.source-page').forEach(item => item.classList.toggle('active', item === page));
+      Array.from(tabs.children).forEach(item => item.classList.toggle('active', item === button));
+      Array.from(pages.children).forEach(item => item.classList.toggle('active', item === page));
     });
     tabs.append(button);
     pages.append(page);
@@ -1758,11 +1824,13 @@ function siteKindGroups(sites) {
   }
   return groups.filter(group => group.rows.length);
 }
-function appendScenarioInput(parent, row, kind, field, numeric = false, label = field) {
+function appendScenarioInput(parent, row, kind, field, numeric = false, label = field, readonly = false) {
   const input = document.createElement('input');
   input.type = numeric ? 'number' : 'text';
   input.value = row[field] ?? '';
-  input.addEventListener('change', () => updateScenarioField(kind, row[`${kind}Key`], field, input.value, numeric));
+  input.disabled = readonly;
+  if (readonly) input.title = '\u5173\u7cfb\u6d3e\u751f\u5b57\u6bb5\uff0c\u7531\u5f53\u524d\u5173\u8054\u6570\u636e\u81ea\u52a8\u8ba1\u7b97';
+  else input.addEventListener('change', () => updateScenarioField(kind, row[`${kind}Key`], field, input.value, numeric));
   appendFieldControl(parent, label, input);
 }
 function renderManagerList(node, rows, emptyText) {
@@ -1883,7 +1951,7 @@ function stageIniGeneralSaveRows() {
 }
 function inactiveStageIniGeneralRows() {
   const activePersonIds = new Set(scenarioGeneralRows().map(entity => Number(entity.person_id || 0)).filter(Boolean));
-  return stageIniGeneralRows().filter(row => !activePersonIds.has(Number(row.person_id || 0)));
+  return stageIniGeneralRows().filter(row => Number(row.command || 0) > 0 && !activePersonIds.has(Number(row.person_id || 0)));
 }
 function updateStageIniGeneralHeader(rowKey, header, rawValue) {
   const row = stageIniGeneralRows().find(item => item.stageIniGeneralKey === rowKey || item.stageIniRowKey === String(rowKey).replace(/^stageini:/, ''));
@@ -2139,6 +2207,8 @@ function renderDomainManagers() {
   }
   forceSplit.append(forceItems, forceDetail);
   els.forceList.append(forceSplit);
+  const currentEntityItems = els.entityList.querySelector('.manager-items');
+  if (currentEntityItems) state.entityListScrollTop = currentEntityItems.scrollTop;
   const entityRows = scenarioGeneralRows();
   const inactiveRows = inactiveHistoryGeneralRows();
   els.entityList.textContent = '';
@@ -2169,7 +2239,7 @@ function renderDomainManagers() {
     entityItems.append(empty);
   }
   const entityDetail = document.createElement('div');
-  entityDetail.className = 'manager-detail';
+  entityDetail.className = 'manager-detail entity-detail';
   const entity = activeEntity();
   const historyGeneral = entity ? null : activeHistoryGeneral();
   if (entity) {
@@ -2242,8 +2312,10 @@ function renderDomainManagers() {
       { key: 'history', label: 'history', content: historyPage },
     ], `history:${historyGeneralKey(historyGeneral)}:source`));
   }
+  entityItems.addEventListener('scroll', () => { state.entityListScrollTop = entityItems.scrollTop; });
   entitySplit.append(entityItems, entityDetail);
   els.entityList.append(entitySplit);
+  entityItems.scrollTop = state.entityListScrollTop;
 }
 function validationIssues() {
   const issues = [];
@@ -2823,6 +2895,7 @@ function resetEditState(meta) {
   state.activeForceKey = '';
   state.activeEntityKey = '';
   state.activeHistoryGeneralKey = '';
+  state.entityListScrollTop = 0;
   refreshScenarioRelations();
   renderSitePicker();
   renderDomainManagers();
