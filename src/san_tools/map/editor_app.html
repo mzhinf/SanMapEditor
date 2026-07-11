@@ -1393,21 +1393,33 @@ function refreshCompositeList() {
 }
 function gateKey(gate) { return gate.gateKey || `gate:${gate.gateIndex}`; }
 function normalizeGateRows(rows) {
-  return rows.map((gate, index) => ({
-    ...gate,
-    gateKey: typeof gate.gateKey === 'string' && gate.gateKey ? gate.gateKey : `gate:${Number.isFinite(Number(gate.gateIndex)) ? Number(gate.gateIndex) : index}`,
-    gateIndex: Number.isFinite(Number(gate.gateIndex)) ? Number(gate.gateIndex) : index,
-    group: Number.isFinite(Number(gate.group)) ? Number(gate.group) : 0,
-    doorIndex: Number.isFinite(Number(gate.doorIndex)) ? Number(gate.doorIndex) : index,
-    doorX: Number.isFinite(Number(gate.doorX)) ? Number(gate.doorX) : 0,
-    doorY: Number.isFinite(Number(gate.doorY)) ? Number(gate.doorY) : 0,
-    dir: Number.isFinite(Number(gate.dir)) ? Number(gate.dir) : 0,
-    siteX: Number.isFinite(Number(gate.siteX)) ? Number(gate.siteX) : 0,
-    siteY: Number.isFinite(Number(gate.siteY)) ? Number(gate.siteY) : 0,
-    siteKey: typeof gate.siteKey === 'string' ? gate.siteKey : '',
-    cityName: typeof gate.cityName === 'string' ? gate.cityName : '',
-    deleted: gate.deleted === true,
-  }));
+  return rows.map((gate, index) => {
+    const group = Number.isFinite(Number(gate.group)) ? Number(gate.group) : 0;
+    const doorIndex = Number.isFinite(Number(gate.doorIndex)) ? Number(gate.doorIndex) : index;
+    const gateIndex = Number.isFinite(Number(gate.gateIndex)) ? Number(gate.gateIndex) : index;
+    const isNew = gate.isNew === true || String(gate.gateKey || '').startsWith('gate:new:');
+    const originalGroup = !isNew && Number.isFinite(Number(gate.originalGroup)) ? Number(gate.originalGroup) : group;
+    const originalDoorIndex = !isNew && Number.isFinite(Number(gate.originalDoorIndex)) ? Number(gate.originalDoorIndex) : doorIndex;
+    return {
+      ...gate,
+      gateKey: typeof gate.gateKey === 'string' && gate.gateKey ? gate.gateKey : `gate:${gateIndex}`,
+      gateIndex,
+      group,
+      doorIndex,
+      originalGroup: isNew ? null : originalGroup,
+      originalDoorIndex: isNew ? null : originalDoorIndex,
+      originalDorKey: isNew ? '' : (typeof gate.originalDorKey === 'string' && gate.originalDorKey ? gate.originalDorKey : dorRecordKey(originalGroup, originalDoorIndex)),
+      doorX: Number.isFinite(Number(gate.doorX)) ? Number(gate.doorX) : 0,
+      doorY: Number.isFinite(Number(gate.doorY)) ? Number(gate.doorY) : 0,
+      dir: Number.isFinite(Number(gate.dir)) ? Number(gate.dir) : 0,
+      siteX: Number.isFinite(Number(gate.siteX)) ? Number(gate.siteX) : 0,
+      siteY: Number.isFinite(Number(gate.siteY)) ? Number(gate.siteY) : 0,
+      siteKey: typeof gate.siteKey === 'string' ? gate.siteKey : '',
+      cityName: typeof gate.cityName === 'string' ? gate.cityName : '',
+      isNew,
+      deleted: gate.deleted === true,
+    };
+  });
 }
 function gateRowsForSite(siteKey) {
   return state.gates.filter(gate => !gate.deleted && gate.siteKey === siteKey);
@@ -1441,10 +1453,14 @@ function addSiteGate(siteView) {
   const doorIndex = state.gates.filter(gate => !gate.deleted && Number(gate.group) === group).length;
   const selected = state.selected || { col: Number(siteView.mapX || 0), row: Number(siteView.mapY || 0) };
   const gate = {
-    gateKey: `gate:new:${Date.now()}`,
+    gateKey: `gate:new:${Date.now()}:${state.gates.length}`,
     gateIndex: index,
     group,
     doorIndex,
+    originalGroup: null,
+    originalDoorIndex: null,
+    originalDorKey: '',
+    isNew: true,
     doorX: Number(selected.col || 0),
     doorY: Number(selected.row || 0),
     dir: 0,
@@ -3422,7 +3438,7 @@ function buildEditedDorBytes(originalBytes) {
     writeInt32LE(countBytes, 0, gates.length);
     parts.push(countBytes);
     gates.forEach((gate, index) => {
-      const original = originalByKey.get(dorRecordKey(groupNumber, gate.doorIndex)) || originalByKey.get(dorRecordKey(groupNumber, gate.gateIndex));
+      const original = gate.originalDorKey ? originalByKey.get(gate.originalDorKey) : null;
       const normalizedGate = { ...gate, doorIndex: index };
       parts.push(buildDorRecordBytes(normalizedGate, original));
     });
