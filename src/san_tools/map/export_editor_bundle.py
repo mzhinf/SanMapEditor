@@ -6,6 +6,7 @@ import json
 import shutil
 import struct
 import uuid
+from collections import Counter
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -688,6 +689,40 @@ STAGE_INI_FIELD_MAP = {
 }
 
 
+def _stage_ini_append_layout(
+    bundle: dict[str, object],
+    payload: dict[str, object],
+    sheet_name: str,
+) -> dict[str, object]:
+    """根据已确认的连续数值流反推出新增母表逻辑行的布局。"""
+
+    model = bundle["conversion_models"].get(sheet_name, {})
+    row_models = sorted(model.get("row_models", {}).values(), key=lambda row: int(row["stream_start_dword"]))
+    if len(row_models) < 2:
+        raise ValueError(f"{sheet_name} 母表缺少足够的连续行，无法计算新增布局")
+    starts = [int(row["stream_start_dword"]) for row in row_models]
+    step_counts = Counter(b - a for a, b in zip(starts, starts[1:]) if b > a)
+    row_dwords = step_counts.most_common(1)[0][0]
+    numeric_counts = Counter(int(row["numeric_count"]) for row in row_models)
+    numeric_count = numeric_counts.most_common(1)[0][0]
+    title_bytes = (row_dwords - numeric_count) * 4
+    if title_bytes <= 0:
+        raise ValueError(f"{sheet_name} 母表标题槽长度无效：{title_bytes}")
+    last = row_models[-1]
+    section = str(last["stream_section"])
+    section_base = MAIN_HEADER_SIZE if section == "main" else int(payload["header"]["tail_offset"])
+    insert_offset = section_base + (int(last["stream_start_dword"]) + int(last["numeric_count"])) * 4
+    return {
+        "sheet": sheet_name,
+        "section": section,
+        "insertOffset": insert_offset,
+        "rowBytes": row_dwords * 4,
+        "titleBytes": title_bytes,
+        "numericCount": numeric_count,
+        "numericHeaders": list(model.get("value_headers", []))[:numeric_count],
+    }
+
+
 def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]:
     """\u4e3a\u6d4f\u89c8\u5668\u4fdd\u5b58 stage.ini \u51c6\u5907 dword \u7ea7\u5b57\u6bb5\u6620\u5c04\u4e0e\u5de5\u4f5c\u7c3f\u57fa\u51c6\u884c\u3002"""
 
@@ -733,6 +768,14 @@ def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]
         "fileSize": int(header["file_size"]),
         "fieldMap": STAGE_INI_FIELD_MAP,
         "fieldLocations": field_locations,
+        "appendLayout": {
+            "mainCount": int(header["main_count"]),
+            "mainStride": int(header["main_stride"]),
+            "tailOffset": int(header["tail_offset"]),
+            "tailStride": int(header["tail_stride"]),
+            "general": _stage_ini_append_layout(bundle, payload, "general"),
+            "castle": _stage_ini_append_layout(bundle, payload, "castle"),
+        },
         "workbookSheets": workbook_sheets,
     }
 

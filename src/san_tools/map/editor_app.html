@@ -34,6 +34,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .topbar { grid-area: top; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .title { font-weight: 700; min-width: 130px; }
 .toolbar-group { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.coord-input { width: 58px; }
 .toolbar-group label { font-size: 12px; color: var(--muted); }
 .status { margin-left: auto; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .resource-panel, .inspector-panel, .bottom-dock { min-width: 0; min-height: 0; background: var(--panel); }
@@ -168,6 +169,12 @@ canvas { display: block; width: 100%; height: 100%; }
       <button id="resetCell">恢复图层</button>
       <button id="resetAll">清空修改</button>
     </div>
+    <div class="toolbar-group" title="输入 .m 格子坐标并定位，不修改数据。">
+      <label>坐标</label>
+      <input id="coordX" class="coord-input" type="number" min="0" step="1" placeholder="X">
+      <input id="coordY" class="coord-input" type="number" min="0" step="1" placeholder="Y">
+      <button id="findCoord" type="button">搜索</button>
+    </div>
     <span class="status" id="status">正在加载</span>
   </header>
   <aside class="resource-panel">
@@ -243,7 +250,7 @@ canvas { display: block; width: 100%; height: 100%; }
         <div class="section"><div class="section-title">武将管理</div><div class="manager-list" id="entityList"></div></div>
       </section>
       <section class="inspector-page" data-page="raw">
-        <div class="section"><div class="section-title">字段级模型</div><div class="record-list" id="recordList"></div></div>
+        <div class="section"><div class="section-title"><span>字段级模型</span><button id="resetRecord" type="button">恢复当前记录</button></div><div class="record-list" id="recordList"></div></div>
       </section>
       <section class="inspector-page" data-page="validation">
         <div class="section"><div class="section-title">导出校验</div><div class="validation-list" id="validationList"></div></div>
@@ -394,6 +401,8 @@ const state = {
   stageIniGeneralPatches: new Map(),
   historyEdits: new Map(),
   historyPatches: new Map(),
+  newHistoryRows: [],
+  deletedHistoryRowKeys: new Set(),
   gates: [],
   gatePatches: new Map(),
   activeForceKey: '',
@@ -417,6 +426,7 @@ const els = {
   selectionInfo: document.getElementById('selectionInfo'), compositeList: document.getElementById('compositeList'),
   hudTool: document.getElementById('hudTool'), hudLayer: document.getElementById('hudLayer'), hudSelection: document.getElementById('hudSelection'), hudSite: document.getElementById('hudSite'),
   forceList: document.getElementById('forceList'), entityList: document.getElementById('entityList'), validationList: document.getElementById('validationList'),
+  coordX: document.getElementById('coordX'), coordY: document.getElementById('coordY'), findCoord: document.getElementById('findCoord'), resetRecord: document.getElementById('resetRecord'),
 };
 function canonicalFieldName(name) { return LEGACY_FIELD_ALIASES[name] || name; }
 function fieldIndex(name) { return state.meta.fields.indexOf(canonicalFieldName(name)); }
@@ -1331,6 +1341,24 @@ function drawMinimap() {
   miniCtx.lineWidth = 2;
   miniCtx.strokeRect(ox + view.x / imageSize.width * w, oy + view.y / imageSize.height * h, view.w / imageSize.width * w, view.h / imageSize.height * h);
 }
+function rebuildDataMinimap() {
+  if (!state.meta) return;
+  const fi = fieldIndex('minimap_color');
+  if (fi < 0) return;
+  const scaleX = 2;
+  const map = document.createElement('canvas');
+  map.width = state.meta.width * scaleX + 1;
+  map.height = state.meta.height;
+  const mapCtx = map.getContext('2d');
+  for (let row = 0; row < state.meta.height; row++) {
+    for (let col = 0; col < state.meta.width; col++) {
+      const value = Number(state.meta.records[row * state.meta.width + col][fi] || 0);
+      mapCtx.fillStyle = state.meta.pointPalette[value] || '#000000';
+      mapCtx.fillRect(col * scaleX + (row & 1), row, scaleX, 1);
+    }
+  }
+  state.minimap = map;
+}
 function setPairs(node, pairs) { node.innerHTML = ''; for (const [k, v] of pairs) { const a = document.createElement('div'); a.className = 'k'; a.textContent = k; const b = document.createElement('div'); b.textContent = String(v); node.append(a, b); } }
 function switchInspectorTab(tabName) {
   document.querySelectorAll('.inspector-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabName));
@@ -1815,6 +1843,7 @@ function addScenarioEntity() {
   state.activeEntityKey = '';
   state.activeHistoryGeneralKey = general.stageIniGeneralKey;
   state.stageIniGeneralPatches.set('stageini:add:' + rowKey, { kind: 'stageIniGeneral', key: rowKey, op: 'add', field: '', before: null, after: { ...general } });
+  ensureHistoryRow(personId, general.entity_name);
   schedulePatchRefresh();
   renderDomainManagers();
 }
@@ -2085,6 +2114,25 @@ function updateStageIniGeneralHeader(rowKey, header, rawValue) {
   schedulePatchRefresh();
   if (header === 'title' || header === stageIniGeneralFieldHeaders().command || header === stageIniGeneralFieldHeaders().portrait_id) renderDomainManagers();
 }
+function retireStageIniGeneral(row) {
+  if (!row) return;
+  const key = String(row.stageIniRowKey || '');
+  const historyRow = historyTableRowForPerson(row.person_id);
+  if (row.isNew) {
+    state.newStageIniGenerals = state.newStageIniGenerals.filter(item => String(item.stageIniRowKey) !== key);
+    state.stageIniGeneralEdits.delete(key);
+    for (const patchKeyValue of [...state.stageIniGeneralPatches.keys()]) {
+      if (patchKeyValue.includes(':' + key)) state.stageIniGeneralPatches.delete(patchKeyValue);
+    }
+  } else {
+    const commandHeader = stageIniGeneralFieldHeaders().command;
+    if (commandHeader) updateStageIniGeneralHeader(row.stageIniGeneralKey, commandHeader, '0');
+  }
+  if (historyRow) deleteHistoryRow(historyRow.rowKey);
+  state.activeHistoryGeneralKey = '';
+  renderDomainManagers();
+  schedulePatchRefresh();
+}
 function appendStageIniGeneralFields(parent, row) {
   const sheet = stageIniGeneralSheet();
   if (!sheet || !row?.stageIniValues) return;
@@ -2109,13 +2157,53 @@ function historyTableModel() { return state.commonModel?.historyTable?.available
 function historyTableRows() {
   const model = historyTableModel();
   if (!model) return [];
-  return (model.rows || []).map((row, index) => {
-    const key = String(row.rowKey || (row['\u7de8\u865f'] ?? row['\u7f16\u53f7']) || index + 1);
+  const idHeader = historyIdHeader(model.headers || []);
+  const rows = (model.rows || []).map((row, index) => {
+    const key = String(row.rowKey || row[idHeader] || index + 1);
     return { ...row, ...(state.historyEdits.get(key) || {}), rowKey: key };
   });
+  for (const row of state.newHistoryRows) rows.push({ ...row, ...(state.historyEdits.get(String(row.rowKey)) || {}) });
+  return rows.filter(row => !state.deletedHistoryRowKeys.has(String(row.rowKey)));
+}
+function historyIdHeader(headers) {
+  return headers.find(header => ['編號', '编号', '人物編號', '人物编号'].includes(header)) || headers[0] || '';
+}
+function historyNameHeader(headers) {
+  return headers.find(header => ['武將名', '武将名', '姓名', '名稱', '名称'].includes(header)) || headers[1] || '';
+}
+function ensureHistoryRow(personId, name = '') {
+  const model = historyTableModel();
+  if (!model) return null;
+  const existing = historyTableRowForPerson(personId);
+  if (existing) return existing;
+  const headers = model.headers || [];
+  const row = Object.fromEntries(headers.map(header => [header, '0']));
+  const idHeader = historyIdHeader(headers);
+  const nameHeader = historyNameHeader(headers);
+  if (idHeader) row[idHeader] = String(personId);
+  if (nameHeader) row[nameHeader] = String(name || '');
+  row.rowKey = String(personId);
+  state.deletedHistoryRowKeys.delete(row.rowKey);
+  state.newHistoryRows.push(row);
+  state.historyPatches.set('history:add:' + row.rowKey, { kind: 'history', key: row.rowKey, op: 'add', field: '', before: null, after: { ...row } });
+  schedulePatchRefresh();
+  return row;
+}
+function deleteHistoryRow(rowKey) {
+  const key = String(rowKey || '');
+  const row = historyTableRows().find(item => String(item.rowKey) === key);
+  if (!row) return;
+  state.newHistoryRows = state.newHistoryRows.filter(item => String(item.rowKey) !== key);
+  const idHeader = historyIdHeader(historyTableModel()?.headers || []);
+  if ((historyTableModel()?.rows || []).some(item => String(item.rowKey || item[idHeader]) === key)) state.deletedHistoryRowKeys.add(key);
+  state.historyEdits.delete(key);
+  state.historyPatches.set('history:delete:' + key, { kind: 'history', key, op: 'delete', field: '', before: { ...row }, after: null });
+  schedulePatchRefresh();
+  renderDomainManagers();
 }
 function historyTableRowForPerson(personId) {
-  return historyTableRows().find(row => Number((row['\u7de8\u865f'] ?? row['\u7f16\u53f7']) || row.rowKey || 0) === Number(personId || 0)) || null;
+  const idHeader = historyIdHeader(historyTableModel()?.headers || []);
+  return historyTableRows().find(row => Number(row[idHeader] || row.rowKey || 0) === Number(personId || 0)) || null;
 }
 function updateHistoryField(rowKey, field, rawValue) {
   const key = String(rowKey || '');
@@ -2139,17 +2227,33 @@ function appendHistoryFields(parent, personId) {
   if (!model || !row) {
     const empty = document.createElement('div');
     empty.className = 'placeholder';
-    empty.textContent = '\u672a\u5339\u914d\u5230 History.txt \u52a0\u5165\u65f6\u95f4\u3002';
+    empty.textContent = '未匹配到 History.txt 加入时间。';
     parent.append(empty);
+    if (model) {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.textContent = '新增 History 记录';
+      add.addEventListener('click', () => {
+        const general = stageIniGeneralRows().find(item => Number(item.person_id || 0) === Number(personId));
+        ensureHistoryRow(personId, general?.name || '');
+        renderDomainManagers();
+      });
+      parent.append(add);
+    }
     return;
   }
   for (const field of model.headers || []) {
     const input = document.createElement('input');
     input.value = row[field] ?? '';
-    input.disabled = field === '\u7de8\u865f' || field === '\u7f16\u53f7' || field === '\u6b66\u5c07\u540d' || field === '\u6b66\u5c06\u540d';
+    input.disabled = ['編號', '编号', '武將名', '武将名'].includes(field);
     input.addEventListener('change', () => updateHistoryField(row.rowKey, field, input.value));
     appendFieldControl(parent, field, input);
   }
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.textContent = '删除 History 记录';
+  remove.addEventListener('click', () => deleteHistoryRow(row.rowKey));
+  parent.append(remove);
 }
 function scenarioGeneralRows() { return scenarioRows('entity').filter(isGeneralEntity); }
 function inactiveHistoryGeneralRows() {
@@ -2429,6 +2533,11 @@ function renderDomainManagers() {
       { key: 'stg', label: 'stg', content: stgPage },
       { key: 'history', label: 'history', content: historyPage },
     ], `history:${historyGeneralKey(historyGeneral)}:source`));
+    const retire = document.createElement('button');
+    retire.type = 'button';
+    retire.textContent = historyGeneral.isNew ? '移除新增武将' : '停用武将';
+    retire.addEventListener('click', () => retireStageIniGeneral(historyGeneral));
+    entityDetail.append(retire);
   }
   entityItems.addEventListener('scroll', () => { state.entityListScrollTop = entityItems.scrollTop; });
   entitySplit.append(entityItems, entityDetail);
@@ -2446,10 +2555,8 @@ function validationIssues() {
   if (!state.meta.scenarioFiles?.stageIni?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage.ini\uff0c\u57ce\u6c60\u4e0e\u6b66\u5c06\u5168\u5c40\u6bcd\u8868\u53ea\u80fd\u5bfc\u51fa patch\u3002' });
   if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage_ini.xlsx\uff0c\u4fdd\u5b58\u65f6\u4e0d\u4f1a\u751f\u6210\u5de5\u4f5c\u7c3f\u3002' });
   const stageIniModel = stageIniPatchModel();
-  const newSiteWithoutBinaryRow = scenarioRows('site').filter(site => site.isNew && siteHouseAttrValue(site) === 0 && !stageIniModel?.fieldLocations?.castle?.[String(site.stageIniRowKey || site.city_index)]);
-  const newGeneralWithoutBinaryRow = state.newStageIniGenerals.filter(row => !stageIniModel?.fieldLocations?.general?.[String(row.stageIniRowKey)]);
-  if (newSiteWithoutBinaryRow.length) issues.push({ level: 'error', text: '新增城池没有可写的 stage.ini 二进制母表行，继续导出会产生越界 city_index。' });
-  if (newGeneralWithoutBinaryRow.length) issues.push({ level: 'error', text: '新增武将没有可写的 stage.ini 二进制母表行，继续导出会产生越界 person_id。' });
+  const hasNewMasterRows = scenarioRows('site').some(site => site.isNew && siteHouseAttrValue(site) === 0) || state.newStageIniGenerals.length > 0;
+  if (hasNewMasterRows && !stageIniModel?.appendLayout) issues.push({ level: 'error', text: '当前 bundle 缺少 stage.ini 母表新增布局，请重新生成 stage01 bundle。' });
   const unsupportedScenario = unsupportedScenarioChanges();
   if (unsupportedScenario.length) issues.push({ level: 'warn', text: '.stg 对象新增、删除或归属移动暂未写回二进制：' + unsupportedScenario.length + ' 项会保留在 patch。' });
   for (const patch of state.patches.values()) {
@@ -2894,6 +3001,7 @@ function refreshAfterRecordEdit(cell = null, editedCells = null, changedFields =
   if (cell) state.selected = cell;
   if (editedCells && editedCells.length) rebuildEditedImage(editedCells);
   if (isPointLayer(currentLayerName()) && changedFields.includes(currentLayerName())) renderResourceList(false);
+  if (changedFields.includes('minimap_color')) rebuildDataMinimap();
   scheduleSideRefresh();
   schedulePatchRefresh();
   scheduleDraw();
@@ -2970,6 +3078,43 @@ function resetSelectedLayerChange() {
   const original = state.originalRecords[recordIndex(state.selected)][fi];
   applyChangeSet([{ x: state.selected.col, y: state.selected.row, field, after: original }]);
 }
+function resetSelectedRecord() {
+  if (!state.selected) return;
+  const idx = recordIndex(state.selected);
+  const original = state.originalRecords[idx];
+  const current = state.meta.records[idx];
+  const changes = [];
+  for (const field of state.meta.editableRecordFields) {
+    const fi = fieldIndex(field);
+    if (fi >= 0 && current[fi] !== original[fi]) changes.push({ x: state.selected.col, y: state.selected.row, field, after: original[fi] });
+  }
+  applyChangeSet(changes);
+}
+function focusSelectedCell() {
+  if (!state.selected) {
+    state.transform = { x: 24, y: 24, scale: 0.8 };
+    scheduleDraw();
+    return;
+  }
+  const point = cellToWorld(state.selected.col, state.selected.row);
+  const rect = canvas.getBoundingClientRect();
+  state.transform.x = rect.width / 2 - (point.x + 20) * state.transform.scale;
+  state.transform.y = rect.height / 2 - (point.y + 10) * state.transform.scale;
+  scheduleDraw();
+}
+function findCellByCoordinates() {
+  const col = Number.parseInt(els.coordX.value, 10);
+  const row = Number.parseInt(els.coordY.value, 10);
+  if (!Number.isInteger(col) || !Number.isInteger(row) || col < 0 || row < 0 || col >= state.meta.width || row >= state.meta.height) {
+    els.status.textContent = `坐标范围：X 0..${state.meta.width - 1}，Y 0..${state.meta.height - 1}`;
+    return false;
+  }
+  selectCell({ col, row });
+  focusSelectedCell();
+  refreshSide();
+  els.status.textContent = `已定位格子 ${col},${row}`;
+  return true;
+}
 function resetAllChanges() {
   const changes = [...state.patches.values()].map(patch => ({ x: patch.x, y: patch.y, field: patch.field, after: patch.before }));
   applyChangeSet(changes);
@@ -3018,6 +3163,8 @@ function resetEditState(meta) {
   state.stageIniGeneralPatches.clear();
   state.historyEdits.clear();
   state.historyPatches.clear();
+  state.newHistoryRows = [];
+  state.deletedHistoryRowKeys.clear();
   state.newStageIniGenerals = [];
   state.gatePatches.clear();
   state.sourceTabState.clear();
@@ -3050,6 +3197,7 @@ function resetEditState(meta) {
   rebuildLayerStats();
   recomputeRedrawConfig();
   rebuildEditedImage();
+  if (!state.minimap) rebuildDataMinimap();
   refreshSide();
   refreshPatches();
   resizeCanvas();
@@ -3225,18 +3373,39 @@ function planImportedHistoryChanges(payload, conflicts) {
   const changes = importedPatchChanges(payload, 'historyChanges');
   if (!changes.length) return null;
   const edits = new Map([...state.historyEdits].map(([key, value]) => [key, { ...value }]));
+  const additions = (state.newHistoryRows || []).map(row => ({ ...row }));
+  const deleted = new Set(state.deletedHistoryRowKeys || []);
   const rows = new Map(historyTableRows().map(row => [String(row.rowKey), row]));
-  for (const change of changes) {
+  const ordered = changes.slice().sort((left, right) => (left.op === 'add' ? 0 : left.op === 'delete' ? 2 : 1) - (right.op === 'add' ? 0 : right.op === 'delete' ? 2 : 1));
+  for (const change of ordered) {
     const key = String(change?.key || '');
-    const field = String(change?.field || '');
+    if (change.op === 'add') {
+      if (rows.has(key)) continue;
+      if (!change.after || typeof change.after !== 'object') { conflicts.push('History.txt 新增行缺少 after：' + key); continue; }
+      const row = { ...change.after, rowKey: key };
+      additions.push(row);
+      rows.set(key, row);
+      deleted.delete(key);
+      continue;
+    }
     const row = rows.get(key);
+    if (change.op === 'delete') {
+      if (!row && deleted.has(key)) continue;
+      if (!row) { conflicts.push('History.txt 删除对象不存在：' + key); continue; }
+      additions.splice(0, additions.length, ...additions.filter(item => String(item.rowKey) !== key));
+      deleted.add(key);
+      rows.delete(key);
+      edits.delete(key);
+      continue;
+    }
+    const field = String(change?.field || '');
     if (!row || !field) { conflicts.push('History.txt 对象不存在：' + key + '.' + field); continue; }
     const current = edits.get(key)?.[field] ?? row[field] ?? '';
     if (patchValuesEqual(String(current), String(change.after ?? ''))) continue;
     if (!patchValuesEqual(String(current), String(change.before ?? ''))) { conflicts.push('History.txt 冲突：' + key + '.' + field); continue; }
     edits.set(key, { ...(edits.get(key) || {}), [field]: String(change.after ?? '') });
   }
-  return edits;
+  return { edits, additions, deleted };
 }
 function planImportedStageIniGeneralChanges(payload, conflicts) {
   const changes = importedPatchChanges(payload, 'stageIniGeneralChanges');
@@ -3288,8 +3457,10 @@ function applyImportedPatchPayload(rawPayload, fileName = 'patch.json') {
     for (const change of importedPatchChanges(payload, 'gateChanges')) state.gatePatches.set('gate:' + change.op + ':' + change.key + ':' + (change.field || ''), { ...change });
   }
   if (historyPlan) {
-    state.historyEdits = historyPlan;
-    for (const change of importedPatchChanges(payload, 'historyChanges')) state.historyPatches.set('history:' + change.key + ':' + change.field, { ...change });
+    state.historyEdits = historyPlan.edits;
+    state.newHistoryRows = historyPlan.additions;
+    state.deletedHistoryRowKeys = historyPlan.deleted;
+    for (const change of importedPatchChanges(payload, 'historyChanges')) state.historyPatches.set('history:' + (change.op || 'update') + ':' + change.key + ':' + (change.field || ''), { ...change });
   }
   if (stageIniPlan) {
     state.newStageIniGenerals = stageIniPlan.additions;
@@ -3763,6 +3934,11 @@ function canBuildStageIniWorkbook() { return !!stageIniPatchModel()?.workbookShe
 function stageIniRowsForKind(kind) {
   if (kind === 'site') {
     const rows = new Map();
+    for (const source of state.scenario ? scenarioRows('site') : []) {
+      if (!source.isNew || siteHouseAttrValue(source) !== 0) continue;
+      const rowKey = String(source.stageIniRowKey || source.city_index || '');
+      rows.set(rowKey, { ...source, stageIniRowKey: rowKey });
+    }
     for (const change of state.scenarioPatches.values()) {
       if (change.kind !== 'site' || change.op !== 'update' || !SITE_INI_FIELDS.includes(change.field)) continue;
       const source = state.scenario.siteByKey.get(change.key);
@@ -3774,7 +3950,8 @@ function stageIniRowsForKind(kind) {
     return [...rows.values()];
   }
   if (kind === 'entity') {
-    return stageIniGeneralRows().filter(row => row.isNew || state.stageIniGeneralEdits.has(String(row.stageIniRowKey)));
+    const rows = typeof stageIniGeneralSaveRows === 'function' ? stageIniGeneralSaveRows() : stageIniGeneralRows();
+    return rows.filter(row => row.isNew || state.stageIniGeneralEdits.has(String(row.stageIniRowKey)));
   }
   return [];
 }
@@ -3803,13 +3980,62 @@ function applyStageIniRowPatch(bytes, row, kind) {
     view.setUint32(Number(location.byteOffset), value >>> 0, true);
   }
 }
+function stageIniLogicalRowBytes(row, kind) {
+  const model = stageIniPatchModel();
+  const config = model?.fieldMap?.[kind];
+  const layout = model?.appendLayout?.[kind === 'entity' ? 'general' : 'castle'];
+  if (!config || !layout) throw new Error('缺少 stage.ini ' + kind + ' 新增布局');
+  const values = { ...(row.stageIniValues || {}) };
+  for (const [field, header] of Object.entries(config.fields || {})) {
+    if (field in row) values[header] = row[field];
+  }
+  const title = String(values.title || row.site_name || row.entity_name || row.name || '');
+  const titleBytes = encodeBig5Text(title);
+  if (titleBytes.length >= Number(layout.titleBytes)) throw new Error('stage.ini 标题过长：' + title);
+  const bytes = new Uint8Array(Number(layout.rowBytes));
+  bytes.set(titleBytes, 0);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < layout.numericHeaders.length; index++) {
+    const value = Number.parseInt(values[layout.numericHeaders[index]] ?? 0, 10);
+    view.setUint32(Number(layout.titleBytes) + index * 4, (Number.isFinite(value) ? value : 0) >>> 0, true);
+  }
+  return bytes;
+}
+function insertByteRows(source, offset, rows) {
+  if (!rows.length) return source;
+  return concatBytes([source.slice(0, offset), ...rows, source.slice(offset)]);
+}
+function padByteSection(source, stride) {
+  const padding = (stride - source.length % stride) % stride;
+  return padding ? concatBytes([source, new Uint8Array(padding)]) : source;
+}
 function buildEditedStageIniBytes(originalBytes) {
   const model = stageIniPatchModel();
   if (!model) return originalBytes;
-  const bytes = new Uint8Array(originalBytes);
-  for (const site of stageIniRowsForKind('site')) applyStageIniRowPatch(bytes, site, 'site');
-  for (const entity of stageIniRowsForKind('entity')) applyStageIniRowPatch(bytes, entity, 'entity');
-  return bytes;
+  const patched = new Uint8Array(originalBytes);
+  const sites = stageIniRowsForKind('site');
+  const entities = stageIniRowsForKind('entity');
+  for (const site of sites) applyStageIniRowPatch(patched, site, 'site');
+  for (const entity of entities) applyStageIniRowPatch(patched, entity, 'entity');
+
+  const append = model.appendLayout;
+  const newGenerals = entities.filter(row => !model.fieldLocations?.general?.[String(row.stageIniRowKey)]);
+  const newCities = sites.filter(row => !model.fieldLocations?.castle?.[String(row.stageIniRowKey)]);
+  if (!newGenerals.length && !newCities.length) return patched;
+  if (!append) throw new Error('当前 bundle 缺少 stage.ini 母表新增布局');
+
+  const header = patched.slice(0, 8);
+  const oldMain = patched.slice(8, Number(append.tailOffset));
+  const generalOffset = Number(append.general.insertOffset) - 8;
+  let main = insertByteRows(oldMain, generalOffset, newGenerals.map(row => stageIniLogicalRowBytes(row, 'entity')));
+  main = padByteSection(main, Number(append.mainStride));
+  new DataView(header.buffer, header.byteOffset, header.byteLength).setUint32(0, main.length / Number(append.mainStride), true);
+
+  let tail = patched.slice(Number(append.tailOffset));
+  const cityOffset = Number(append.castle.insertOffset) - Number(append.tailOffset);
+  tail = insertByteRows(tail, cityOffset, newCities.map(row => stageIniLogicalRowBytes(row, 'site')));
+  tail = padByteSection(tail, Number(append.tailStride));
+  return concatBytes([header, main, tail]);
 }
 function cloneWorkbookSheets() {
   const sheets = stageIniPatchModel()?.workbookSheets || [];
@@ -4182,10 +4408,13 @@ els.pasteRegion.addEventListener('click', () => { const snapshot = state.regionC
 els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成对象 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
 els.loadMFile.addEventListener('change', async () => { try { await loadLocalProjectFiles(els.loadMFile.files); } catch (err) { els.status.textContent = String(err?.message || err); } finally { els.loadMFile.value = ''; } });
 els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
-document.getElementById('resetView').addEventListener('click', () => { state.transform = { x: 24, y: 24, scale: 0.8 }; scheduleDraw(); });
+document.getElementById('resetView').addEventListener('click', focusSelectedCell);
 els.undoEdit.addEventListener('click', undoLastEdit);
 els.redoEdit.addEventListener('click', redoLastEdit);
 els.resetCell.addEventListener('click', resetSelectedLayerChange);
+els.resetRecord.addEventListener('click', resetSelectedRecord);
+els.findCoord.addEventListener('click', findCellByCoordinates);
+for (const input of [els.coordX, els.coordY]) input.addEventListener('keydown', ev => { if (ev.key === 'Enter') findCellByCoordinates(); });
 els.resetAll.addEventListener('click', resetAllChanges);
 document.getElementById('exportPatch').addEventListener('click', downloadPatch);
 els.exportFiles.addEventListener('click', () => { exportEditedArtifacts(); });
