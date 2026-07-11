@@ -1598,10 +1598,14 @@ function addScenarioSite(forceKey = '') {
 function stageIniGeneralByKey(rowKey) {
   return stageIniGeneralRows().find(row => row.stageIniGeneralKey === rowKey || row.stageIniRowKey === String(rowKey).replace(/^stageini:/, '')) || null;
 }
+function generalCandidateByKey(rowKey) {
+  const key = String(rowKey || '');
+  return stageIniGeneralByKey(key) || inactiveHistoryGeneralRows().find(row => historyGeneralKey(row) === key) || null;
+}
 function addExistingGeneralToSite(siteKey, rowKey) {
   if (!state.scenario) return;
   const site = state.scenario.siteByKey.get(siteKey || state.activeSiteKey) || scenarioRows('site')[0] || null;
-  const general = stageIniGeneralByKey(rowKey) || inactiveStageIniGeneralRows().find(row => Number(row.command || 0) > 0) || null;
+  const general = generalCandidateByKey(rowKey) || inactiveHistoryGeneralRows().find(row => Number(row.command || 0) > 0) || null;
   if (!site || !general) return;
   const force = state.scenario.forceByKey.get(site.parentForceKey) || null;
   const index = state.scenario.entities.length;
@@ -1959,10 +1963,16 @@ function appendHistoryFields(parent, personId) {
 }
 function scenarioGeneralRows() { return scenarioRows('entity').filter(isGeneralEntity); }
 function inactiveHistoryGeneralRows() {
-  const stageIniRows = inactiveStageIniGeneralRows();
-  if (stageIniRows.length) return stageIniRows;
   const activePersonIds = new Set(scenarioGeneralRows().map(entity => Number(entity.person_id || 0)).filter(Boolean));
-  return historyGeneralRows().filter(row => !activePersonIds.has(Number(row.person_id || 0)));
+  const rows = inactiveStageIniGeneralRows();
+  const seenPersonIds = new Set(rows.map(row => Number(row.person_id || 0)).filter(Boolean));
+  for (const row of historyGeneralRows()) {
+    const personId = Number(row.person_id || 0);
+    if (!personId || activePersonIds.has(personId) || seenPersonIds.has(personId)) continue;
+    rows.push(row);
+    seenPersonIds.add(personId);
+  }
+  return rows;
 }
 function ensureActiveScenarioKeys() {
   const forces = scenarioRows('force');
@@ -2149,7 +2159,8 @@ function renderDomainManagers() {
   }
   for (const row of inactiveRows) {
     const key = historyGeneralKey(row);
-    entityItems.append(buildScenarioListRow(`${row.name} / stage.ini / \u7edf\u5fa1 ${row.command || 0}`, key === state.activeHistoryGeneralKey, () => { state.activeEntityKey = ''; state.activeHistoryGeneralKey = key; renderDomainManagers(); }, '\u7f16\u8f91'));
+    const sourceLabel = row.stageIniOnly ? 'stage.ini' : 'History.txt';
+    entityItems.append(buildScenarioListRow(`${row.name} / ${sourceLabel} / \u7edf\u5fa1 ${row.command || 0}`, key === state.activeHistoryGeneralKey, () => { state.activeEntityKey = ''; state.activeHistoryGeneralKey = key; renderDomainManagers(); }, '\u7f16\u8f91'));
   }
   if (!entityRows.length && !inactiveRows.length) {
     const empty = document.createElement('div');
