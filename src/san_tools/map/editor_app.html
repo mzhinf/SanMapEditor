@@ -88,6 +88,11 @@ canvas { display: block; width: 100%; height: 100%; }
 .manager-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, auto); gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 12px; }
 .manager-row.active { border-color: var(--accent); background: var(--accent-weak); }
 .manager-detail { display: grid; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.source-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.source-tab { height: 28px; padding: 0 8px; font-size: 12px; }
+.source-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.source-page { display: none; gap: 8px; }
+.source-page.active { display: grid; }
 .manager-sublist { display: grid; gap: 4px; max-height: 160px; overflow: auto; }
 .manager-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 5px 6px; border: 1px solid var(--soft); border-radius: 6px; background: #fbfaf7; font-size: 12px; }
 .entity-card { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: start; }
@@ -306,7 +311,7 @@ const SCENARIO_FIELD_LABELS = {
     siteY: '\u636e\u70b9Y',
     dir: '\u65b9\u5411',
     group: '\u7ec4\u53f7',
-    doorIndex: '\u95e8\u5e8f\u53f7',
+    doorIndex: '\u95e8\u5e8f\u53f7(.dor\u7ec4\u5185)',
   },
 };
 const SCENARIO_FIELD_GROUPS = {
@@ -314,6 +319,8 @@ const SCENARIO_FIELD_GROUPS = {
   site: ['site_name', 'city_index', 'house_attr', 'castle_scale', 'population', 'gold', 'food', 'standby_soldier', 'develop', 'commerce', 'security', 'coord_x', 'coord_y', 'governor', 'primary_entity_count', 'parentForceKey'],
   entity: ['entity_name', 'person_id', 'portrait_id', 'static_owner_id', 'static_location_id', 'command', 'soldier_type_id', 'level', 'troop_count', 'martial_force', 'intellect', 'loyalty', 'parentSiteKey'],
 };
+const SITE_INI_FIELDS = ['city_index', 'house_attr', 'castle_scale', 'population', 'gold', 'food', 'standby_soldier', 'develop', 'commerce', 'security', 'governor'];
+const SITE_STG_FIELDS = ['site_name', 'coord_x', 'coord_y', 'primary_entity_count', 'parentForceKey'];
 const SCENARIO_NUMERIC_FIELDS = new Set(['force_lord_person_id', 'force_slot_or_index_14', 'force_index_1based', 'site_count', 'city_index', 'house_attr', 'castle_scale', 'population', 'gold', 'food', 'standby_soldier', 'develop', 'commerce', 'security', 'coord_x', 'coord_y', 'governor', 'primary_entity_count', 'person_id', 'portrait_id', 'static_owner_id', 'static_location_id', 'command', 'soldier_type_id', 'level', 'troop_count', 'martial_force', 'intellect', 'loyalty']);
 const PAINT_LAYER_OPTIONS = [...RESOURCE_LAYER_OPTIONS, ...POINT_LAYER_OPTIONS];
 const MAX_BASE_IMAGE_EDGE = 8192;
@@ -678,7 +685,7 @@ function buildSiteIndex(siteLinks) {
     cityKeyByGateCell.set(`${gate.doorX},${gate.doorY}`, linkedKey);
   }
   for (const city of cityByKey.values()) {
-    city.gates.sort((a, b) => a.doorY - b.doorY || a.doorX - b.doorX || a.gateIndex - b.gateIndex);
+    city.gates.sort((a, b) => Number(a.gateIndex) - Number(b.gateIndex) || Number(a.doorIndex) - Number(b.doorIndex));
     city.gateCount = city.gates.length;
     city.gateIndices = city.gates.map(gate => gate.gateIndex);
   }
@@ -703,16 +710,96 @@ function renderActiveSiteEditor(siteView) {
   if (!site) return;
   const wrap = document.createElement('div');
   wrap.className = 'manager-detail';
-  appendScenarioFields(wrap, site, 'site');
+
+  const iniPage = document.createElement('div');
+  appendScenarioFieldsFor(iniPage, site, 'site', SITE_INI_FIELDS);
+
+  const stgSitePage = document.createElement('div');
+  appendScenarioFieldsFor(stgSitePage, site, 'site', SITE_STG_FIELDS);
+
+  const stgGatePage = document.createElement('div');
+  const orderNote = document.createElement('div');
+  orderNote.className = 'record-note';
+  orderNote.textContent = '\u57ce\u95e8\u6309 .stg/.dor \u539f\u59cb gateIndex \u987a\u5e8f\u663e\u793a\uff1b\u95e8\u5e8f\u53f7 doorIndex \u662f .dor \u7ec4\u5185\u8bb0\u5f55\u5e8f\u53f7\u3002';
+  stgGatePage.append(orderNote);
+  for (const gate of siteView.gates || []) {
+    const line = document.createElement('div');
+    line.className = 'record-note';
+    line.textContent = `gateIndex=${gate.gateIndex} / doorIndex=${gate.doorIndex} / ${gate.doorX},${gate.doorY}`;
+    stgGatePage.append(line);
+  }
+
+  const stgGeneralPage = document.createElement('div');
+  const entities = scenarioRows('entity').filter(entity => entity.parentSiteKey === site.siteKey);
+  const generalCount = entities.filter(isGeneralEntity).length;
+  const troopTotal = entities.reduce((sum, entity) => sum + Number(entity.troop_count || 0), 0);
+  const entityTitle = document.createElement('div');
+  entityTitle.className = 'record-name';
+  entityTitle.textContent = `\u6b66\u5c06 ${generalCount} / \u5175\u529b ${troopTotal}`;
+  stgGeneralPage.append(entityTitle);
+  const candidates = inactiveStageIniGeneralRows().filter(row => Number(row.command || 0) > 0);
+  const addRow = document.createElement('div');
+  addRow.className = 'manager-row';
+  const select = document.createElement('select');
+  select.disabled = !candidates.length;
+  for (const row of candidates) {
+    const option = document.createElement('option');
+    option.value = row.stageIniGeneralKey;
+    option.textContent = `${row.name} / ID ${row.person_id} / \u7edf\u5fa1 ${row.command || 0}`;
+    select.append(option);
+  }
+  const addGeneral = document.createElement('button');
+  addGeneral.type = 'button';
+  addGeneral.textContent = '\u6dfb\u52a0\u5df2\u6709\u6b66\u5c06';
+  addGeneral.disabled = !candidates.length;
+  addGeneral.addEventListener('click', () => addExistingGeneralToSite(site.siteKey, select.value));
+  addRow.append(select, addGeneral);
+  stgGeneralPage.append(addRow);
+  const entityList = document.createElement('div');
+  entityList.className = 'manager-sublist';
+  for (const entity of entities) {
+    const row = document.createElement('div');
+    row.className = 'manager-row' + (entity.entityKey === state.activeEntityKey ? ' active' : '');
+    const label = document.createElement('div');
+    label.textContent = `${entity.entity_name} / ${isGeneralEntity(entity) ? '\u6b66\u5c06' : '\u58eb\u5175'} / ${soldierName(entity.soldier_type_id)} / ${entity.troop_count || 0}`;
+    row.append(label);
+    if (isGeneralEntity(entity)) {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = '\u7f16\u8f91';
+      edit.addEventListener('click', () => { state.activeEntityKey = entity.entityKey; state.activeHistoryGeneralKey = ''; switchInspectorTab('entities'); renderDomainManagers(); });
+      row.append(edit);
+    }
+    const delEntity = document.createElement('button');
+    delEntity.type = 'button';
+    delEntity.textContent = '\u5220\u9664';
+    delEntity.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
+    row.append(delEntity);
+    entityList.append(row);
+  }
+  if (!entities.length) {
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.textContent = '\u5f53\u524d\u636e\u70b9\u6ca1\u6709\u6b66\u5c06\u6216\u58eb\u5175\u3002';
+    entityList.append(empty);
+  }
+  stgGeneralPage.append(entityList);
+  const stgPage = createSourceTabs([
+    { label: '\u636e\u70b9\u4fe1\u606f', content: stgSitePage },
+    { label: '\u57ce\u95e8\u4fe1\u606f', content: stgGatePage },
+    { label: '\u6b66\u5c06\u4fe1\u606f', content: stgGeneralPage },
+  ]);
+
+  const dorPage = document.createElement('div');
   const gateTitle = document.createElement('div');
   gateTitle.className = 'record-name';
   gateTitle.textContent = `\u57ce\u95e8 ${siteView.gates?.length || 0}`;
-  wrap.append(gateTitle);
+  dorPage.append(gateTitle);
   const addGate = document.createElement('button');
   addGate.type = 'button';
   addGate.textContent = '\u65b0\u589e\u57ce\u95e8';
   addGate.addEventListener('click', () => addSiteGate(siteView));
-  wrap.append(addGate);
+  dorPage.append(addGate);
   const gateList = document.createElement('div');
   gateList.className = 'manager-sublist';
   for (const gate of siteView.gates || []) {
@@ -755,62 +842,21 @@ function renderActiveSiteEditor(siteView) {
     empty.textContent = '\u5f53\u524d\u636e\u70b9\u6ca1\u6709\u5339\u914d\u5230 .dor \u57ce\u95e8\u3002';
     gateList.append(empty);
   }
-  wrap.append(gateList);
-  const entities = scenarioRows('entity').filter(entity => entity.parentSiteKey === site.siteKey);
-  const generalCount = entities.filter(isGeneralEntity).length;
-  const troopTotal = entities.reduce((sum, entity) => sum + Number(entity.troop_count || 0), 0);
-  const entityTitle = document.createElement('div');
-  entityTitle.className = 'record-name';
-  entityTitle.textContent = `\u6b66\u5c06 ${generalCount} / \u58eb\u5175 ${troopTotal}`;
-  wrap.append(entityTitle);
-  const entityToolbar = document.createElement('div');
-  entityToolbar.className = 'manager-toolbar';
-  const addGeneral = document.createElement('button');
-  addGeneral.type = 'button';
-  addGeneral.textContent = '\u65b0\u589e\u6b66\u5c06';
-  addGeneral.addEventListener('click', () => addScenarioEntity('general'));
-  const addSoldier = document.createElement('button');
-  addSoldier.type = 'button';
-  addSoldier.textContent = '\u65b0\u589e\u58eb\u5175';
-  addSoldier.addEventListener('click', () => addScenarioEntity('soldier'));
-  entityToolbar.append(addGeneral, addSoldier);
-  wrap.append(entityToolbar);
-  const entityList = document.createElement('div');
-  entityList.className = 'manager-sublist';
-  for (const entity of entities) {
-    const row = document.createElement('div');
-    row.className = 'manager-row' + (entity.entityKey === state.activeEntityKey ? ' active' : '');
-    const label = document.createElement('div');
-    label.textContent = `${entity.entity_name} / ${isGeneralEntity(entity) ? '\u6b66\u5c06' : '\u58eb\u5175'} / ${soldierName(entity.soldier_type_id)} / ${entity.troop_count || 0}`;
-    row.append(label);
-    if (isGeneralEntity(entity)) {
-      const edit = document.createElement('button');
-      edit.type = 'button';
-      edit.textContent = '\u7f16\u8f91';
-      edit.addEventListener('click', () => { state.activeEntityKey = entity.entityKey; state.activeHistoryGeneralKey = ''; switchInspectorTab('entities'); renderDomainManagers(); });
-      row.append(edit);
-    }
-    const delEntity = document.createElement('button');
-    delEntity.type = 'button';
-    delEntity.textContent = '\u5220\u9664';
-    delEntity.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
-    row.append(delEntity);
-    entityList.append(row);
-  }
-  if (!entities.length) {
-    const empty = document.createElement('div');
-    empty.className = 'placeholder';
-    empty.textContent = '\u5f53\u524d\u636e\u70b9\u6ca1\u6709\u6b66\u5c06\u6216\u58eb\u5175\u3002';
-    entityList.append(empty);
-  }
-  wrap.append(entityList);
+  dorPage.append(gateList);
+
+  wrap.append(createSourceTabs([
+    { label: 'ini', content: iniPage },
+    { label: 'stg', content: stgPage },
+    { label: 'dor', content: dorPage },
+  ]));
   const del = document.createElement('button');
   del.type = 'button';
-  del.textContent = '删除据点';
+  del.textContent = '\u5220\u9664\u636e\u70b9';
   del.addEventListener('click', () => markScenarioDeleted('site', site.siteKey));
   wrap.append(del);
   els.siteNote.append(wrap);
 }
+
 function refreshSiteInfo() {
   if (!state.siteIndex) {
     setPairs(els.siteInfo, [['据点模型', '未加载']]);
@@ -1057,13 +1103,7 @@ function midpointSquarePath(col, row) {
   ctx.closePath();
 }
 function largeDiamondPath(col, row, pad = 2) {
-  const p = cellToWorld(col, row);
-  ctx.beginPath();
-  ctx.moveTo(p.x + 20, p.y - pad);
-  ctx.lineTo(p.x + 40 + pad, p.y + 10);
-  ctx.lineTo(p.x + 20, p.y + 20 + pad);
-  ctx.lineTo(p.x - pad, p.y + 10);
-  ctx.closePath();
+  innerDiamondPath(col, row, pad);
 }
 function drawCellDataOverlay(option, col, row, value) {
   if (option.mode === 'fill') {
@@ -1082,7 +1122,7 @@ function drawCellDataOverlay(option, col, row, value) {
   if (option.mode === 'center-ring') {
     const p = cellToWorld(col, row);
     ctx.beginPath();
-    ctx.arc(p.x + 20, p.y + 10, Math.hypot(10, 5), 0, Math.PI * 2);
+    ctx.arc(p.x + 20, p.y + 10, 5, 0, Math.PI * 2);
     ctx.strokeStyle = overlayPaletteColor(option, value, 0.96);
     ctx.lineWidth = 1.8 / state.transform.scale;
     ctx.stroke();
@@ -1363,14 +1403,17 @@ function updateGateField(gateKeyValue, field, rawValue, numeric = true) {
 }
 function addSiteGate(siteView) {
   if (!siteView) return;
-  const index = state.gates.length;
+  const index = state.gates.reduce((maxValue, gate) => Math.max(maxValue, Number(gate.gateIndex || 0)), -1) + 1;
+  const group = Number.isFinite(Number(siteView.forceIndex)) ? Number(siteView.forceIndex) : 0;
+  const doorIndex = state.gates.filter(gate => !gate.deleted && Number(gate.group) === group).length;
+  const selected = state.selected || { col: Number(siteView.mapX || 0), row: Number(siteView.mapY || 0) };
   const gate = {
     gateKey: `gate:new:${Date.now()}`,
     gateIndex: index,
-    group: Number.isFinite(Number(siteView.forceIndex)) ? Number(siteView.forceIndex) : 0,
-    doorIndex: index,
-    doorX: Number(siteView.mapX || 0),
-    doorY: Number(siteView.mapY || 0),
+    group,
+    doorIndex,
+    doorX: Number(selected.col || 0),
+    doorY: Number(selected.row || 0),
     dir: 0,
     siteX: Number(siteView.mapX || 0),
     siteY: Number(siteView.mapY || 0),
@@ -1503,44 +1546,50 @@ function addScenarioSite(forceKey = '') {
   setActiveSite(site.siteKey, { focus: true });
   renderDomainManagers();
 }
-function addScenarioEntity(kind = 'general') {
+function stageIniGeneralByKey(rowKey) {
+  return stageIniGeneralRows().find(row => row.stageIniGeneralKey === rowKey || row.stageIniRowKey === String(rowKey).replace(/^stageini:/, '')) || null;
+}
+function addExistingGeneralToSite(siteKey, rowKey) {
   if (!state.scenario) return;
-  const site = state.scenario.siteByKey.get(state.activeSiteKey) || scenarioRows('site')[0] || null;
-  const force = site ? state.scenario.forceByKey.get(site.parentForceKey) : null;
+  const site = state.scenario.siteByKey.get(siteKey || state.activeSiteKey) || scenarioRows('site')[0] || null;
+  const general = stageIniGeneralByKey(rowKey) || inactiveStageIniGeneralRows().find(row => Number(row.command || 0) > 0) || null;
+  if (!site || !general) return;
+  const force = state.scenario.forceByKey.get(site.parentForceKey) || null;
   const index = state.scenario.entities.length;
-  const isSoldier = kind === 'soldier';
   const entity = {
-    entityKey: `entity:new:${Date.now()}:${kind}`,
+    entityKey: `entity:new:${Date.now()}:general`,
     entityIndex: index,
     entityGroup: 'primary',
-    entity_name: isSoldier ? `\u65b0\u58eb\u5175 ${index + 1}` : `\u65b0\u6b66\u5c06 ${index + 1}`,
-    person_id: 0,
-    portrait_id: 0,
-    static_owner_id: force?.force_lord_person_id || 0,
-    static_location_id: site?.city_index || 0,
-    command: isSoldier ? 0 : 1,
-    soldier_type_id: 0,
-    level: 1,
-    troop_count: isSoldier ? 100 : 0,
-    martial_force: 0,
-    intellect: 0,
-    loyalty: 0,
-    parentSiteKey: site?.siteKey || '',
-    parent_site_name: site?.site_name || '',
+    entity_name: general.name || `\u6b66\u5c06 ${general.person_id || index + 1}`,
+    person_id: Number(general.person_id || 0),
+    portrait_id: Number(general.portrait_id || 0),
+    static_owner_id: Number(general.static_owner_id || force?.force_lord_person_id || 0),
+    static_location_id: Number(general.static_location_id || site.city_index || 0),
+    command: Math.max(1, Number(general.command || 0)),
+    soldier_type_id: Number(general.soldier_type_id || 0),
+    level: Number(general.level || 1),
+    troop_count: Number(general.troop_count || 0),
+    martial_force: Number(general.martial_force || 0),
+    intellect: Number(general.intellect || 0),
+    loyalty: Number(general.loyalty || 0),
+    parentSiteKey: site.siteKey,
+    parent_site_name: site.site_name || '',
     parentForceKey: force?.forceKey || '',
     actual_force_index: force?.forceIndex ?? 0,
     actual_force_name: force?.force_name || '',
     deleted: false,
   };
   state.scenario.entities.push(entity);
-  if (site) site.entityKeys.push(entity.entityKey);
-  if (!isSoldier) {
-    state.activeEntityKey = entity.entityKey;
-    state.activeHistoryGeneralKey = '';
-  }
+  site.entityKeys.push(entity.entityKey);
+  state.activeEntityKey = entity.entityKey;
+  state.activeHistoryGeneralKey = '';
   refreshScenarioRelations();
   storeScenarioPatch('entity', entity.entityKey, 'add', '', null, { ...entity });
   renderDomainManagers();
+}
+function addScenarioEntity() {
+  const general = inactiveStageIniGeneralRows().find(row => Number(row.command || 0) > 0) || null;
+  addExistingGeneralToSite(state.activeSiteKey, general?.stageIniGeneralKey || '');
 }
 function scenarioFieldLabel(kind, field) {
   return SCENARIO_FIELD_LABELS[kind]?.[field] || field;
@@ -1566,6 +1615,34 @@ function appendScenarioField(parent, row, kind, field) {
 function appendScenarioFields(parent, row, kind) {
   const fields = SCENARIO_FIELD_GROUPS[kind] || [];
   for (const field of fields) appendScenarioField(parent, row, kind, field);
+}
+function appendScenarioFieldsFor(parent, row, kind, fields) {
+  for (const field of fields || []) appendScenarioField(parent, row, kind, field);
+}
+function createSourceTabs(sections) {
+  const wrap = document.createElement('div');
+  wrap.className = 'manager-detail';
+  const tabs = document.createElement('div');
+  tabs.className = 'source-tabs';
+  const pages = document.createElement('div');
+  pages.className = 'source-pages';
+  sections.forEach((section, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'source-tab' + (index === 0 ? ' active' : '');
+    button.textContent = section.label;
+    const page = document.createElement('div');
+    page.className = 'source-page' + (index === 0 ? ' active' : '');
+    if (section.content) page.append(section.content);
+    button.addEventListener('click', () => {
+      tabs.querySelectorAll('.source-tab').forEach(item => item.classList.toggle('active', item === button));
+      pages.querySelectorAll('.source-page').forEach(item => item.classList.toggle('active', item === page));
+    });
+    tabs.append(button);
+    pages.append(page);
+  });
+  wrap.append(tabs, pages);
+  return wrap;
 }
 function assignExistingSiteToForce(siteKey, forceKey) {
   const site = state.scenario?.siteByKey.get(siteKey);
@@ -1758,6 +1835,7 @@ function appendStageIniGeneralFields(parent, row) {
 function isGeneralEntity(entity) { return Number(entity?.command || 0) > 0; }
 function historyGeneralKey(row) { return row.stageIniGeneralKey || `history:${row.person_id}`; }
 function historyGeneralRows() { return (state.commonModel?.historyGenerals || []).filter(row => Number(row.command || 0) > 0); }
+function historyGeneralForPerson(personId) { return historyGeneralRows().find(row => Number(row.person_id || 0) === Number(personId || 0)) || null; }
 function scenarioGeneralRows() { return scenarioRows('entity').filter(isGeneralEntity); }
 function inactiveHistoryGeneralRows() {
   const stageIniRows = inactiveStageIniGeneralRows();
@@ -1930,7 +2008,7 @@ function renderDomainManagers() {
   const addEntity = document.createElement('button');
   addEntity.type = 'button';
   addEntity.textContent = '新增武将';
-  addEntity.addEventListener('click', () => addScenarioEntity('general'));
+  addEntity.addEventListener('click', addScenarioEntity);
   entityToolbar.append(addEntity);
   els.entityList.append(entityToolbar);
   const entitySplit = document.createElement('div');
@@ -1966,14 +2044,48 @@ function renderDomainManagers() {
     title.textContent = entity.entity_name;
     const note = document.createElement('div');
     note.className = 'record-note';
-    note.textContent = `person_id=${entity.person_id} portrait_id=${entity.portrait_id} 兵种=${soldierName(entity.soldier_type_id)} 兵力=${entity.troop_count || 0}`;
+    note.textContent = `person_id=${entity.person_id} portrait_id=${entity.portrait_id} \u5175\u79cd=${soldierName(entity.soldier_type_id)} \u5175\u529b=${entity.troop_count || 0}`;
     fields.append(title, note);
     card.append(portrait, fields);
     entityDetail.append(card);
-    appendScenarioFields(entityDetail, entity, 'entity');
+    const iniPage = document.createElement('div');
+    const iniRow = stageIniGeneralRows().find(row => Number(row.person_id || 0) === Number(entity.person_id || 0));
+    if (iniRow) appendStageIniGeneralFields(iniPage, iniRow);
+    else {
+      const empty = document.createElement('div');
+      empty.className = 'placeholder';
+      empty.textContent = '\u672a\u5339\u914d\u5230 stage.ini \u6b66\u5c06\u6bcd\u8868\u884c\u3002';
+      iniPage.append(empty);
+    }
+    const stgPage = document.createElement('div');
+    appendScenarioFields(stgPage, entity, 'entity');
+    const historyPage = document.createElement('div');
+    const historyRow = historyGeneralForPerson(entity.person_id);
+    if (historyRow) {
+      for (const [key, value] of Object.entries(historyRow)) {
+        const line = document.createElement('label');
+        line.className = 'record-note';
+        line.textContent = `${key} `;
+        const input = document.createElement('input');
+        input.value = value ?? '';
+        input.disabled = true;
+        line.append(input);
+        historyPage.append(line);
+      }
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'placeholder';
+      empty.textContent = '\u672a\u5339\u914d\u5230 History.txt \u52a0\u5165\u65f6\u95f4\u3002';
+      historyPage.append(empty);
+    }
+    entityDetail.append(createSourceTabs([
+      { label: 'ini', content: iniPage },
+      { label: 'stg', content: stgPage },
+      { label: 'history', content: historyPage },
+    ]));
     const del = document.createElement('button');
     del.type = 'button';
-    del.textContent = '删除武将';
+    del.textContent = '\u5220\u9664\u6b66\u5c06';
     del.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
     entityDetail.append(del);
   } else if (historyGeneral) {
@@ -1988,11 +2100,36 @@ function renderDomainManagers() {
     title.textContent = historyGeneral.name;
     const note = document.createElement('div');
     note.className = 'record-note';
-    note.textContent = historyGeneral.stageIniOnly ? `stage.ini person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0}` : `History.txt \u672a\u52a0\u5165\u5267\u672c person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0} \u52a0\u5165=${historyGeneral.join_year || '-'}-${historyGeneral.join_month || '-'}-${historyGeneral.join_day || '-'}`;
+    note.textContent = historyGeneral.stageIniOnly ? `stage.ini person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0}` : `History.txt \u672a\u52a0\u5165\u5267\u672c person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0}`;
     fields.append(title, note);
     card.append(portrait, fields);
     entityDetail.append(card);
-    if (historyGeneral.stageIniOnly) appendStageIniGeneralFields(entityDetail, historyGeneral);
+    const iniPage = document.createElement('div');
+    if (historyGeneral.stageIniOnly) appendStageIniGeneralFields(iniPage, historyGeneral);
+    const stgPage = document.createElement('div');
+    const stgEmpty = document.createElement('div');
+    stgEmpty.className = 'placeholder';
+    stgEmpty.textContent = '\u672a\u52a0\u5165\u5267\u672c\uff0c\u6682\u65e0 .stg \u5f52\u5c5e\u4e0e\u636e\u70b9\u5b57\u6bb5\u3002';
+    stgPage.append(stgEmpty);
+    const historyPage = document.createElement('div');
+    const historyRow = historyGeneralForPerson(historyGeneral.person_id);
+    if (historyRow) {
+      for (const [key, value] of Object.entries(historyRow)) {
+        const line = document.createElement('label');
+        line.className = 'record-note';
+        line.textContent = `${key} `;
+        const input = document.createElement('input');
+        input.value = value ?? '';
+        input.disabled = true;
+        line.append(input);
+        historyPage.append(line);
+      }
+    }
+    entityDetail.append(createSourceTabs([
+      { label: 'ini', content: iniPage },
+      { label: 'stg', content: stgPage },
+      { label: 'history', content: historyPage },
+    ]));
   }
   entitySplit.append(entityItems, entityDetail);
   els.entityList.append(entitySplit);
