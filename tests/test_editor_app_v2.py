@@ -291,6 +291,7 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
                 'palette.dat',
                 {'available': False},
                 ['#000000'],
+                ['#010203'],
                 {'available': False},
                 scenario_files,
                 {'available': True, 'forces': [], 'sites': [], 'entities': []},
@@ -304,6 +305,8 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
             self.assertFalse(payload['scenarioFiles']['stageIniWorkbook']['available'])
             self.assertTrue(payload['scenarioModel']['available'])
             self.assertTrue(payload['commonModel']['available'])
+            self.assertEqual(payload['pointPalette'], ['#000000'])
+            self.assertEqual(payload['minimapPalette'], ['#010203'])
             self.assertIn('blocked', payload['editableLayers'])
             self.assertIn('terrain_tag', payload['editableLayers'])
             self.assertEqual(payload['resourceLayers'], ['acwx', 'acwy', 'acwz'])

@@ -670,7 +670,8 @@ function normalizeMeta(meta) {
   const pointLayers = (Array.isArray(meta.pointLayers) && meta.pointLayers.length ? meta.pointLayers : POINT_LAYER_OPTIONS).map(canonicalFieldName);
   const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name)).map(canonicalFieldName);
   const pointPalette = Array.isArray(meta.pointPalette) ? meta.pointPalette.slice(0, 256) : [];
-  return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, sidecars: normalizeSidecars(meta.sidecars), siteLinks: normalizeSiteLinks(meta.siteLinks), scenarioModel: meta.scenarioModel || { available: false }, commonModel: meta.commonModel || { available: false } };
+  const minimapPalette = Array.isArray(meta.minimapPalette) ? meta.minimapPalette.slice(0, 256) : pointPalette.slice();
+  return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, minimapPalette, sidecars: normalizeSidecars(meta.sidecars), siteLinks: normalizeSiteLinks(meta.siteLinks), scenarioModel: meta.scenarioModel || { available: false }, commonModel: meta.commonModel || { available: false } };
 }
 function getFieldMeta(name) {
   return state.fieldMetaByName.get(canonicalFieldName(name)) || DEFAULT_FIELD_META.find(entry => entry.name === canonicalFieldName(name)) || { name, alias: name, label: name, editable: true, reserved: false };
@@ -1359,7 +1360,7 @@ function rebuildDataMinimap() {
       const point = cellToWorld(col, row);
       const x = Math.floor((point.x + 20) * scale);
       const y = Math.floor((point.y + 10) * scale);
-      mapCtx.fillStyle = state.meta.pointPalette[value] || '#000000';
+      mapCtx.fillStyle = state.meta.minimapPalette[value] || '#000000';
       mapCtx.fillRect(x, y, 1, 1);
     }
   }
@@ -3245,6 +3246,7 @@ function parseStageM(buffer, name = 'local.m') {
     pointLayers: state.meta.pointLayers.slice(),
     editableRecordFields: state.meta.editableRecordFields.slice(),
     pointPalette: state.meta.pointPalette.slice(),
+    minimapPalette: state.meta.minimapPalette.slice(),
     palette: state.meta.palette,
     image: null,
     minimap: { image: null, source: 'local-m-file', sync: 'derived-from-m-records' },
