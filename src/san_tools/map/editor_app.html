@@ -198,10 +198,11 @@ canvas { display: block; width: 100%; height: 100%; }
       <div class="overlay-list" id="overlayList"></div>
     </section>
     <section class="section">
-      <div class="section-title">合成对象 / 区域复制</div>
+      <div class="section-title">合成对象 / 区域操作</div>
       <div class="selection-actions">
         <button id="setRegionAnchor" type="button">设起点</button>
         <button id="copyRegion" type="button">复制区域</button>
+        <button id="cutRegion" type="button">剪切区域</button>
         <button id="pasteRegion" type="button">粘贴区域</button>
         <button id="saveComposite" type="button">存为对象</button>
       </div>
@@ -259,7 +260,7 @@ canvas { display: block; width: 100%; height: 100%; }
     </div>
   </aside>
   <footer class="bottom-dock">
-    <section class="section"><div class="section-title">当前工作</div><div class="hint">选择格子后可在 Raw 中精确改字段；选择区域后可复制全部层数据或保存为合成对象。</div></section>
+    <section class="section"><div class="section-title">当前工作</div><div class="hint">选择格子后可在 Raw 中精确改字段；选择区域后可复制、剪切全部层数据或保存为合成对象。</div></section>
     <section class="history-section"><div class="section-title">修改记录</div><div class="patch-list" id="patchList"></div></section>
     <section class="section"><div class="section-title">状态</div><div class="field"><label>修改数量</label><input id="patchCount" value="0" readonly></div><div class="hint">导出前会检查 .m 长度、字段范围、sidecar 参考和据点联动状态。</div></section>
   </footer>
@@ -423,7 +424,7 @@ const els = {
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
   exportFiles: document.getElementById('exportFiles'),
   sitePicker: document.getElementById('sitePicker'), clearSite: document.getElementById('clearSite'), siteInfo: document.getElementById('siteInfo'), siteNote: document.getElementById('siteNote'),
-  setRegionAnchor: document.getElementById('setRegionAnchor'), copyRegion: document.getElementById('copyRegion'), pasteRegion: document.getElementById('pasteRegion'), saveComposite: document.getElementById('saveComposite'),
+  setRegionAnchor: document.getElementById('setRegionAnchor'), copyRegion: document.getElementById('copyRegion'), cutRegion: document.getElementById('cutRegion'), pasteRegion: document.getElementById('pasteRegion'), saveComposite: document.getElementById('saveComposite'),
   selectionInfo: document.getElementById('selectionInfo'), compositeList: document.getElementById('compositeList'),
   hudTool: document.getElementById('hudTool'), hudLayer: document.getElementById('hudLayer'), hudSelection: document.getElementById('hudSelection'), hudSite: document.getElementById('hudSite'),
   forceList: document.getElementById('forceList'), entityList: document.getElementById('entityList'), validationList: document.getElementById('validationList'),
@@ -1421,6 +1422,32 @@ function captureRegionSnapshot(name = '区域复制') {
   }
   return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'rect', width: bounds.width, height: bounds.height, count: bounds.count, fields: state.meta.fields.slice(), rows };
 }
+function cutRegionSnapshot(name = '区域剪切') {
+  const snapshot = captureRegionSnapshot(name);
+  if (!snapshot) return null;
+  const cells = [];
+  if (snapshot.mode === 'cells') {
+    cells.push(...selectedCellList().map(cell => ({ col: cell.col, row: cell.row })));
+  } else {
+    const bounds = currentRegionBounds();
+    if (!bounds) return null;
+    for (let row = bounds.top; row <= bounds.bottom; row++) {
+      for (let col = bounds.left; col <= bounds.right; col++) cells.push({ col, row });
+    }
+  }
+  const clearFields = (state.meta.editableRecordFields || [])
+    .map(canonicalFieldName)
+    .filter(field => field !== 'acwx');
+  const changes = [];
+  for (const cell of cells) {
+    for (const field of clearFields) {
+      const after = field === 'acwy' || field === 'acwz' ? -1 : 0;
+      changes.push({ x: cell.col, y: cell.row, field, after });
+    }
+  }
+  applyChangeSet(changes);
+  return snapshot;
+}
 function pasteRegionSnapshot(snapshot) {
   if (!snapshot || !state.selected) return false;
   const changes = [];
@@ -1455,6 +1482,7 @@ function refreshCompositeList() {
   els.selectionInfo.textContent = `${describeRegion()}${state.regionClipboard ? `；剪贴板 ${state.regionClipboard.width} x ${state.regionClipboard.height}` : ''}`;
   els.pasteRegion.disabled = !state.regionClipboard && !state.activeCompositeId;
   els.copyRegion.disabled = !currentRegionBounds();
+  els.cutRegion.disabled = !currentRegionBounds();
   els.saveComposite.disabled = !currentRegionBounds();
   els.compositeList.textContent = '';
   if (!state.compositeObjects.length) {
@@ -4421,6 +4449,7 @@ document.querySelectorAll('.inspector-tab').forEach(tab => { tab.addEventListene
 els.tool.addEventListener('change', () => { updateHud(); });
 els.setRegionAnchor.addEventListener('click', () => { if (!state.selected) return; state.regionAnchor = { ...state.selected }; refreshCompositeList(); scheduleDraw(); });
 els.copyRegion.addEventListener('click', () => { const snapshot = captureRegionSnapshot('区域复制'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已复制区域 ' + snapshot.width + ' x ' + snapshot.height; });
+els.cutRegion.addEventListener('click', () => { const snapshot = cutRegionSnapshot('区域剪切'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已剪切区域 ' + snapshot.width + ' x ' + snapshot.height + '，源区域仅保留底层地表'; });
 els.pasteRegion.addEventListener('click', () => { const snapshot = state.regionClipboard || state.compositeObjects.find(item => item.id === state.activeCompositeId); if (!snapshot || !state.selected) return; if (pasteRegionSnapshot(snapshot)) els.status.textContent = '已粘贴 ' + snapshot.name; });
 els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成对象 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
 els.loadMFile.addEventListener('change', async () => { els.status.classList.remove('error'); try { await loadLocalProjectFiles(els.loadMFile.files); } catch (err) { const message = String(err?.message || err); els.status.textContent = message; els.status.title = message; els.status.classList.add('error'); } finally { els.loadMFile.value = ''; } });
@@ -4508,7 +4537,7 @@ async function boot() {
   resetEditState(state.meta);
   await loadStagePicker();
 }
-window.sanEditor = { state, els, applyImportedPatchPayload, loadPatchFile, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, pasteRegionSnapshot, validationIssues };
+window.sanEditor = { state, els, applyImportedPatchPayload, loadPatchFile, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, cutRegionSnapshot, pasteRegionSnapshot, validationIssues };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>

@@ -270,6 +270,43 @@ if (findCellByCoordinates()) throw new Error('越界坐标未被拒绝');
 """
         self.run_node(harness + functions + checks)
 
+    def test_cut_region_preserves_snapshot_and_clears_to_base_terrain(self) -> None:
+        """验证区域剪切先保存全部字段，再把源区域作为一次修改清理到底层地表。"""
+
+        source = script_source()
+        functions = function_range(source, "captureRegionSnapshot", "refreshCompositeList")
+        harness = """
+const fields = ['acwx', 'acwy', 'acwz', 'terrain_tag', 'blocked', 'site_trigger', 'site_area', 'minimap_color'];
+const state = {
+  meta: {
+    width: 2, height: 1, fields, editableRecordFields: fields.slice(),
+    records: [[10, 20, 30, 1, 2, 3, 4, 60], [11, 21, 31, 5, 6, 7, 8, 61]]
+  },
+  selected: { col: 1, row: 0 }, regionAnchor: null,
+  selectedCells: new Map([['0,0', { col: 0, row: 0 }], ['1,0', { col: 1, row: 0 }]])
+};
+let appliedBatches = 0;
+function canonicalFieldName(value) { return value; }
+function selectedCellList() { return [...state.selectedCells.values()]; }
+function selectedCellBounds() { return { left: 0, right: 1, top: 0, bottom: 0, width: 2, height: 1, count: 2 }; }
+function currentRegionBounds() { return selectedCellBounds(); }
+function recordAt(cell) { return state.meta.records[cell.row * state.meta.width + cell.col]; }
+function applyChangeSet(changes) {
+  appliedBatches += 1;
+  for (const change of changes) recordAt({ col: change.x, row: change.y })[fields.indexOf(change.field)] = change.after;
+  return true;
+}
+"""
+        checks = """
+const snapshot = cutRegionSnapshot();
+if (!snapshot || snapshot.mode !== 'cells' || snapshot.cells.length !== 2) throw new Error('剪切快照不完整');
+if (snapshot.cells[0].record.join(',') !== '10,20,30,1,2,3,4,60') throw new Error('剪切前未保存全部层数据');
+if (state.meta.records[0].join(',') !== '10,-1,-1,0,0,0,0,0') throw new Error('源区域未仅保留底层地表');
+if (state.meta.records[1].join(',') !== '11,-1,-1,0,0,0,0,0') throw new Error('多选源区域清理不完整');
+if (appliedBatches !== 1) throw new Error('区域剪切未作为单次撤销事务提交');
+"""
+        self.run_node(harness + functions + checks)
+
     def test_data_minimap_builds_without_full_map_image(self) -> None:
         """验证大地图无整图 Canvas 时仍可由 minimap_color 构建小地图。"""
 

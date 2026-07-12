@@ -20,13 +20,14 @@ class TestEditorAppV2Template(unittest.TestCase):
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
         for marker in (
             '地图编辑器 2.0',
-            '合成对象 / 区域复制',
+            '合成对象 / 区域操作',
             '势力管理',
             '据点 / 城门',
             '武将管理',
             '导出校验',
             'data-tab="raw"',
             'id="resourceList"',
+            'id="cutRegion"',
             'id="canvas"',
             'terrain_tag',
             'minimap_color',
@@ -93,6 +94,7 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn('buildRewrittenStgBytes', html)
         self.assertIn('parentSiteKey', html)
         self.assertIn('selectedCells', html)
+        self.assertIn('cutRegionSnapshot', html)
         self.assertIn('entityPortraitStyle', html)
         self.assertIn('manager-detail', html)
         self.assertIn('scenarioCollectionName', html)
