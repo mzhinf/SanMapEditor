@@ -292,6 +292,7 @@ const DATA_OVERLAY_OPTIONS = [
   { key: 'site_trigger', name: 'site_trigger', label: '\u636e\u70b9\u5f71\u54cd', color: '#0ea5e9', mode: 'fill' },
   { key: 'site_area', name: 'site_area', label: '\u636e\u70b9\u6838\u5fc3', color: '#f59e0b', mode: 'center-ring' },
   { key: 'blocked', name: 'blocked', label: '\u963b\u6321', color: '#ef4444', mode: 'large-outline' },
+  { key: 'edited', name: 'edited', label: '\u5df2\u7f16\u8f91\u7eff\u6846', color: '#22c55e', mode: 'edited-outline', derived: true },
 ];
 const SCENARIO_FIELD_LABELS = {
   force: {
@@ -1053,7 +1054,7 @@ function renderDataOverlayControls() {
     swatch.className = 'overlay-swatch';
     swatch.style.background = option.color;
     const text = document.createElement('span');
-    text.textContent = layerOptionLabel(option.key);
+    text.textContent = option.derived ? option.label : layerOptionLabel(option.key);
     label.append(input, swatch, text);
     els.overlayList.append(label);
   }
@@ -1243,7 +1244,7 @@ function drawCurrentPointLayer(viewWidth, viewHeight) {
 function drawVisiblePointOverlay(viewWidth, viewHeight) {
   if (!state.meta || !shouldShowDataOverlays()) return;
   const options = DATA_OVERLAY_OPTIONS
-    .filter(option => state.dataOverlayVisible[option.key])
+    .filter(option => !option.derived && state.dataOverlayVisible[option.key])
     .map(option => ({ ...option, fieldIndex: fieldIndex(option.key) }))
     .filter(option => option.fieldIndex >= 0);
   if (!options.length) return;
@@ -1302,6 +1303,17 @@ function drawVisibleMapResources(viewWidth, viewHeight) {
     }
   }
 }
+function drawEditedCellOverlay() {
+  if (!shouldShowDataOverlays() || state.dataOverlayVisible.edited === false) return;
+  ctx.save();
+  ctx.lineWidth = 1.4 / state.transform.scale;
+  ctx.strokeStyle = 'rgba(34,197,94,0.95)';
+  for (const patch of state.patches.values()) {
+    diamondPath(patch.x, patch.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 function draw() {
   const image = displayImage();
   const useCompositedImage = !!image;
@@ -1316,10 +1328,10 @@ function draw() {
   else drawVisibleMapResources(rect.width, rect.height);
   drawCurrentPointLayer(rect.width, rect.height);
   drawVisiblePointOverlay(rect.width, rect.height);
+  drawEditedCellOverlay();
   drawActiveSiteOverlay();
   ctx.lineWidth = 1 / state.transform.scale;
-  for (const patch of state.patches.values()) { diamondPath(patch.x, patch.y); ctx.strokeStyle = 'rgba(15,118,110,0.9)'; ctx.stroke(); }
-  for (const cell of selectedCellList()) { diamondPath(cell.col, cell.row); ctx.fillStyle = 'rgba(245,158,11,0.14)'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.4 / state.transform.scale; ctx.fill(); ctx.stroke(); }
+  for (const cell of selectedCellList()) { diamondPath(cell.col, cell.row); ctx.fillStyle = 'rgba(245,158,11,0.07)'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.4 / state.transform.scale; ctx.fill(); ctx.stroke(); }
   if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2.4 / state.transform.scale; ctx.stroke(); }
   ctx.restore();
   drawMinimap();
@@ -1402,39 +1414,40 @@ function describeRegion() {
 }
 function captureRegionSnapshot(name = '区域复制') {
   const selectedCells = selectedCellList();
+  let bounds = null;
+  let candidates = [];
   if (selectedCells.length > 1 || (selectedCells.length === 1 && !state.regionAnchor)) {
-    const bounds = selectedCellBounds();
-    const active = state.selected || selectedCells[0];
-    const anchor = { dx: active.col - bounds.left, dy: active.row - bounds.top };
-    const cells = selectedCells
-      .slice()
-      .sort((a, b) => a.row - b.row || a.col - b.col)
-      .map(cell => ({ dx: cell.col - bounds.left, dy: cell.row - bounds.top, record: recordAt(cell).slice() }));
-    return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'cells', width: bounds.width, height: bounds.height, count: cells.length, fields: state.meta.fields.slice(), anchor, cells };
+    bounds = selectedCellBounds();
+    candidates = selectedCells.slice();
+  } else {
+    bounds = currentRegionBounds();
+    if (bounds) {
+      for (let row = bounds.top; row <= bounds.bottom; row++) {
+        for (let col = bounds.left; col <= bounds.right; col++) candidates.push({ col, row });
+      }
+    }
   }
-  const bounds = currentRegionBounds();
   if (!bounds) return null;
-  const rows = [];
-  for (let row = bounds.top; row <= bounds.bottom; row++) {
-    const line = [];
-    for (let col = bounds.left; col <= bounds.right; col++) line.push(recordAt({ col, row }).slice());
-    rows.push(line);
-  }
-  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'rect', width: bounds.width, height: bounds.height, count: bounds.count, fields: state.meta.fields.slice(), rows };
+  const acwyIndex = fieldIndex('acwy');
+  const acwzIndex = fieldIndex('acwz');
+  const cellsWithContent = candidates.filter(cell => {
+    const record = recordAt(cell);
+    return (acwyIndex >= 0 && Number(record[acwyIndex]) >= 0) || (acwzIndex >= 0 && Number(record[acwzIndex]) >= 0);
+  });
+  if (!cellsWithContent.length) return null;
+  const active = state.selected || cellsWithContent[0];
+  const anchor = { dx: active.col - bounds.left, dy: active.row - bounds.top };
+  const cells = cellsWithContent
+    .sort((left, right) => left.row - right.row || left.col - right.col)
+    .map(cell => ({ dx: cell.col - bounds.left, dy: cell.row - bounds.top, record: recordAt(cell).slice() }));
+  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'cells', width: bounds.width, height: bounds.height, count: cells.length, fields: state.meta.fields.slice(), anchor, cells };
 }
 function cutRegionSnapshot(name = '区域剪切') {
   const snapshot = captureRegionSnapshot(name);
   if (!snapshot) return null;
-  const cells = [];
-  if (snapshot.mode === 'cells') {
-    cells.push(...selectedCellList().map(cell => ({ col: cell.col, row: cell.row })));
-  } else {
-    const bounds = currentRegionBounds();
-    if (!bounds) return null;
-    for (let row = bounds.top; row <= bounds.bottom; row++) {
-      for (let col = bounds.left; col <= bounds.right; col++) cells.push({ col, row });
-    }
-  }
+  const bounds = currentRegionBounds();
+  if (!bounds) return null;
+  const cells = snapshot.cells.map(cell => ({ col: bounds.left + cell.dx, row: bounds.top + cell.dy }));
   const clearFields = (state.meta.editableRecordFields || [])
     .map(canonicalFieldName)
     .filter(field => field !== 'acwx');
@@ -1754,33 +1767,50 @@ function nextAvailableStageIniSite() {
   const used = new Set(scenarioRows('site').map(site => Number(site.city_index || 0)).filter(value => value > 0));
   return stageIniSiteRows().find(row => Number(row.city_index || 0) > 0 && !used.has(Number(row.city_index))) || null;
 }
+function stageIniSiteTemplate() {
+  const rows = stageIniSiteRows();
+  return rows.find(row => Number(row.house_attr || 0) === 0 && Number(row.castle_scale || 0) === 1)
+    || rows.find(row => Number(row.house_attr || 0) === 0)
+    || rows[0]
+    || null;
+}
+function nextStageIniSiteRowKey() {
+  const rowIds = stageIniSiteRows().map(row => Number.parseInt(row.stageIniRowKey, 10)).filter(Number.isFinite);
+  return String((rowIds.length ? Math.max(...rowIds) : 0) + 1);
+}
 function addScenarioSite(forceKey = '') {
   if (!state.scenario) return;
   const force = state.scenario.forceByKey.get(forceKey || state.activeForceKey) || scenarioRows('force')[0] || null;
   const cell = state.selected || { col: 0, row: 0 };
   const index = state.scenario.sites.length;
   const seed = nextAvailableStageIniSite();
+  const template = seed || stageIniSiteTemplate();
   const cityIndex = Number(seed?.city_index || 0) || Math.max(0, ...stageIniSiteRows().map(row => Number(row.city_index || 0))) + 1;
+  const stageIniRowKey = seed?.stageIniRowKey || nextStageIniSiteRowKey();
+  const siteName = seed?.title || ('Site ' + (index + 1));
+  const stageIniValues = template?.stageIniValues ? { ...template.stageIniValues } : {};
+  stageIniValues.row_id = stageIniRowKey;
+  stageIniValues.title = siteName;
   const site = {
     siteKey: 'site:new:' + Date.now() + ':' + state.scenario.sites.length,
     isNew: true,
     siteIndex: index,
-    site_name: seed?.title || ('Site ' + (index + 1)),
+    site_name: siteName,
     city_index: cityIndex,
-    house_attr: Number(seed?.house_attr || 0),
-    castle_scale: Number(seed?.castle_scale || 1),
-    population: Number(seed?.population || 0),
-    gold: Number(seed?.gold || 0),
-    food: Number(seed?.food || 0),
-    standby_soldier: Number(seed?.standby_soldier || 0),
-    develop: Number(seed?.develop || 0),
-    commerce: Number(seed?.commerce || 0),
-    security: Number(seed?.security || 0),
+    house_attr: Number(template?.house_attr || 0),
+    castle_scale: Number(template?.castle_scale || 1),
+    population: Number(template?.population || 0),
+    gold: Number(template?.gold || 0),
+    food: Number(template?.food || 0),
+    standby_soldier: Number(template?.standby_soldier || 0),
+    develop: Number(template?.develop || 0),
+    commerce: Number(template?.commerce || 0),
+    security: Number(template?.security || 0),
     coord_x: cell.col,
     coord_y: cell.row,
-    governor: Number(seed?.governor || 0),
-    stageIniRowKey: seed?.stageIniRowKey || String(cityIndex),
-    stageIniValues: seed?.stageIniValues ? { ...seed.stageIniValues } : {},
+    governor: Number(template?.governor || 0),
+    stageIniRowKey,
+    stageIniValues,
     parentForceKey: force?.forceKey || '',
     parent_force_index: force?.forceIndex ?? 0,
     parent_force_name: force?.force_name || '',
@@ -3979,16 +4009,34 @@ function canBuildStageIniWorkbook() { return !!stageIniPatchModel()?.workbookShe
 function stageIniRowsForKind(kind) {
   if (kind === 'site') {
     const rows = new Map();
+    const normalizedKeyBySite = new Map();
+    const baseRows = stageIniSiteRows();
+    const reservedRowKeys = new Set(baseRows.map(row => String(row.stageIniRowKey || '')));
+    let nextRowId = Math.max(0, ...baseRows.map(row => Number.parseInt(row.stageIniRowKey, 10)).filter(Number.isFinite)) + 1;
+    const template = stageIniSiteTemplate();
+    const locations = stageIniPatchModel()?.fieldLocations?.castle || {};
     for (const source of state.scenario ? scenarioRows('site') : []) {
       if (!source.isNew || siteHouseAttrValue(source) !== 0) continue;
-      const rowKey = String(source.stageIniRowKey || source.city_index || '');
-      rows.set(rowKey, { ...source, stageIniRowKey: rowKey });
+      let rowKey = String(source.stageIniRowKey || source.city_index || '');
+      if (!locations[rowKey] && reservedRowKeys.has(rowKey)) {
+        while (reservedRowKeys.has(String(nextRowId))) nextRowId += 1;
+        rowKey = String(nextRowId++);
+      }
+      reservedRowKeys.add(rowKey);
+      normalizedKeyBySite.set(source.siteKey, rowKey);
+      const stageIniValues = {
+        ...(template?.stageIniValues || {}),
+        ...(source.stageIniValues || {}),
+        row_id: rowKey,
+        title: String(source.site_name || source.stageIniValues?.title || ''),
+      };
+      rows.set(rowKey, { ...source, stageIniRowKey: rowKey, stageIniValues });
     }
     for (const change of state.scenarioPatches.values()) {
       if (change.kind !== 'site' || change.op !== 'update' || !SITE_INI_FIELDS.includes(change.field)) continue;
       const source = state.scenario.siteByKey.get(change.key);
       if (!source || source.deleted) continue;
-      const rowKey = String(source.stageIniRowKey || source.city_index || '');
+      const rowKey = normalizedKeyBySite.get(source.siteKey) || String(source.stageIniRowKey || source.city_index || '');
       if (!rows.has(rowKey)) rows.set(rowKey, { stageIniRowKey: rowKey });
       rows.get(rowKey)[change.field] = source[change.field];
     }
@@ -4034,7 +4082,7 @@ function stageIniLogicalRowBytes(row, kind) {
   for (const [field, header] of Object.entries(config.fields || {})) {
     if (field in row) values[header] = row[field];
   }
-  const title = String(values.title || row.site_name || row.entity_name || row.name || '');
+  const title = String(row.site_name || row.entity_name || row.name || values.title || '');
   const titleBytes = encodeBig5Text(title);
   if (titleBytes.length >= Number(layout.titleBytes)) throw new Error('stage.ini 标题过长：' + title);
   const bytes = new Uint8Array(Number(layout.rowBytes));
@@ -4072,14 +4120,16 @@ function buildEditedStageIniBytes(originalBytes) {
   const header = patched.slice(0, 8);
   const oldMain = patched.slice(8, Number(append.tailOffset));
   const generalOffset = Number(append.general.insertOffset) - 8;
-  let main = insertByteRows(oldMain, generalOffset, newGenerals.map(row => stageIniLogicalRowBytes(row, 'entity')));
-  main = padByteSection(main, Number(append.mainStride));
+  const generalRows = concatBytes(newGenerals.map(row => stageIniLogicalRowBytes(row, 'entity')));
+  const alignedGeneralRows = padByteSection(generalRows, Number(append.mainStride));
+  const main = insertByteRows(oldMain, generalOffset, alignedGeneralRows.length ? [alignedGeneralRows] : []);
   new DataView(header.buffer, header.byteOffset, header.byteLength).setUint32(0, main.length / Number(append.mainStride), true);
 
-  let tail = patched.slice(Number(append.tailOffset));
+  const originalTail = patched.slice(Number(append.tailOffset));
   const cityOffset = Number(append.castle.insertOffset) - Number(append.tailOffset);
-  tail = insertByteRows(tail, cityOffset, newCities.map(row => stageIniLogicalRowBytes(row, 'site')));
-  tail = padByteSection(tail, Number(append.tailStride));
+  const cityRows = concatBytes(newCities.map(row => stageIniLogicalRowBytes(row, 'site')));
+  const alignedCityRows = padByteSection(cityRows, Number(append.tailStride));
+  const tail = insertByteRows(originalTail, cityOffset, alignedCityRows.length ? [alignedCityRows] : []);
   return concatBytes([header, main, tail]);
 }
 function cloneWorkbookSheets() {
@@ -4115,6 +4165,9 @@ function applyWorkbookRowPatch(sheetMap, row, kind) {
     if (column < 0 || !(field in row)) continue;
     target[column] = String(row[field] ?? '');
   }
+  const titleColumn = sheet.headers.indexOf('title');
+  const title = row.site_name || row.entity_name || row.name;
+  if (titleColumn >= 0 && title !== undefined) target[titleColumn] = String(title);
 }
 function buildStageIniWorkbookBytes() {
   const sheets = cloneWorkbookSheets();
@@ -4359,16 +4412,8 @@ async function buildExportArtifacts() {
   if (historyPatch) files.push(historyPatch);
   return { files, usedFallbackTail: sidecarFlags.some(Boolean) };
 }
-async function writeFilesToDirectory(dirHandle, files) {
-  for (const file of files) {
-    const handle = await dirHandle.getFileHandle(file.name, { create: true });
-    const writer = await handle.createWritable();
-    await writer.write(file.bytes);
-    await writer.close();
-  }
-}
-function triggerDownload(name, bytes) {
-  const blob = new Blob([bytes], { type: 'application/octet-stream' });
+function triggerDownload(name, bytes, type = 'application/octet-stream') {
+  const blob = new Blob([bytes], { type });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = name;
@@ -4378,23 +4423,11 @@ function triggerDownload(name, bytes) {
 async function exportEditedArtifacts() {
   try {
     const artifacts = await buildExportArtifacts();
-    if (typeof window.showDirectoryPicker === 'function') {
-      try {
-        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        await writeFilesToDirectory(dirHandle, artifacts.files);
-        els.status.textContent = artifacts.usedFallbackTail ? '已导出可写文件，缺失 sidecar 尾区时已用 0 填充。' : '已导出可写文件';
-        return;
-      } catch (err) {
-        if (err?.name === 'AbortError') {
-          els.status.textContent = '已取消导出';
-          return;
-        }
-      }
-    }
-    for (const [index, file] of artifacts.files.entries()) {
-      window.setTimeout(() => triggerDownload(file.name, file.bytes), index * 180);
-    }
-    els.status.textContent = artifacts.usedFallbackTail ? '已开始下载可写文件，缺失 sidecar 尾区时已用 0 填充。' : '已开始下载可写文件';
+    const archive = zipStore(artifacts.files.map(file => ({ name: file.name, data: file.bytes })));
+    triggerDownload(state.meta.stage + '-export.zip', archive, 'application/zip');
+    els.status.textContent = artifacts.usedFallbackTail
+      ? '已导出 ZIP；缺失 sidecar 尾区时已用 0 填充。'
+      : '已导出 ZIP：' + state.meta.stage + '-export.zip';
   } catch (err) {
     els.status.textContent = String(err.message || err);
   }

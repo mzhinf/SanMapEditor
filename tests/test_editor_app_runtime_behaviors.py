@@ -87,6 +87,8 @@ const state = {
   selected: { col: 40, row: 50 }, activeForceKey: force.forceKey, activeSiteKey: '',
   scenario: { sites: [], forces: [force], forceByKey: new Map([[force.forceKey, force]]), siteByKey: new Map() }
 };
+model.workbookSheets[0].headers.push('develop_cap', 'commerce_cap', 'security_cap', 'officer_slot');
+model.workbookSheets[0].rows[0].push(120, 130, 140, 9);
 function stageIniPatchModel() { return model; }
 function scenarioRows(kind) { return kind === 'site' ? state.scenario.sites.filter(row => !row.deleted) : state.scenario.forces; }
 function refreshScenarioRelations() { state.scenario.siteByKey = new Map(state.scenario.sites.map(row => [row.siteKey, row])); }
@@ -101,6 +103,11 @@ const site = state.scenario.sites[0];
 if (!site || state.activeSiteKey !== site.siteKey) throw new Error('新增据点未选中');
 if (site.city_index !== 2 || site.castle_scale !== 4 || site.population !== 2100 || site.gold !== 6000 || site.food !== 15000) throw new Error('stage.ini 基本字段缺失');
 if (site.coord_x !== 40 || site.coord_y !== 50 || site.stageIniRowKey !== '2') throw new Error('据点坐标或母表行错误');
+addScenarioSite(force.forceKey);
+const appended = state.scenario.sites[1];
+if (appended.city_index !== 3 || appended.stageIniRowKey !== '3') throw new Error('新增城池的都市索引与母表行号未独立递增');
+if (appended.stageIniValues.develop_cap !== 120 || appended.stageIniValues.commerce_cap !== 130 || appended.stageIniValues.security_cap !== 140 || appended.stageIniValues.officer_slot !== 9) throw new Error('新增城池未继承完整母表模板');
+if (appended.stageIniValues.row_id !== '3' || appended.stageIniValues.title !== 'Site 2') throw new Error('新增城池母表标识或标题未初始化');
 """
         self.run_node(harness + functions + checks)
 
@@ -280,13 +287,14 @@ const fields = ['acwx', 'acwy', 'acwz', 'terrain_tag', 'blocked', 'site_trigger'
 const state = {
   meta: {
     width: 2, height: 1, fields, editableRecordFields: fields.slice(),
-    records: [[10, 20, 30, 1, 2, 3, 4, 60], [11, 21, 31, 5, 6, 7, 8, 61]]
+    records: [[10, 20, -1, 1, 2, 3, 4, 60], [11, -1, -1, 5, 6, 7, 8, 61]]
   },
   selected: { col: 1, row: 0 }, regionAnchor: null,
   selectedCells: new Map([['0,0', { col: 0, row: 0 }], ['1,0', { col: 1, row: 0 }]])
 };
 let appliedBatches = 0;
 function canonicalFieldName(value) { return value; }
+function fieldIndex(field) { return fields.indexOf(field); }
 function selectedCellList() { return [...state.selectedCells.values()]; }
 function selectedCellBounds() { return { left: 0, right: 1, top: 0, bottom: 0, width: 2, height: 1, count: 2 }; }
 function currentRegionBounds() { return selectedCellBounds(); }
@@ -299,14 +307,51 @@ function applyChangeSet(changes) {
 """
         checks = """
 const snapshot = cutRegionSnapshot();
-if (!snapshot || snapshot.mode !== 'cells' || snapshot.cells.length !== 2) throw new Error('剪切快照不完整');
-if (snapshot.cells[0].record.join(',') !== '10,20,30,1,2,3,4,60') throw new Error('剪切前未保存全部层数据');
+if (!snapshot || snapshot.mode !== 'cells' || snapshot.cells.length !== 1) throw new Error('复制/剪切未过滤纯底层 Cell');
+if (snapshot.cells[0].record.join(',') !== '10,20,-1,1,2,3,4,60') throw new Error('剪切前未保存有效 Cell 的全部层数据');
 if (state.meta.records[0].join(',') !== '10,-1,-1,0,0,0,0,0') throw new Error('源区域未仅保留底层地表');
-if (state.meta.records[1].join(',') !== '11,-1,-1,0,0,0,0,0') throw new Error('多选源区域清理不完整');
+if (state.meta.records[1].join(',') !== '11,-1,-1,5,6,7,8,61') throw new Error('纯底层 Cell 不应参与剪切');
 if (appliedBatches !== 1) throw new Error('区域剪切未作为单次撤销事务提交');
 """
         self.run_node(harness + functions + checks)
 
+    def test_edited_outline_respects_overlay_toggle(self) -> None:
+        """验证已编辑绿框可由数据叠加开关独立显示和隐藏。"""
+
+        source = script_source()
+        functions = function_range(source, "drawEditedCellOverlay", "drawMinimap")
+        harness = """
+let strokes = 0;
+const ctx = { save() {}, restore() {}, stroke() { strokes += 1; }, set lineWidth(value) {}, set strokeStyle(value) {} };
+const state = { transform: { scale: 1 }, patches: new Map([['a', { x: 1, y: 2 }], ['b', { x: 3, y: 4 }]]), dataOverlayVisible: { edited: false } };
+function shouldShowDataOverlays() { return true; }
+function diamondPath() {}
+"""
+        checks = """
+drawEditedCellOverlay();
+if (strokes !== 0) throw new Error('关闭后仍显示已编辑绿框');
+state.dataOverlayVisible.edited = true;
+drawEditedCellOverlay();
+if (strokes !== 2) throw new Error('开启后未显示全部已编辑绿框');
+"""
+        self.run_node(harness + functions + checks)
+
+    def test_zip_store_contains_all_export_files(self) -> None:
+        """验证导出归档是包含全部文件的标准 ZIP 存储包。"""
+
+        source = script_source()
+        functions = function_range(source, "crc32", "buildXlsxBytes")
+        checks = """
+const archive = zipStore([
+  { name: 'stage01.m', data: new Uint8Array([1, 2, 3]) },
+  { name: 'stage.ini', data: new Uint8Array([4, 5]) }
+]);
+const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+if (view.getUint32(0, true) !== 0x04034b50 || view.getUint32(archive.length - 22, true) !== 0x06054b50) throw new Error('ZIP 结构签名错误');
+const text = new TextDecoder().decode(archive);
+if (!text.includes('stage01.m') || !text.includes('stage.ini')) throw new Error('ZIP 缺少导出文件');
+"""
+        self.run_node(functions + checks)
     def test_data_minimap_builds_without_full_map_image(self) -> None:
         """验证大地图无整图 Canvas 时仍可由 minimap_color 构建小地图。"""
 
@@ -328,11 +373,50 @@ if (fills[1][4] !== '#000000' || fills[2][4] !== '#ffffff') throw new Error('小
 if (fills[1][0] !== 84 || fills[1][1] !== 74) throw new Error('Cell 未按世界坐标投影');
 """
         self.run_node(harness + functions + checks)
+    def test_legacy_new_site_master_row_is_migrated(self) -> None:
+        """验证旧 Patch 的冲突行号会迁移，并从城池模板补齐完整字段。"""
+
+        source = script_source()
+        functions = (
+            function_range(source, "stageIniSiteRows", "nextAvailableStageIniSite")
+            + function_range(source, "stageIniSiteTemplate", "addScenarioSite")
+            + function_range(source, "stageIniRowsForKind", "applyStageIniRowPatch")
+        )
+        harness = """
+const model = {
+  available: true,
+  workbookSheets: [{ name: 'castle', headers: ['row_id', 'title', 'city', 'cap'], rows: [['43', 'OLD_CITY', 42, 150]] }],
+  fieldMap: { site: { sheet: 'castle', fields: { city_index: 'city' } } },
+  fieldLocations: { castle: {} }
+};
+const site = {
+  isNew: true, deleted: false, house_attr: 0, siteKey: 'site:new:83', site_name: 'NORTH_STATE',
+  city_index: 84, stageIniRowKey: '43', stageIniValues: {}
+};
+const state = {
+  commonModel: { stageIniPatchModel: model },
+  scenario: { sites: [site], siteByKey: new Map([[site.siteKey, site]]) },
+  scenarioPatches: new Map([['site:update', { kind: 'site', key: site.siteKey, op: 'update', field: 'city_index' }]]),
+  stageIniGeneralEdits: new Map()
+};
+const SITE_INI_FIELDS = ['city_index'];
+function stageIniPatchModel() { return model; }
+function scenarioRows(kind) { return kind === 'site' ? state.scenario.sites : []; }
+function siteHouseAttrValue(row) { return Number(row.house_attr || 0); }
+function stageIniGeneralRows() { return []; }
+"""
+        checks = """
+const rows = stageIniRowsForKind('site');
+if (rows.length !== 1 || rows[0].stageIniRowKey !== '44') throw new Error('旧 Patch 冲突行号未迁移');
+if (rows[0].stageIniValues.title !== 'NORTH_STATE' || rows[0].stageIniValues.cap !== 150) throw new Error('新城标题或完整模板字段未补齐');
+if (rows[0].city_index !== 84 || rows[0].stageIniValues.row_id !== '44') throw new Error('迁移后的都市索引或行标识错误');
+"""
+        self.run_node(harness + functions + checks)
     def test_new_stage_ini_master_rows_are_rebuilt(self) -> None:
         """验证新增武将和城池会扩展 stage.ini 两个母表区段。"""
 
         source = script_source()
-        functions = function_range(source, "stageIniPatchModel", "cloneWorkbookSheets")
+        functions = function_range(source, "stageIniPatchModel", "buildStageIniWorkbookBytes")
         harness = """
 const model = {
   available: true,
@@ -341,21 +425,24 @@ const model = {
     site: { sheet: 'castle', fields: { city_index: '都市索引' } }
   },
   fieldLocations: { general: {}, castle: {} },
+  workbookSheets: [{ name: 'castle', headers: ['row_id', 'title', '都市索引'], rows: [] }],
   appendLayout: {
     mainCount: 1, mainStride: 8, tailOffset: 16, tailStride: 4,
     general: { insertOffset: 12, rowBytes: 8, titleBytes: 4, numericHeaders: ['人物编号'] },
-    castle: { insertOffset: 16, rowBytes: 8, titleBytes: 4, numericHeaders: ['都市索引'] }
+    castle: { insertOffset: 18, rowBytes: 6, titleBytes: 2, numericHeaders: ['都市索引'] }
   }
 };
 const general = { isNew: true, stageIniRowKey: '8', entity_name: 'G', person_id: 8, stageIniValues: { title: 'G', 人物编号: 8 } };
-const site = { isNew: true, stageIniRowKey: '9', site_name: 'C', city_index: 9, house_attr: 0, deleted: false };
+const site = { isNew: true, stageIniRowKey: '9', site_name: 'C', city_index: 9, house_attr: 0, deleted: false, stageIniValues: { title: 'X' } };
 const state = {
-  meta: { commonModel: { big5CharMap: { G: [71], C: [67] } } },
+  meta: { commonModel: { big5CharMap: { G: [71], C: [67], X: [88] } } },
   commonModel: { stageIniPatchModel: model },
   scenarioPatches: new Map(), stageIniGeneralEdits: new Map(),
   scenario: { sites: [site], siteByKey: new Map([[site.siteKey, site]]) }
 };
 const SITE_INI_FIELDS = [];
+function stageIniSiteRows() { return []; }
+function stageIniSiteTemplate() { return null; }
 function stageIniGeneralRows() { return [general]; }
 function stageIniGeneralSaveRows() { return [general]; }
 function scenarioRows(kind) { return kind === 'site' ? [site] : []; }
@@ -371,18 +458,24 @@ function concatBytes(parts) {
 const original = new Uint8Array(20);
 new DataView(original.buffer).setUint32(0, 1, true);
 new DataView(original.buffer).setUint32(4, 8, true);
+original[18] = 0xaa; original[19] = 0xbb;
 const edited = buildEditedStageIniBytes(original);
 const view = new DataView(edited.buffer);
 if (edited.length !== 36 || view.getUint32(0, true) !== 2) throw new Error('主表块数或文件长度错误');
 if (edited[12] !== 71 || view.getUint32(16, true) !== 8) throw new Error('新增武将母表行错误');
-if (edited[24] !== 67 || view.getUint32(28, true) !== 9) throw new Error('新增城池母表行错误');
+if (edited[26] !== 67 || view.getUint32(28, true) !== 9) throw new Error('新增城池母表标题或数值错误');
+if (edited[34] !== 0xaa || edited[35] !== 0xbb) throw new Error('新增城池破坏了后续 tail 步长对齐');
+const sheets = cloneWorkbookSheets();
+const sheetMap = new Map(sheets.map(sheet => [sheet.name, sheet]));
+applyWorkbookRowPatch(sheetMap, site, 'site');
+if (sheets[0].rows[0][0] !== '9' || sheets[0].rows[0][1] !== 'C' || sheets[0].rows[0][2] !== '9') throw new Error('新增城池工作簿标题或字段错误');
 """
         self.run_node(harness + functions + checks)
     def test_unedited_stage_ini_stays_byte_identical(self) -> None:
         """验证仅加载剧本不会把 STG 当前值批量覆盖回 stage.ini。"""
 
         source = script_source()
-        functions = function_range(source, "stageIniPatchModel", "cloneWorkbookSheets")
+        functions = function_range(source, "stageIniPatchModel", "buildStageIniWorkbookBytes")
         harness = """
 const model = { available: true, fieldMap: {}, fieldLocations: {} };
 const state = {
@@ -392,6 +485,8 @@ const state = {
   scenario: { siteByKey: new Map() }
 };
 const SITE_INI_FIELDS = [];
+function stageIniSiteRows() { return []; }
+function stageIniSiteTemplate() { return null; }
 function stageIniGeneralRows() { return []; }
 function scenarioRows() { return []; }
 function siteHouseAttrValue() { return 0; }
