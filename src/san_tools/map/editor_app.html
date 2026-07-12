@@ -1345,16 +1345,22 @@ function rebuildDataMinimap() {
   if (!state.meta) return;
   const fi = fieldIndex('minimap_color');
   if (fi < 0) return;
-  const scaleX = 2;
+  const worldSize = canvasSizeForMeta();
+  const scale = Math.min(280 / worldSize.width, 224 / worldSize.height, 1);
   const map = document.createElement('canvas');
-  map.width = state.meta.width * scaleX + 1;
-  map.height = state.meta.height;
+  map.width = Math.max(1, Math.round(worldSize.width * scale));
+  map.height = Math.max(1, Math.round(worldSize.height * scale));
   const mapCtx = map.getContext('2d');
+  mapCtx.fillStyle = '#000000';
+  mapCtx.fillRect(0, 0, map.width, map.height);
   for (let row = 0; row < state.meta.height; row++) {
     for (let col = 0; col < state.meta.width; col++) {
       const value = Number(state.meta.records[row * state.meta.width + col][fi] || 0);
+      const point = cellToWorld(col, row);
+      const x = Math.floor((point.x + 20) * scale);
+      const y = Math.floor((point.y + 10) * scale);
       mapCtx.fillStyle = state.meta.pointPalette[value] || '#000000';
-      mapCtx.fillRect(col * scaleX + (row & 1), row, scaleX, 1);
+      mapCtx.fillRect(x, y, 1, 1);
     }
   }
   state.minimap = map;

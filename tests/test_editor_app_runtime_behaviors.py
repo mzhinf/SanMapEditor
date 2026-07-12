@@ -278,13 +278,16 @@ if (findCellByCoordinates()) throw new Error('越界坐标未被拒绝');
         harness = """
 const fills = [];
 const document = { createElement() { return { width: 0, height: 0, getContext() { return { fillStyle: '', fillRect(x, y, w, h) { fills.push([x, y, w, h]); } }; } }; } };
-const state = { meta: { width: 2, height: 2, records: [[0], [1], [1], [0]], pointPalette: ['#000000', '#ffffff'] }, minimap: null };
+const state = { meta: { width: 2, height: 2, origin: [64, 64], records: [[0], [1], [1], [0]], pointPalette: ['#000000', '#ffffff'] }, minimap: null };
 function fieldIndex() { return 0; }
+function canvasSizeForMeta() { return { width: 228, height: 168 }; }
+function cellToWorld(col, row) { return { x: 64 + col * 40 + (row & 1 ? 20 : 0), y: 64 + row * 10 }; }
 """
         checks = """
 rebuildDataMinimap();
-if (!state.minimap || state.minimap.width !== 5 || state.minimap.height !== 2) throw new Error('小地图尺寸错误');
-if (fills.length !== 4) throw new Error('小地图未按 Cell 渲染');
+if (!state.minimap || state.minimap.width !== 228 || state.minimap.height !== 168) throw new Error('小地图未按主画布比例渲染');
+if (fills.length !== 5) throw new Error('小地图背景或 Cell 未渲染');
+if (fills[1][0] !== 84 || fills[1][1] !== 74) throw new Error('Cell 未按世界坐标投影');
 """
         self.run_node(harness + functions + checks)
     def test_new_stage_ini_master_rows_are_rebuilt(self) -> None:

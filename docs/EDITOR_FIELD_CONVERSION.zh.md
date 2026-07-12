@@ -27,7 +27,7 @@
 | `+0x0A` | `site_trigger` | `u1` | 据点势力范围，0..255 |
 | `+0x0B` | `site_area` | `u1` | 据点核心区域，0..255 |
 | `+0x0C` | `reserved1` | 固定 1 字节 0 | 只读 |
-| `+0x0D` | `minimap_color` | `u1` | SAN 调色板索引；修改后重建小地图 |
+| `+0x0D` | `minimap_color` | `u1` | SAN 调色板索引；按主画布世界坐标等比投影后重建小地图 |
 | `+0x0E` | `reserved2` | 固定 2 字节 0 | 只读 |
 
 ## `.dor`
