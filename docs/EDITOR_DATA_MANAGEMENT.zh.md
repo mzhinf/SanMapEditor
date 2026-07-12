@@ -66,6 +66,8 @@
 `stage.ini` 已有行只回写用户在 ini 页实际修改过的字段。新增行写入完整逻辑行；加载场景或只编辑 `.stg` 归属，不得把所有 `.stg` 当前值批量覆盖到已有母表。
 ## Patch 跨版本迁移
 
+同一 Patch 内新增对象后的更新属于一个连续事务：新增据点、城门、History 行或 `stage.ini` 武将后，后续更新按 Patch 顺序合并，不再使用新增前的历史 `before` 对该 Patch 自身制造冲突。已有对象仍严格校验 `before`，保证跨版本导入不会覆盖外部修改。
+
 编辑器导出的 `san-editor-patch-v1` 可以通过顶部“导入”重新加载。推荐迁移顺序：
 
 1. 在新版本编辑器中加载目标版本的 `stageXX.m`，并同时选择 `stageXX.dor`、`stageXX.stg`、`stage.ini`、`History.txt` 等配套文件。

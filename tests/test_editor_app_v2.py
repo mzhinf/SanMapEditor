@@ -58,6 +58,13 @@ class TestEditorAppV2Template(unittest.TestCase):
         ):
             self.assertIn(marker, html)
 
+    def test_status_text_cannot_expand_editor_grid(self) -> None:
+        """验证过长错误信息只能在状态栏内截断，不能挤压编辑器布局。"""
+        html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
+        self.assertRegex(html, r'\.status \{[^}]*flex: 1 1 0;[^}]*min-width: 0;[^}]*max-width: 620px;')
+        self.assertIn('els.status.title = message', html)
+        self.assertRegex(html, r'\.status\.error \{[^}]*position: fixed;[^}]*max-height: 160px;[^}]*overflow: auto;')
+        self.assertIn("els.status.addEventListener('click'", html)
     def test_editor_app_els_references_have_dom_ids(self) -> None:
         """验证脚本中的 els 引用都能对应到实际 DOM 节点。"""
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')

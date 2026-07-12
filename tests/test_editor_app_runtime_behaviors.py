@@ -414,9 +414,15 @@ const payload = {
   historyChanges: [{ kind: 'history', key: '1', field: '加入年', before: '190', after: '191' }],
   stageIniGeneralChanges: [{ kind: 'stageIniGeneral', key: '1', field: '统御力', before: '70', after: '80' }]
 };
+payload.scenarioChanges.push(
+  { kind: 'site', key: 'site:new:83', op: 'add', after: { siteKey: 'site:new:83', coord_y: 510, governor: 0 } },
+  { kind: 'site', key: 'site:new:83', op: 'update', field: 'coord_y', before: 521, after: 520 },
+  { kind: 'site', key: 'site:new:83', op: 'update', field: 'governor', before: 5, after: 278 }
+);
 applyImportedPatchPayload(payload, 'all_patch.json');
 if (state.meta.records[0][0] !== 9) throw new Error('地图 Patch 未恢复');
 if (state.scenario.forces[0].force_name !== '新势力') throw new Error('场景 Patch 未恢复');
+if (state.scenario.sites[0].coord_y !== 520 || state.scenario.sites[0].governor !== 278) throw new Error('新增场景对象的连续更新未合并');
 if (state.gates[0].doorX !== 11) throw new Error('城门 Patch 未恢复');
 if (state.historyEdits.get('1').加入年 !== '191') throw new Error('History Patch 未恢复');
 if (state.stageIniGeneralEdits.get('1').统御力 !== '80') throw new Error('ini Patch 未恢复');

@@ -31,12 +31,13 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 select, input { min-width: 0; padding: 0 8px; }
 canvas { display: block; width: 100%; height: 100%; }
 #app { height: 100vh; display: grid; grid-template-columns: 316px minmax(0, 1fr) 380px; grid-template-rows: 48px minmax(0, 1fr) 138px; grid-template-areas: "top top top" "left canvas right" "bottom bottom bottom"; }
-.topbar { grid-area: top; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.topbar { grid-area: top; position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .title { font-weight: 700; min-width: 130px; }
 .toolbar-group { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .coord-input { width: 58px; }
 .toolbar-group label { font-size: 12px; color: var(--muted); }
-.status { margin-left: auto; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status { flex: 1 1 0; min-width: 0; max-width: 620px; margin-left: auto; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status.error { position: fixed; z-index: 20; top: 56px; right: 12px; width: min(620px, calc(100vw - 24px)); max-width: none; max-height: 160px; margin: 0; padding: 10px 12px; overflow: auto; border: 1px solid var(--danger); border-radius: 6px; background: #fff; color: var(--danger); box-shadow: 0 8px 24px rgba(32, 33, 36, .18); cursor: pointer; text-overflow: clip; white-space: pre-wrap; overflow-wrap: anywhere; }
 .resource-panel, .inspector-panel, .bottom-dock { min-width: 0; min-height: 0; background: var(--panel); }
 .resource-panel { grid-area: left; border-right: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; padding: 12px; overflow: hidden; }
 .canvas-zone { grid-area: canvas; position: relative; min-width: 0; min-height: 0; background: var(--canvas); overflow: hidden; }
@@ -3320,6 +3321,7 @@ function planImportedScenarioChanges(payload, conflicts) {
     entity: new Map(plan.entities.map(row => [row.entityKey, row])),
   };
   const collection = { force: plan.forces, site: plan.sites, entity: plan.entities };
+  const addedKeys = new Set();
   const ordered = changes.slice().sort((left, right) => (left.op === 'add' ? 0 : left.op === 'delete' ? 2 : 1) - (right.op === 'add' ? 0 : right.op === 'delete' ? 2 : 1));
   for (const change of ordered) {
     const kind = String(change?.kind || '');
@@ -3332,6 +3334,7 @@ function planImportedScenarioChanges(payload, conflicts) {
       row = { ...change.after, deleted: false, isNew: true };
       collection[kind].push(row);
       maps[kind].set(key, row);
+      addedKeys.add(key);
       continue;
     }
     if (!row) { conflicts.push('场景对象不存在：' + key); continue; }
@@ -3339,7 +3342,7 @@ function planImportedScenarioChanges(payload, conflicts) {
       const field = String(change.field || '');
       if (!field) { conflicts.push('场景更新缺少字段：' + key); continue; }
       if (patchValuesEqual(row[field], change.after)) continue;
-      if (!patchValuesEqual(row[field], change.before)) { conflicts.push('场景冲突：' + key + '.' + field); continue; }
+      if (!addedKeys.has(key) && !patchValuesEqual(row[field], change.before)) { conflicts.push('场景冲突：' + key + '.' + field); continue; }
       row[field] = change.after;
     } else if (change.op === 'delete') {
       row.deleted = true;
@@ -3354,6 +3357,7 @@ function planImportedGateChanges(payload, conflicts) {
   if (!changes.length) return null;
   const rows = state.gates.map(gate => ({ ...gate }));
   const byKey = new Map(rows.map(gate => [gateKey(gate), gate]));
+  const addedKeys = new Set();
   const ordered = changes.slice().sort((left, right) => (left.op === 'add' ? 0 : left.op === 'delete' ? 2 : 1) - (right.op === 'add' ? 0 : right.op === 'delete' ? 2 : 1));
   for (const change of ordered) {
     const key = String(change?.key || '');
@@ -3364,13 +3368,14 @@ function planImportedGateChanges(payload, conflicts) {
       gate = { ...change.after, gateKey: key, isNew: true, deleted: false };
       rows.push(gate);
       byKey.set(key, gate);
+      addedKeys.add(key);
       continue;
     }
     if (!gate) { conflicts.push('城门对象不存在：' + key); continue; }
     if (change.op === 'update') {
       const field = String(change.field || '');
       if (patchValuesEqual(gate[field], change.after)) continue;
-      if (!patchValuesEqual(gate[field], change.before)) { conflicts.push('城门冲突：' + key + '.' + field); continue; }
+      if (!addedKeys.has(key) && !patchValuesEqual(gate[field], change.before)) { conflicts.push('城门冲突：' + key + '.' + field); continue; }
       gate[field] = change.after;
     } else if (change.op === 'delete') gate.deleted = true;
     else conflicts.push('不支持的城门操作：' + change.op);
@@ -3384,6 +3389,7 @@ function planImportedHistoryChanges(payload, conflicts) {
   const additions = (state.newHistoryRows || []).map(row => ({ ...row }));
   const deleted = new Set(state.deletedHistoryRowKeys || []);
   const rows = new Map(historyTableRows().map(row => [String(row.rowKey), row]));
+  const addedKeys = new Set();
   const ordered = changes.slice().sort((left, right) => (left.op === 'add' ? 0 : left.op === 'delete' ? 2 : 1) - (right.op === 'add' ? 0 : right.op === 'delete' ? 2 : 1));
   for (const change of ordered) {
     const key = String(change?.key || '');
@@ -3394,6 +3400,7 @@ function planImportedHistoryChanges(payload, conflicts) {
       additions.push(row);
       rows.set(key, row);
       deleted.delete(key);
+      addedKeys.add(key);
       continue;
     }
     const row = rows.get(key);
@@ -3410,7 +3417,7 @@ function planImportedHistoryChanges(payload, conflicts) {
     if (!row || !field) { conflicts.push('History.txt 对象不存在：' + key + '.' + field); continue; }
     const current = edits.get(key)?.[field] ?? row[field] ?? '';
     if (patchValuesEqual(String(current), String(change.after ?? ''))) continue;
-    if (!patchValuesEqual(String(current), String(change.before ?? ''))) { conflicts.push('History.txt 冲突：' + key + '.' + field); continue; }
+    if (!addedKeys.has(key) && !patchValuesEqual(String(current), String(change.before ?? ''))) { conflicts.push('History.txt 冲突：' + key + '.' + field); continue; }
     edits.set(key, { ...(edits.get(key) || {}), [field]: String(change.after ?? '') });
   }
   return { edits, additions, deleted };
@@ -3421,6 +3428,7 @@ function planImportedStageIniGeneralChanges(payload, conflicts) {
   const additions = state.newStageIniGenerals.map(row => ({ ...row, stageIniValues: { ...(row.stageIniValues || {}) } }));
   const edits = new Map([...state.stageIniGeneralEdits].map(([key, value]) => [key, { ...value }]));
   const baseRows = new Map(stageIniGeneralRows().map(row => [String(row.stageIniRowKey), row]));
+  const addedKeys = new Set();
   for (const change of changes) {
     const key = String(change?.key || '').replace(/^stageini:/, '');
     if (change.op === 'add') {
@@ -3429,6 +3437,7 @@ function planImportedStageIniGeneralChanges(payload, conflicts) {
       const row = { ...change.after, isNew: true, stageIniRowKey: key, stageIniValues: { ...(change.after.stageIniValues || {}) } };
       additions.push(row);
       baseRows.set(key, row);
+      addedKeys.add(key);
       continue;
     }
     const field = String(change.field || '');
@@ -3436,7 +3445,7 @@ function planImportedStageIniGeneralChanges(payload, conflicts) {
     if (!row || !field) { conflicts.push('stage.ini 武将对象不存在：' + key + '.' + field); continue; }
     const current = edits.get(key)?.[field] ?? row.stageIniValues?.[field] ?? '';
     if (patchValuesEqual(String(current), String(change.after ?? ''))) continue;
-    if (!patchValuesEqual(String(current), String(change.before ?? ''))) { conflicts.push('stage.ini 冲突：' + key + '.' + field); continue; }
+    if (!addedKeys.has(key) && !patchValuesEqual(String(current), String(change.before ?? ''))) { conflicts.push('stage.ini 冲突：' + key + '.' + field); continue; }
     edits.set(key, { ...(edits.get(key) || {}), [field]: change.after });
   }
   return { additions, edits };
@@ -4414,7 +4423,8 @@ els.setRegionAnchor.addEventListener('click', () => { if (!state.selected) retur
 els.copyRegion.addEventListener('click', () => { const snapshot = captureRegionSnapshot('区域复制'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已复制区域 ' + snapshot.width + ' x ' + snapshot.height; });
 els.pasteRegion.addEventListener('click', () => { const snapshot = state.regionClipboard || state.compositeObjects.find(item => item.id === state.activeCompositeId); if (!snapshot || !state.selected) return; if (pasteRegionSnapshot(snapshot)) els.status.textContent = '已粘贴 ' + snapshot.name; });
 els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成对象 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
-els.loadMFile.addEventListener('change', async () => { try { await loadLocalProjectFiles(els.loadMFile.files); } catch (err) { els.status.textContent = String(err?.message || err); } finally { els.loadMFile.value = ''; } });
+els.loadMFile.addEventListener('change', async () => { els.status.classList.remove('error'); try { await loadLocalProjectFiles(els.loadMFile.files); } catch (err) { const message = String(err?.message || err); els.status.textContent = message; els.status.title = message; els.status.classList.add('error'); } finally { els.loadMFile.value = ''; } });
+els.status.addEventListener('click', () => els.status.classList.remove('error'));
 els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
 document.getElementById('resetView').addEventListener('click', focusSelectedCell);
 els.undoEdit.addEventListener('click', undoLastEdit);
