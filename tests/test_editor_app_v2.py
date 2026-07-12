@@ -28,6 +28,8 @@ class TestEditorAppV2Template(unittest.TestCase):
             'data-tab="raw"',
             'id="resourceList"',
             'id="cutRegion"',
+            'id="regionCopyMode"',
+            'class="panel-collapse"',
             'id="canvas"',
             'terrain_tag',
             'minimap_color',
@@ -95,6 +97,9 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn('parentSiteKey', html)
         self.assertIn('selectedCells', html)
         self.assertIn('cutRegionSnapshot', html)
+        self.assertIn("regionCopyMode: 'full'", html)
+        self.assertIn("mode === 'non-base'", html)
+        self.assertNotIn('setRegionAnchor', html)
         self.assertIn("key: 'edited'", html)
         self.assertIn('drawEditedCellOverlay', html)
         self.assertIn("rgba(245,158,11,0.07)", html)
@@ -112,6 +117,7 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn("mode: 'center-ring'", html)
         self.assertIn("mode: 'large-outline'", html)
         self.assertIn('midpointSquarePath', html)
+        self.assertIn('ctx.moveTo(p.x + 24, p.y + 6)', html)
         self.assertIn('drawCellDataOverlay', html)
         self.assertIn('shouldShowDataOverlays', html)
         self.assertIn('if (!state.meta || !shouldShowDataOverlays()) return;', html)

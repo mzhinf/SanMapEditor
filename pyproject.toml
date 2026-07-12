@@ -17,6 +17,9 @@ dependencies = [
 dev = [
   "pytest>=8,<9",
 ]
+release = [
+  "pyinstaller>=6,<7",
+]
 
 [project.scripts]
 san-tools = "san_tools.__main__:main"

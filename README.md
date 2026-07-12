@@ -75,7 +75,7 @@
 - 地图编辑器页面升级为 2.0 五区布局：顶部工具栏、左侧资源库、中央地图画布、右侧 Inspector、底部历史与状态面板。
 - 左侧资源库支持地表层、叠加层、物件层、数据层色板切换，并保留资源窗口化渲染，避免一次性挂载全部 DOM。
 - `.m` 记录字段按 `m.ksy` 的 `acwx/acwy/acwz/reserved0/terrain_tag/blocked/site_trigger/site_area/reserved1/minimap_color/reserved2` 统一口径展示；旧 `byte08..byte15` 仅作为兼容别名处理。
-- 页面支持区域复制和合成对象，复制内容包含当前选区内每个 cell 的所有层字段。
+- 页面支持区域复制、剪切和合成对象，并提供“全复制”与“非底层复制”两种模式；左侧数据叠加和区域操作面板可折叠。
 - 右侧 Inspector 提供属性、势力、据点、武将、Raw、校验 6 个视图；据点视图会按 `.dor/.stg` 联动高亮城门。
 - bundle 导出时会复制同名 `.dor/.stg` 与可选 `heads.dat` 到关卡目录，浏览器导出会把这些参考文件随 `.m/.s/.x` 一起下载。
 - 校验视图会提示 `.m` 结构、sidecar 尾区、`.dor/.stg` 参考文件和字段范围风险。
@@ -94,6 +94,17 @@
 浏览器入口：
 - [stage01 编辑器](http://127.0.0.1:8771/stage01/editor.html)
 - [编辑器索引](http://127.0.0.1:8771/index.html)
+
+### Windows 编辑器发布包
+
+安装发布依赖并构建包含 `stage01` 的 Windows 发行包：
+
+```powershell
+& $py -m pip install -e ".[release]"
+& $py -m san_tools.map.build_editor_release . --stage stage01
+```
+
+输出文件为 `dist/SanMapEditor-stage01.zip`。解压后双击 `SanMapEditor.exe`，启动器会在随机本机端口提供编辑器并自动打开默认浏览器；关闭启动器窗口会停止服务。发布包同时包含 `editor-data`，编辑人员无需安装 Python。
 
 ### 编辑器 patch 写回
 

@@ -277,19 +277,20 @@ if (findCellByCoordinates()) throw new Error('越界坐标未被拒绝');
 """
         self.run_node(harness + functions + checks)
 
-    def test_cut_region_preserves_snapshot_and_clears_to_base_terrain(self) -> None:
-        """验证区域剪切先保存全部字段，再把源区域作为一次修改清理到底层地表。"""
+    def test_full_copy_captures_every_selected_cell_and_cut_clears_non_base_fields(self) -> None:
+        """验证全复制包含全部选中 Cell，剪切后源区域只保留底层地表。"""
 
         source = script_source()
-        functions = function_range(source, "captureRegionSnapshot", "refreshCompositeList")
+        functions = function_range(source, "regionCellHasContent", "refreshCompositeList")
         harness = """
 const fields = ['acwx', 'acwy', 'acwz', 'terrain_tag', 'blocked', 'site_trigger', 'site_area', 'minimap_color'];
 const state = {
+  regionCopyMode: 'full',
   meta: {
     width: 2, height: 1, fields, editableRecordFields: fields.slice(),
-    records: [[10, 20, -1, 1, 2, 3, 4, 60], [11, -1, -1, 5, 6, 7, 8, 61]]
+    records: [[10, 20, 30, 1, 2, 3, 4, 60], [11, -1, -1, 0, 0, 0, 0, 61]]
   },
-  selected: { col: 1, row: 0 }, regionAnchor: null,
+  selected: { col: 1, row: 0 },
   selectedCells: new Map([['0,0', { col: 0, row: 0 }], ['1,0', { col: 1, row: 0 }]])
 };
 let appliedBatches = 0;
@@ -307,11 +308,48 @@ function applyChangeSet(changes) {
 """
         checks = """
 const snapshot = cutRegionSnapshot();
-if (!snapshot || snapshot.mode !== 'cells' || snapshot.cells.length !== 1) throw new Error('复制/剪切未过滤纯底层 Cell');
-if (snapshot.cells[0].record.join(',') !== '10,20,-1,1,2,3,4,60') throw new Error('剪切前未保存有效 Cell 的全部层数据');
-if (state.meta.records[0].join(',') !== '10,-1,-1,0,0,0,0,0') throw new Error('源区域未仅保留底层地表');
-if (state.meta.records[1].join(',') !== '11,-1,-1,5,6,7,8,61') throw new Error('纯底层 Cell 不应参与剪切');
+if (!snapshot || snapshot.copyMode !== 'full' || snapshot.cells.length !== 2) throw new Error('全复制未包含全部选中 Cell');
+if (snapshot.fields.join(',') !== fields.join(',')) throw new Error('全复制未保留全部字段');
+if (state.meta.records[0].join(',') !== '10,-1,-1,0,0,0,0,0') throw new Error('全复制剪切未清理到底层地表');
+if (state.meta.records[1].join(',') !== '11,-1,-1,0,0,0,0,0') throw new Error('纯底层 Cell 未参与全复制剪切');
 if (appliedBatches !== 1) throw new Error('区域剪切未作为单次撤销事务提交');
+"""
+        self.run_node(harness + functions + checks)
+
+    def test_non_base_copy_filters_cells_and_excludes_object_and_minimap_fields(self) -> None:
+        """验证非底层复制按六个内容字段筛选，并排除 acwz 与 minimap_color。"""
+
+        source = script_source()
+        functions = function_range(source, "regionCellHasContent", "refreshCompositeList")
+        harness = """
+const fields = ['acwx', 'acwy', 'acwz', 'terrain_tag', 'blocked', 'site_trigger', 'site_area', 'minimap_color'];
+const state = {
+  regionCopyMode: 'non-base',
+  meta: {
+    width: 3, height: 1, fields, editableRecordFields: fields.slice(),
+    records: [[10, 20, 30, 1, 2, 3, 4, 60], [11, -1, -1, 5, 0, 0, 0, 61], [12, -1, -1, 0, 0, 0, 0, 62]]
+  },
+  selected: { col: 1, row: 0 },
+  selectedCells: new Map([['0,0', { col: 0, row: 0 }], ['1,0', { col: 1, row: 0 }], ['2,0', { col: 2, row: 0 }]])
+};
+function canonicalFieldName(value) { return value; }
+function fieldIndex(field) { return fields.indexOf(field); }
+function selectedCellList() { return [...state.selectedCells.values()]; }
+function selectedCellBounds() { return { left: 0, right: 2, top: 0, bottom: 0, width: 3, height: 1, count: 3 }; }
+function currentRegionBounds() { return selectedCellBounds(); }
+function recordAt(cell) { return state.meta.records[cell.row * state.meta.width + cell.col]; }
+function applyChangeSet(changes) {
+  for (const change of changes) recordAt({ col: change.x, row: change.y })[fields.indexOf(change.field)] = change.after;
+  return true;
+}
+"""
+        checks = """
+const snapshot = cutRegionSnapshot();
+if (!snapshot || snapshot.copyMode !== 'non-base' || snapshot.cells.length !== 2) throw new Error('非底层复制的 Cell 筛选错误');
+if (snapshot.fields.includes('acwz') || snapshot.fields.includes('minimap_color')) throw new Error('非底层复制包含了排除字段');
+if (snapshot.cells[0].record.join(',') !== '10,20,1,2,3,4') throw new Error('非底层快照字段顺序错误');
+if (state.meta.records[0].join(',') !== '10,-1,30,0,0,0,0,60') throw new Error('非底层剪切错误清除了排除字段');
+if (state.meta.records[2].join(',') !== '12,-1,-1,0,0,0,0,62') throw new Error('无内容 Cell 不应参与非底层剪切');
 """
         self.run_node(harness + functions + checks)
 

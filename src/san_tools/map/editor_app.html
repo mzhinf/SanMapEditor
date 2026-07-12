@@ -46,6 +46,9 @@ canvas { display: block; width: 100%; height: 100%; }
 .section { min-width: 0; }
 .section + .section { border-top: 1px solid var(--soft); padding-top: 12px; }
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.panel-collapse { width: 24px; min-width: 24px; height: 24px; padding: 0; font-size: 16px; line-height: 1; }
+.collapsible-section.collapsed .collapsible-body { display: none; }
+.collapsible-section.collapsed .section-title { margin-bottom: 0; }
 .layer-list { display: grid; gap: 6px; }
 .layer-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .layer-row.active { border-color: var(--accent); background: #ecfeff; }
@@ -193,21 +196,23 @@ canvas { display: block; width: 100%; height: 100%; }
       <div class="resource-meta" id="resourceMeta"></div>
       <div class="resource-list" id="resourceList"><div class="resource-spacer" id="resourceSpacer"></div></div>
     </section>
-    <section class="section">
-      <div class="section-title">数据叠加显示</div>
-      <div class="overlay-list" id="overlayList"></div>
+    <section class="section collapsible-section" data-panel="data-overlays">
+      <div class="section-title"><span>数据叠加显示</span><button class="panel-collapse" type="button" title="收起数据叠加显示" aria-expanded="true">−</button></div>
+      <div class="collapsible-body"><div class="overlay-list" id="overlayList"></div></div>
     </section>
-    <section class="section">
-      <div class="section-title">合成对象 / 区域操作</div>
-      <div class="selection-actions">
-        <button id="setRegionAnchor" type="button">设起点</button>
-        <button id="copyRegion" type="button">复制区域</button>
-        <button id="cutRegion" type="button">剪切区域</button>
-        <button id="pasteRegion" type="button">粘贴区域</button>
-        <button id="saveComposite" type="button">存为对象</button>
+    <section class="section collapsible-section" data-panel="region-tools">
+      <div class="section-title"><span>合成对象 / 区域操作</span><button class="panel-collapse" type="button" title="收起合成对象与区域操作" aria-expanded="true">−</button></div>
+      <div class="collapsible-body">
+        <div class="field"><label>复制模式</label><select id="regionCopyMode"><option value="full">全复制</option><option value="non-base">非底层复制</option></select></div>
+        <div class="selection-actions">
+          <button id="copyRegion" type="button">复制区域</button>
+          <button id="cutRegion" type="button">剪切区域</button>
+          <button id="pasteRegion" type="button">粘贴区域</button>
+          <button id="saveComposite" type="button">存为对象</button>
+        </div>
+        <div class="hint" id="selectionInfo">未选择区域。</div>
+        <div class="composite-list" id="compositeList"></div>
       </div>
-      <div class="hint" id="selectionInfo">未设置区域。</div>
-      <div class="composite-list" id="compositeList"></div>
     </section>
   </aside>
   <main class="canvas-zone" id="viewport">
@@ -260,7 +265,7 @@ canvas { display: block; width: 100%; height: 100%; }
     </div>
   </aside>
   <footer class="bottom-dock">
-    <section class="section"><div class="section-title">当前工作</div><div class="hint">选择格子后可在 Raw 中精确改字段；选择区域后可复制、剪切全部层数据或保存为合成对象。</div></section>
+    <section class="section"><div class="section-title">当前工作</div><div class="hint">选择格子后可在 Raw 中精确改字段；多选区域后可按复制模式执行复制、剪切或保存为合成对象。</div></section>
     <section class="history-section"><div class="section-title">修改记录</div><div class="patch-list" id="patchList"></div></section>
     <section class="section"><div class="section-title">状态</div><div class="field"><label>修改数量</label><input id="patchCount" value="0" readonly></div><div class="hint">导出前会检查 .m 长度、字段范围、sidecar 参考和据点联动状态。</div></section>
   </footer>
@@ -413,6 +418,7 @@ const state = {
   activeHistoryGeneralKey: '',
   entityListScrollTop: 0,
   sourceTabState: new Map(),
+  regionCopyMode: 'full',
   dataOverlayVisible: Object.fromEntries(DATA_OVERLAY_OPTIONS.map(item => [item.key, true])),
 };
 const els = {
@@ -425,7 +431,7 @@ const els = {
   openMFile: document.getElementById('openMFile'), loadMFile: document.getElementById('loadMFile'), stagePicker: document.getElementById('stagePicker'),
   exportFiles: document.getElementById('exportFiles'),
   sitePicker: document.getElementById('sitePicker'), clearSite: document.getElementById('clearSite'), siteInfo: document.getElementById('siteInfo'), siteNote: document.getElementById('siteNote'),
-  setRegionAnchor: document.getElementById('setRegionAnchor'), copyRegion: document.getElementById('copyRegion'), cutRegion: document.getElementById('cutRegion'), pasteRegion: document.getElementById('pasteRegion'), saveComposite: document.getElementById('saveComposite'),
+  regionCopyMode: document.getElementById('regionCopyMode'), copyRegion: document.getElementById('copyRegion'), cutRegion: document.getElementById('cutRegion'), pasteRegion: document.getElementById('pasteRegion'), saveComposite: document.getElementById('saveComposite'),
   selectionInfo: document.getElementById('selectionInfo'), compositeList: document.getElementById('compositeList'),
   hudTool: document.getElementById('hudTool'), hudLayer: document.getElementById('hudLayer'), hudSelection: document.getElementById('hudSelection'), hudSite: document.getElementById('hudSite'),
   forceList: document.getElementById('forceList'), entityList: document.getElementById('entityList'), validationList: document.getElementById('validationList'),
@@ -1170,10 +1176,10 @@ function innerDiamondPath(col, row, pad = 6) {
 function midpointSquarePath(col, row) {
   const p = cellToWorld(col, row);
   ctx.beginPath();
-  ctx.moveTo(p.x + 30, p.y + 5);
-  ctx.lineTo(p.x + 30, p.y + 15);
-  ctx.lineTo(p.x + 10, p.y + 15);
-  ctx.lineTo(p.x + 10, p.y + 5);
+  ctx.moveTo(p.x + 24, p.y + 6);
+  ctx.lineTo(p.x + 24, p.y + 14);
+  ctx.lineTo(p.x + 16, p.y + 14);
+  ctx.lineTo(p.x + 16, p.y + 6);
   ctx.closePath();
 }
 function largeDiamondPath(col, row, pad = 2) {
@@ -1395,52 +1401,41 @@ function updateHud() {
   els.hudSite.textContent = site ? `据点：${site.cityName}` : `据点：${siteOverlayStatus()}`;
 }
 function currentRegionBounds() {
-  const selection = selectedCellBounds();
-  if (selection) return selection;
-  if (!state.selected || !state.regionAnchor) return null;
-  const left = Math.min(state.selected.col, state.regionAnchor.col);
-  const right = Math.max(state.selected.col, state.regionAnchor.col);
-  const top = Math.min(state.selected.row, state.regionAnchor.row);
-  const bottom = Math.max(state.selected.row, state.regionAnchor.row);
-  return { left, right, top, bottom, width: right - left + 1, height: bottom - top + 1, count: (right - left + 1) * (bottom - top + 1) };
+  return selectedCellBounds();
 }
 function describeRegion() {
   const selection = selectedCellBounds();
   if (selection) return `选区：${selection.count} 格，范围 ${selection.left},${selection.top} 到 ${selection.right},${selection.bottom}`;
-  const bounds = currentRegionBounds();
-  if (!state.regionAnchor) return '未设置区域。';
-  if (!bounds) return `起点：${state.regionAnchor.col},${state.regionAnchor.row}`;
-  return `区域：${bounds.left},${bounds.top} 到 ${bounds.right},${bounds.bottom}，${bounds.width} x ${bounds.height}`;
+  return '未选择区域。';
 }
-function captureRegionSnapshot(name = '区域复制') {
-  const selectedCells = selectedCellList();
-  let bounds = null;
-  let candidates = [];
-  if (selectedCells.length > 1 || (selectedCells.length === 1 && !state.regionAnchor)) {
-    bounds = selectedCellBounds();
-    candidates = selectedCells.slice();
-  } else {
-    bounds = currentRegionBounds();
-    if (bounds) {
-      for (let row = bounds.top; row <= bounds.bottom; row++) {
-        for (let col = bounds.left; col <= bounds.right; col++) candidates.push({ col, row });
-      }
-    }
-  }
-  if (!bounds) return null;
-  const acwyIndex = fieldIndex('acwy');
-  const acwzIndex = fieldIndex('acwz');
-  const cellsWithContent = candidates.filter(cell => {
-    const record = recordAt(cell);
-    return (acwyIndex >= 0 && Number(record[acwyIndex]) >= 0) || (acwzIndex >= 0 && Number(record[acwzIndex]) >= 0);
+function regionCellHasContent(record) {
+  return ['acwy', 'acwz'].some(field => {
+    const index = fieldIndex(field);
+    return index >= 0 && Number(record[index]) >= 0;
+  }) || ['terrain_tag', 'blocked', 'site_trigger', 'site_area'].some(field => {
+    const index = fieldIndex(field);
+    return index >= 0 && Number(record[index]) !== 0;
   });
-  if (!cellsWithContent.length) return null;
-  const active = state.selected || cellsWithContent[0];
+}
+function captureRegionSnapshot(name = '区域复制', mode = state.regionCopyMode || 'full') {
+  const selectedCells = selectedCellList();
+  const bounds = selectedCellBounds();
+  if (!bounds) return null;
+  const normalizedMode = mode === 'non-base' ? 'non-base' : 'full';
+  const fields = normalizedMode === 'non-base'
+    ? state.meta.fields.filter(field => !['acwz', 'minimap_color'].includes(canonicalFieldName(field)))
+    : state.meta.fields.slice();
+  const fieldIndexes = fields.map(fieldIndex);
+  const capturedCells = normalizedMode === 'non-base'
+    ? selectedCells.filter(cell => regionCellHasContent(recordAt(cell)))
+    : selectedCells.slice();
+  if (!capturedCells.length) return null;
+  const active = state.selected || capturedCells[0];
   const anchor = { dx: active.col - bounds.left, dy: active.row - bounds.top };
-  const cells = cellsWithContent
+  const cells = capturedCells
     .sort((left, right) => left.row - right.row || left.col - right.col)
-    .map(cell => ({ dx: cell.col - bounds.left, dy: cell.row - bounds.top, record: recordAt(cell).slice() }));
-  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'cells', width: bounds.width, height: bounds.height, count: cells.length, fields: state.meta.fields.slice(), anchor, cells };
+    .map(cell => ({ dx: cell.col - bounds.left, dy: cell.row - bounds.top, record: fieldIndexes.map(index => recordAt(cell)[index]) }));
+  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'cells', copyMode: normalizedMode, width: bounds.width, height: bounds.height, count: cells.length, fields, anchor, cells };
 }
 function cutRegionSnapshot(name = '区域剪切') {
   const snapshot = captureRegionSnapshot(name);
@@ -1448,9 +1443,10 @@ function cutRegionSnapshot(name = '区域剪切') {
   const bounds = currentRegionBounds();
   if (!bounds) return null;
   const cells = snapshot.cells.map(cell => ({ col: bounds.left + cell.dx, row: bounds.top + cell.dy }));
+  const snapshotFields = new Set(snapshot.fields.map(canonicalFieldName));
   const clearFields = (state.meta.editableRecordFields || [])
     .map(canonicalFieldName)
-    .filter(field => field !== 'acwx');
+    .filter(field => field !== 'acwx' && snapshotFields.has(field));
   const changes = [];
   for (const cell of cells) {
     for (const field of clearFields) {
@@ -3241,7 +3237,6 @@ function resetEditState(meta) {
   state.redoStack = [];
   state.selected = null;
   state.selectedCells.clear();
-  state.regionAnchor = null;
   state.regionClipboard = null;
   state.activeCompositeId = null;
   state.compositeObjects = [];
@@ -4480,11 +4475,20 @@ mini.addEventListener('pointerdown', ev => {
 els.openMFile.addEventListener('click', () => { els.loadMFile.click(); });
 document.querySelectorAll('.inspector-tab').forEach(tab => { tab.addEventListener('click', () => switchInspectorTab(tab.dataset.tab)); });
 els.tool.addEventListener('change', () => { updateHud(); });
-els.setRegionAnchor.addEventListener('click', () => { if (!state.selected) return; state.regionAnchor = { ...state.selected }; refreshCompositeList(); scheduleDraw(); });
-els.copyRegion.addEventListener('click', () => { const snapshot = captureRegionSnapshot('区域复制'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已复制区域 ' + snapshot.width + ' x ' + snapshot.height; });
-els.cutRegion.addEventListener('click', () => { const snapshot = cutRegionSnapshot('区域剪切'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = '已剪切区域 ' + snapshot.width + ' x ' + snapshot.height + '，源区域仅保留底层地表'; });
+els.copyRegion.addEventListener('click', () => { const snapshot = captureRegionSnapshot('区域复制'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); const modeLabel = snapshot.copyMode === 'full' ? '全复制' : '非底层复制'; els.status.textContent = `已${modeLabel} ${snapshot.count} 个 Cell`; });
+els.cutRegion.addEventListener('click', () => { const snapshot = cutRegionSnapshot('区域剪切'); if (!snapshot) return; state.regionClipboard = snapshot; state.activeCompositeId = null; refreshCompositeList(); els.status.textContent = snapshot.copyMode === 'full' ? `已剪切 ${snapshot.count} 个 Cell，源区域仅保留底层地表` : `已剪切 ${snapshot.count} 个 Cell，源区域保留 acwz 与 minimap_color`; });
 els.pasteRegion.addEventListener('click', () => { const snapshot = state.regionClipboard || state.compositeObjects.find(item => item.id === state.activeCompositeId); if (!snapshot || !state.selected) return; if (pasteRegionSnapshot(snapshot)) els.status.textContent = '已粘贴 ' + snapshot.name; });
 els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成对象 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
+els.regionCopyMode.addEventListener('change', () => { state.regionCopyMode = els.regionCopyMode.value === 'non-base' ? 'non-base' : 'full'; refreshCompositeList(); });
+document.querySelectorAll('.panel-collapse').forEach(button => {
+  button.addEventListener('click', () => {
+    const section = button.closest('.collapsible-section');
+    const collapsed = section.classList.toggle('collapsed');
+    button.textContent = collapsed ? '+' : '−';
+    button.title = collapsed ? '展开面板' : '收起面板';
+    button.setAttribute('aria-expanded', String(!collapsed));
+  });
+});
 els.loadMFile.addEventListener('change', async () => { els.status.classList.remove('error'); try { await loadLocalProjectFiles(els.loadMFile.files); } catch (err) { const message = String(err?.message || err); els.status.textContent = message; els.status.title = message; els.status.classList.add('error'); } finally { els.loadMFile.value = ''; } });
 els.status.addEventListener('click', () => els.status.classList.remove('error'));
 els.stagePicker.addEventListener('change', () => { if (els.stagePicker.value && els.stagePicker.value !== state.meta.stage) location.href = `../${els.stagePicker.value}/editor.html`; });
