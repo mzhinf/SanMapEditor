@@ -2623,7 +2623,7 @@ function validationIssues() {
   if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage_ini.xlsx\uff0c\u4fdd\u5b58\u65f6\u4e0d\u4f1a\u751f\u6210\u5de5\u4f5c\u7c3f\u3002' });
   const stageIniModel = stageIniPatchModel();
   const hasNewMasterRows = scenarioRows('site').some(site => site.isNew && siteHouseAttrValue(site) === 0) || state.newStageIniGenerals.length > 0;
-  if (hasNewMasterRows && !stageIniModel?.appendLayout) issues.push({ level: 'error', text: '当前 bundle 缺少 stage.ini 母表新增布局，请重新生成 stage01 bundle。' });
+  if (hasNewMasterRows && stageIniModel?.appendLayout?.format !== 'stage-ini-block-stream-v1') issues.push({ level: 'error', text: '当前 bundle 缺少 stage.ini 块流新增布局，请重新生成 stage01 bundle。' });
   const unsupportedScenario = unsupportedScenarioChanges();
   if (unsupportedScenario.length) issues.push({ level: 'warn', text: '.stg 对象新增、删除或归属移动暂未写回二进制：' + unsupportedScenario.length + ' 项会保留在 patch。' });
   for (const patch of state.patches.values()) {
@@ -4083,24 +4083,31 @@ function stageIniLogicalRowBytes(row, kind) {
     if (field in row) values[header] = row[field];
   }
   const title = String(row.site_name || row.entity_name || row.name || values.title || '');
-  const titleBytes = encodeBig5Text(title);
-  if (titleBytes.length >= Number(layout.titleBytes)) throw new Error('stage.ini 标题过长：' + title);
+  const encodedTitle = encodeBig5Text(title);
+  const titleSuffix = new Uint8Array(layout.titleSuffix || [0]);
+  if (encodedTitle.length + titleSuffix.length > Number(layout.titleBytes)) throw new Error('stage.ini 标题过长：' + title);
+
   const bytes = new Uint8Array(Number(layout.rowBytes));
-  bytes.set(titleBytes, 0);
   const view = new DataView(bytes.buffer);
-  for (let index = 0; index < layout.numericHeaders.length; index++) {
-    const value = Number.parseInt(values[layout.numericHeaders[index]] ?? 0, 10);
-    view.setUint32(Number(layout.titleBytes) + index * 4, (Number.isFinite(value) ? value : 0) >>> 0, true);
-  }
+  let offset = 0;
+  const writeValue = value => {
+    const parsed = Number.parseInt(value ?? 0, 10);
+    view.setUint32(offset, (Number.isFinite(parsed) ? parsed : 0) >>> 0, true);
+    offset += 4;
+  };
+  for (const value of layout.recordPrefixValues || []) writeValue(value);
+  bytes.set(encodedTitle, offset);
+  bytes.set(titleSuffix, offset + encodedTitle.length);
+  offset += Number(layout.titleBytes);
+  for (const header of layout.numericHeaders || []) writeValue(values[header]);
+  for (const header of layout.recordSuffixHeaders || []) writeValue(values[header]);
+  for (const value of layout.recordSuffixValues || []) writeValue(value);
+  if (offset !== bytes.length) throw new Error('stage.ini 新增行布局长度不一致：' + kind);
   return bytes;
 }
 function insertByteRows(source, offset, rows) {
   if (!rows.length) return source;
   return concatBytes([source.slice(0, offset), ...rows, source.slice(offset)]);
-}
-function padByteSection(source, stride) {
-  const padding = (stride - source.length % stride) % stride;
-  return padding ? concatBytes([source, new Uint8Array(padding)]) : source;
 }
 function buildEditedStageIniBytes(originalBytes) {
   const model = stageIniPatchModel();
@@ -4115,22 +4122,27 @@ function buildEditedStageIniBytes(originalBytes) {
   const newGenerals = entities.filter(row => !model.fieldLocations?.general?.[String(row.stageIniRowKey)]);
   const newCities = sites.filter(row => !model.fieldLocations?.castle?.[String(row.stageIniRowKey)]);
   if (!newGenerals.length && !newCities.length) return patched;
-  if (!append) throw new Error('当前 bundle 缺少 stage.ini 母表新增布局');
+  if (append?.format !== 'stage-ini-block-stream-v1') throw new Error('当前 bundle 缺少 stage.ini 块流新增布局');
 
-  const header = patched.slice(0, 8);
-  const oldMain = patched.slice(8, Number(append.tailOffset));
-  const generalOffset = Number(append.general.insertOffset) - 8;
-  const generalRows = concatBytes(newGenerals.map(row => stageIniLogicalRowBytes(row, 'entity')));
-  const alignedGeneralRows = padByteSection(generalRows, Number(append.mainStride));
-  const main = insertByteRows(oldMain, generalOffset, alignedGeneralRows.length ? [alignedGeneralRows] : []);
-  new DataView(header.buffer, header.byteOffset, header.byteLength).setUint32(0, main.length / Number(append.mainStride), true);
+  let rebuilt = patched;
+  const generalRows = newGenerals.map(row => stageIniLogicalRowBytes(row, 'entity'));
+  if (generalRows.length) {
+    rebuilt = insertByteRows(rebuilt, Number(append.general.insertOffset), generalRows);
+    new DataView(rebuilt.buffer, rebuilt.byteOffset, rebuilt.byteLength).setUint32(
+      Number(append.general.countOffset), Number(append.general.count) + generalRows.length, true
+    );
+  }
 
-  const originalTail = patched.slice(Number(append.tailOffset));
-  const cityOffset = Number(append.castle.insertOffset) - Number(append.tailOffset);
-  const cityRows = concatBytes(newCities.map(row => stageIniLogicalRowBytes(row, 'site')));
-  const alignedCityRows = padByteSection(cityRows, Number(append.tailStride));
-  const tail = insertByteRows(originalTail, cityOffset, alignedCityRows.length ? [alignedCityRows] : []);
-  return concatBytes([header, main, tail]);
+  const generalShift = generalRows.reduce((sum, row) => sum + row.length, 0);
+  const cityRows = newCities.map(row => stageIniLogicalRowBytes(row, 'site'));
+  if (cityRows.length) {
+    const cityCountOffset = Number(append.castle.countOffset) + generalShift;
+    rebuilt = insertByteRows(rebuilt, Number(append.castle.insertOffset) + generalShift, cityRows);
+    new DataView(rebuilt.buffer, rebuilt.byteOffset, rebuilt.byteLength).setUint32(
+      cityCountOffset, Number(append.castle.count) + cityRows.length, true
+    );
+  }
+  return rebuilt;
 }
 function cloneWorkbookSheets() {
   const sheets = stageIniPatchModel()?.workbookSheets || [];

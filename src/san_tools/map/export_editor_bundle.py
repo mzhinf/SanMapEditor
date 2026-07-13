@@ -562,7 +562,7 @@ def build_editor_common_model(root: Path) -> dict[str, object]:
     """导出 stage.ini 中可作为全局武将、技能、城池和兵种索引的轻量母表。"""
 
     try:
-        payload = stage_ini_codec.build_payload(root)
+        payload = stage_ini_codec.build_payload(find_game_dir(root))
     except (FileNotFoundError, ValueError) as exc:
         return {"available": False, "source": "stage.ini", "reason": str(exc), "generals": [], "skills": [], "cities": [], "soldiers": []}
 
@@ -704,38 +704,97 @@ STAGE_INI_FIELD_MAP = {
 }
 
 
+def _stage_ini_title_suffix(title_slot: bytes, title: str) -> list[int]:
+    """提取标题后的类型标记；零填充按新标题长度重新生成。"""
+
+    encoded_title = title.encode("cp950")
+    if not title_slot.startswith(encoded_title):
+        raise ValueError(f"stage.ini 标题槽与文本标题不一致：{title}")
+    tail = title_slot[len(encoded_title) :]
+    nonzero = [index for index, value in enumerate(tail) if value]
+    if not nonzero:
+        return [0]
+    suffix_end = min(len(tail), nonzero[-1] + 2)
+    return list(tail[:suffix_end])
+
+
 def _stage_ini_append_layout(
     bundle: dict[str, object],
     payload: dict[str, object],
     sheet_name: str,
+    stage_ini_blob: bytes,
 ) -> dict[str, object]:
-    """根据已确认的连续数值流反推出新增母表逻辑行的布局。"""
+    """严格按 stage.ini 的 size 块流生成新增母表行布局。"""
 
     model = bundle["conversion_models"].get(sheet_name, {})
     row_models = sorted(model.get("row_models", {}).values(), key=lambda row: int(row["stream_start_dword"]))
-    if len(row_models) < 2:
-        raise ValueError(f"{sheet_name} 母表缺少足够的连续行，无法计算新增布局")
-    starts = [int(row["stream_start_dword"]) for row in row_models]
-    step_counts = Counter(b - a for a, b in zip(starts, starts[1:]) if b > a)
-    row_dwords = step_counts.most_common(1)[0][0]
+    if not row_models:
+        raise ValueError(f"{sheet_name} 母表没有可用基准行")
     numeric_counts = Counter(int(row["numeric_count"]) for row in row_models)
     numeric_count = numeric_counts.most_common(1)[0][0]
-    title_bytes = (row_dwords - numeric_count) * 4
-    if title_bytes <= 0:
-        raise ValueError(f"{sheet_name} 母表标题槽长度无效：{title_bytes}")
-    last = row_models[-1]
-    section = str(last["stream_section"])
-    section_base = MAIN_HEADER_SIZE if section == "main" else int(payload["header"]["tail_offset"])
-    insert_offset = section_base + (int(last["stream_start_dword"]) + int(last["numeric_count"])) * 4
-    return {
-        "sheet": sheet_name,
-        "section": section,
-        "insertOffset": insert_offset,
-        "rowBytes": row_dwords * 4,
-        "titleBytes": title_bytes,
-        "numericCount": numeric_count,
-        "numericHeaders": list(model.get("value_headers", []))[:numeric_count],
-    }
+    numeric_headers = list(model.get("value_headers", []))[:numeric_count]
+    layout = payload["block_layout"]
+
+    if sheet_name == "general":
+        main_blocks = layout["main_blocks"]
+        insert_index = len(row_models)
+        if insert_index >= len(main_blocks):
+            raise ValueError("stage.ini 武将主表后缺少可定位的后续块")
+        template = main_blocks[0]
+        if int(template["size"]) != 224 or numeric_count != 49:
+            raise ValueError("stage.ini 武将块结构与已确认的 224/49 布局不一致")
+        title_bytes = 20
+        slot_start = int(template["payload_offset"])
+        suffix_headers = numeric_headers[-2:]
+        return {
+            "sheet": sheet_name,
+            "section": "main",
+            "countOffset": int(layout["main_count_offset"]),
+            "count": int(layout["main_count"]),
+            "insertOffset": int(main_blocks[insert_index]["size_offset"]),
+            "rowBytes": 4 + title_bytes + numeric_count * 4 + len(suffix_headers) * 4,
+            "recordPrefixValues": [224],
+            "titleBytes": title_bytes,
+            "titleSuffix": _stage_ini_title_suffix(
+                stage_ini_blob[slot_start : slot_start + title_bytes], str(row_models[0]["title"])
+            ),
+            "numericCount": numeric_count,
+            "numericHeaders": numeric_headers,
+            "recordSuffixHeaders": suffix_headers,
+            "recordSuffixValues": [],
+        }
+
+    if sheet_name == "castle":
+        city_records = layout["city_records"]
+        if not city_records:
+            raise ValueError("stage.ini 城池表没有可用基准行")
+        primary = city_records[0]["primary"]
+        secondary = city_records[0]["secondary"]
+        if int(primary["size"]) != 92 or int(secondary["size"]) != 0 or numeric_count != 17:
+            raise ValueError("stage.ini 城池块结构与已确认的 92+0/17 布局不一致")
+        title_bytes = 20
+        leading_offset = int(primary["payload_offset"])
+        title_start = leading_offset + 4
+        leading_value = int.from_bytes(stage_ini_blob[leading_offset:title_start], "little")
+        return {
+            "sheet": sheet_name,
+            "section": "city",
+            "countOffset": int(layout["city_count_offset"]),
+            "count": int(layout["city_count"]),
+            "insertOffset": int(layout["city_records_end"]),
+            "rowBytes": 8 + title_bytes + numeric_count * 4 + 4,
+            "recordPrefixValues": [92, leading_value],
+            "titleBytes": title_bytes,
+            "titleSuffix": _stage_ini_title_suffix(
+                stage_ini_blob[title_start : title_start + title_bytes], str(row_models[0]["title"])
+            ),
+            "numericCount": numeric_count,
+            "numericHeaders": numeric_headers,
+            "recordSuffixHeaders": [],
+            "recordSuffixValues": [0],
+        }
+
+    raise ValueError(f"不支持的 stage.ini 母表：{sheet_name}")
 
 
 def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]:
@@ -761,6 +820,7 @@ def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]
         return {"available": False, "reason": str(exc)}
 
     payload = stage_ini_codec.build_payload(game_dir)
+    stage_ini_blob = stage_ini.read_bytes()
     header = payload["header"]
     section_base = {"main": MAIN_HEADER_SIZE, "tail": int(header["tail_offset"])}
     field_locations: dict[str, dict[str, dict[str, dict[str, int]]]] = {"general": {}, "castle": {}}
@@ -787,12 +847,9 @@ def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]
         "fieldMap": STAGE_INI_FIELD_MAP,
         "fieldLocations": field_locations,
         "appendLayout": {
-            "mainCount": int(header["main_count"]),
-            "mainStride": int(header["main_stride"]),
-            "tailOffset": int(header["tail_offset"]),
-            "tailStride": int(header["tail_stride"]),
-            "general": _stage_ini_append_layout(bundle, payload, "general"),
-            "castle": _stage_ini_append_layout(bundle, payload, "castle"),
+            "format": "stage-ini-block-stream-v1",
+            "general": _stage_ini_append_layout(bundle, payload, "general", stage_ini_blob),
+            "castle": _stage_ini_append_layout(bundle, payload, "castle", stage_ini_blob),
         },
         "workbookSheets": workbook_sheets,
     }

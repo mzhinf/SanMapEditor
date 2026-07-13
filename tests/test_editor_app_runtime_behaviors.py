@@ -475,7 +475,7 @@ if (rows[0].city_index !== 84 || rows[0].stageIniValues.row_id !== '44') throw n
 """
         self.run_node(harness + functions + checks)
     def test_new_stage_ini_master_rows_are_rebuilt(self) -> None:
-        """验证新增武将和城池会扩展 stage.ini 两个母表区段。"""
+        """验证新增武将和城池按真实块流扩展 stage.ini。"""
 
         source = script_source()
         functions = function_range(source, "stageIniPatchModel", "buildStageIniWorkbookBytes")
@@ -489,9 +489,17 @@ const model = {
   fieldLocations: { general: {}, castle: {} },
   workbookSheets: [{ name: 'castle', headers: ['row_id', 'title', '都市索引'], rows: [] }],
   appendLayout: {
-    mainCount: 1, mainStride: 8, tailOffset: 16, tailStride: 4,
-    general: { insertOffset: 12, rowBytes: 8, titleBytes: 4, numericHeaders: ['人物编号'] },
-    castle: { insertOffset: 18, rowBytes: 6, titleBytes: 2, numericHeaders: ['都市索引'] }
+    format: 'stage-ini-block-stream-v1',
+    general: {
+      countOffset: 0, count: 1, insertOffset: 16, rowBytes: 12,
+      recordPrefixValues: [8], titleBytes: 4, titleSuffix: [0],
+      numericHeaders: ['人物编号'], recordSuffixHeaders: [], recordSuffixValues: []
+    },
+    castle: {
+      countOffset: 16, count: 1, insertOffset: 40, rowBytes: 20,
+      recordPrefixValues: [12, 0], titleBytes: 4, titleSuffix: [0],
+      numericHeaders: ['都市索引'], recordSuffixHeaders: [], recordSuffixValues: [0]
+    }
   }
 };
 const general = { isNew: true, stageIniRowKey: '8', entity_name: 'G', person_id: 8, stageIniValues: { title: 'G', 人物编号: 8 } };
@@ -517,16 +525,22 @@ function concatBytes(parts) {
 }
 """
         checks = """
-const original = new Uint8Array(20);
-new DataView(original.buffer).setUint32(0, 1, true);
-new DataView(original.buffer).setUint32(4, 8, true);
-original[18] = 0xaa; original[19] = 0xbb;
+const original = new Uint8Array(42);
+const originalView = new DataView(original.buffer);
+originalView.setUint32(0, 1, true);
+originalView.setUint32(4, 8, true);
+originalView.setUint32(16, 1, true);
+originalView.setUint32(20, 12, true);
+originalView.setUint32(36, 0, true);
+original[40] = 0xaa; original[41] = 0xbb;
 const edited = buildEditedStageIniBytes(original);
 const view = new DataView(edited.buffer);
-if (edited.length !== 36 || view.getUint32(0, true) !== 2) throw new Error('主表块数或文件长度错误');
-if (edited[12] !== 71 || view.getUint32(16, true) !== 8) throw new Error('新增武将母表行错误');
-if (edited[26] !== 67 || view.getUint32(28, true) !== 9) throw new Error('新增城池母表标题或数值错误');
-if (edited[34] !== 0xaa || edited[35] !== 0xbb) throw new Error('新增城池破坏了后续 tail 步长对齐');
+if (edited.length !== 74 || view.getUint32(0, true) !== 2) throw new Error('主表块数或文件长度错误');
+if (view.getUint32(16, true) !== 8 || edited[20] !== 71 || view.getUint32(24, true) !== 8) throw new Error('新增武将块错误');
+if (view.getUint32(28, true) !== 2) throw new Error('城池计数未按武将插入量迁移');
+if (view.getUint32(52, true) !== 12 || edited[60] !== 67 || view.getUint32(64, true) !== 9) throw new Error('新增城池双块错误');
+if (view.getUint32(68, true) !== 0) throw new Error('新增城池缺少零长度次块');
+if (edited[72] !== 0xaa || edited[73] !== 0xbb) throw new Error('新增记录破坏了后续原始块');
 const sheets = cloneWorkbookSheets();
 const sheetMap = new Map(sheets.map(sheet => [sheet.name, sheet]));
 applyWorkbookRowPatch(sheetMap, site, 'site');

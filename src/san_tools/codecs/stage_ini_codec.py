@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from pathlib import Path
 
 import san_tools.analysis.analyze_stage_sidecars as sidecars
 import san_tools.analysis.analyze_stg_family_alignment as align
 
+# 以下常量仅描述旧工作簿兼容视图，不代表 stage.ini 的物理块边界。
 MAIN_HEADER_SIZE = 8
 TAIL_STRIDE = 76
 
@@ -23,6 +25,66 @@ def read_u16_words(blob: bytes) -> list[int]:
 
 def read_u32_dwords(blob: bytes) -> list[int]:
     return [int.from_bytes(blob[index : index + 4], "little") for index in range(0, len(blob), 4)]
+
+
+def _read_size_block(blob: bytes, offset: int, label: str) -> tuple[dict[str, int], int]:
+    """读取一个 `u32 size + payload` 块，并返回可用于精确回写的边界。"""
+
+    if offset < 0 or offset + 4 > len(blob):
+        raise ValueError(f"stage.ini {label} 缺少块长度字段：offset={offset}")
+    size = int.from_bytes(blob[offset : offset + 4], "little")
+    payload_offset = offset + 4
+    end_offset = payload_offset + size
+    if end_offset > len(blob):
+        raise ValueError(
+            f"stage.ini {label} 块越界：offset={offset}, size={size}, file_size={len(blob)}"
+        )
+    return {
+        "size_offset": offset,
+        "size": size,
+        "payload_offset": payload_offset,
+        "end_offset": end_offset,
+    }, end_offset
+
+
+def parse_stage_ini_block_layout(blob: bytes) -> dict[str, object]:
+    """按游戏实际块流解析武将主表与城池双块记录的物理边界。"""
+
+    if len(blob) < 4:
+        raise ValueError("stage.ini 长度不足，缺少主表计数")
+
+    main_count = int.from_bytes(blob[0:4], "little")
+    offset = 4
+    main_blocks: list[dict[str, int]] = []
+    for index in range(main_count):
+        block, offset = _read_size_block(blob, offset, f"主表[{index}]")
+        main_blocks.append(block)
+
+    city_count_offset = offset
+    if city_count_offset + 4 > len(blob):
+        raise ValueError("stage.ini 缺少城池计数")
+    city_count = int.from_bytes(blob[city_count_offset : city_count_offset + 4], "little")
+    offset += 4
+
+    city_records: list[dict[str, object]] = []
+    for index in range(city_count):
+        primary, offset = _read_size_block(blob, offset, f"城池[{index}].primary")
+        secondary, offset = _read_size_block(blob, offset, f"城池[{index}].secondary")
+        city_records.append({"record_index": index, "primary": primary, "secondary": secondary})
+
+    return {
+        "format": "stage-ini-block-stream-v1",
+        "main_count_offset": 0,
+        "main_count": main_count,
+        "main_blocks": main_blocks,
+        "main_blocks_end": city_count_offset,
+        "city_count_offset": city_count_offset,
+        "city_count": city_count,
+        "city_records": city_records,
+        "city_records_end": offset,
+        "remaining_offset": offset,
+        "file_size": len(blob),
+    }
 
 
 def decode_zero_terminated_strings(blob: bytes) -> list[str]:
@@ -130,9 +192,8 @@ def parse_main_records(blob: bytes, count: int, stride: int) -> list[dict[str, o
 
 def parse_tail_records(blob: bytes, tail_offset: int) -> list[dict[str, object]]:
     tail_blob = blob[tail_offset:]
-    if len(tail_blob) % TAIL_STRIDE != 0:
-        raise ValueError(f"Unexpected stage.ini tail size: {len(tail_blob)}")
     count = len(tail_blob) // TAIL_STRIDE
+    tail_blob = tail_blob[: count * TAIL_STRIDE]
     rows: list[dict[str, object]] = []
     for record_index in range(count):
         start = tail_offset + record_index * TAIL_STRIDE
@@ -175,11 +236,14 @@ def parse_tail_records(blob: bytes, tail_offset: int) -> list[dict[str, object]]
 def build_payload(root: Path) -> dict[str, object]:
     stage_ini_path = find_stage_ini(root.resolve())
     blob = stage_ini_path.read_bytes()
+    block_layout = parse_stage_ini_block_layout(blob)
     main_count = int.from_bytes(blob[0:4], "little")
     main_stride = int.from_bytes(blob[4:8], "little")
     tail_offset = MAIN_HEADER_SIZE + main_count * main_stride
     main_records = parse_main_records(blob, main_count, main_stride)
     tail_records = parse_tail_records(blob, tail_offset)
+    tail_records_end = tail_offset + len(tail_records) * TAIL_STRIDE
+    tail_remainder = blob[tail_records_end:]
 
     tail_family_counter = Counter(str(row["family_guess"]) for row in tail_records)
     main_family_counter = Counter(str(row["family_guess"]) for row in main_records)
@@ -242,11 +306,11 @@ def build_payload(root: Path) -> dict[str, object]:
         },
         {
             "主题": "主表",
-            "内容": "文件头前 8 字节后跟 277 条 224 字节记录。当前高置信理解是：这里主要是全局武将/角色母表，而不是单关局部数据。",
+            "内容": "物理格式以 main_count 开始，随后是 u32 size + payload 主块；普通武将使用 size=224，除标题和 49 个字段外还包含两个能力镜像。",
         },
         {
             "主题": "尾表",
-            "内容": "主表之后还有 174 条 76 字节记录，结构风格接近 .stg，混有城市、兵种、山寨/盗贼、技能/文本字典等全局资源。",
+            "内容": "主块之后先保存 city_count；每座城池由 size=92 主块和 size=0 次块组成，后续还混有兵种、山寨/盗贼、技能/文本字典等全局资源。",
         },
         {
             "主题": "当前印证",
@@ -254,7 +318,7 @@ def build_payload(root: Path) -> dict[str, object]:
         },
         {
             "主题": "回写策略",
-            "内容": "build_stage_ini.py 默认优先使用每条记录的 raw_hex 原样回写；如果 raw_hex 缺失，则退回使用 u16_words 重新打包，以保证 round-trip 安全。",
+            "内容": "旧工作簿仍按 224/76 字节兼容视图展示；raw_hex、u16_words 与不足 76 字节的尾部余数共同保证 byte-for-byte round-trip。新增对象必须按真实 size 块流写入。",
         },
     ]
 
@@ -266,9 +330,12 @@ def build_payload(root: Path) -> dict[str, object]:
             "tail_offset": tail_offset,
             "tail_stride": TAIL_STRIDE,
             "tail_count": len(tail_records),
+            "tail_remainder_size": len(tail_remainder),
             "file_size": len(blob),
         },
         "notes": notes,
+        "block_layout": block_layout,
+        "tail_remainder_hex": tail_remainder.hex(),
         "tables": {
             "main_family_totals": [
                 {"family_guess": family_name, "count": count}
@@ -318,11 +385,15 @@ def rebuild_stage_ini(payload: dict[str, object]) -> bytes:
 
     main_blob = b"".join(record_bytes_from_row(row, main_stride) for row in main_records)
     tail_blob = b"".join(record_bytes_from_row(row, tail_stride) for row in tail_records)
+    tail_remainder = bytes.fromhex(str(payload.get("tail_remainder_hex", "")))
+    if len(tail_remainder) != int(header.get("tail_remainder_size", len(tail_remainder))):
+        raise ValueError("tail remainder size mismatch")
     return (
         int(main_count).to_bytes(4, "little")
         + int(main_stride).to_bytes(4, "little")
         + main_blob
         + tail_blob
+        + tail_remainder
     )
 
 
