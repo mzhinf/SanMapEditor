@@ -737,9 +737,8 @@ def _stage_ini_append_layout(
 
     if sheet_name == "general":
         main_blocks = layout["main_blocks"]
-        insert_index = len(row_models)
-        if insert_index >= len(main_blocks):
-            raise ValueError("stage.ini 武将主表后缺少可定位的后续块")
+        if not main_blocks:
+            raise ValueError("stage.ini 武将主表没有可用基准块")
         template = main_blocks[0]
         if int(template["size"]) != 224 or numeric_count != 49:
             raise ValueError("stage.ini 武将块结构与已确认的 224/49 布局不一致")
@@ -751,7 +750,7 @@ def _stage_ini_append_layout(
             "section": "main",
             "countOffset": int(layout["main_count_offset"]),
             "count": int(layout["main_count"]),
-            "insertOffset": int(main_blocks[insert_index]["size_offset"]),
+            "insertOffset": int(layout["main_blocks_end"]),
             "rowBytes": 4 + title_bytes + numeric_count * 4 + len(suffix_headers) * 4,
             "recordPrefixValues": [224],
             "titleBytes": title_bytes,

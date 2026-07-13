@@ -76,10 +76,11 @@ class TestStageIniBlockLayout(unittest.TestCase):
         append = model["appendLayout"]
 
         self.assertEqual(append["format"], "stage-ini-block-stream-v1")
-        self.assertEqual(append["general"]["insertOffset"], 62020)
+        self.assertEqual(append["general"]["insertOffset"], 63160)
         self.assertEqual(append["general"]["rowBytes"], 228)
         self.assertEqual(append["general"]["titleBytes"], 20)
         self.assertEqual(append["general"]["recordSuffixHeaders"], ["最大武力", "最大智力"])
+        self.assertEqual(append["general"]["insertOffset"], append["castle"]["countOffset"])
         self.assertEqual(append["castle"]["countOffset"], 63160)
         self.assertEqual(append["castle"]["insertOffset"], 67364)
         self.assertEqual(append["castle"]["rowBytes"], 100)
