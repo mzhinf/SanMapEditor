@@ -361,16 +361,18 @@ if (state.meta.records[2].join(',') !== '12,-1,-1,0,0,0,0,62') throw new Error('
         end = source.index("els.copyRegion.addEventListener", start)
         functions = source[start:end]
         harness = """
-const state = { regionCopyMode: 'non-base', regionClipboard: null, activeCompositeId: 'old' };
+const state = { regionCopyMode: 'non-base', regionClipboard: null, activeCompositeId: 'old', selected: { col: 4, row: 5 }, compositeObjects: [] };
 const els = { status: { textContent: '' } };
-let copyMode = ''; let cutMode = ''; let refreshes = 0;
+let copyMode = ''; let cutMode = ''; let refreshes = 0; let pasted = null;
 function captureRegionSnapshot() { copyMode = state.regionCopyMode; return { copyMode, count: 2 }; }
 function cutRegionSnapshot() { cutMode = state.regionCopyMode; return { copyMode: cutMode, count: 3 }; }
 function refreshCompositeList() { refreshes += 1; }
+function pasteRegionSnapshot(snapshot) { pasted = snapshot; return true; }
 """
         checks = """
 if (!copySelectedRegion() || copyMode !== 'non-base') throw new Error('复制命令未使用当前模式');
 if (!cutSelectedRegion() || cutMode !== 'non-base') throw new Error('剪切命令未使用当前模式');
+if (!pasteSelectedRegion() || pasted !== state.regionClipboard) throw new Error('粘贴命令未使用当前区域剪贴板');
 if (refreshes !== 2 || state.activeCompositeId !== null) throw new Error('区域命令未同步剪贴板状态');
 """
         self.run_node(harness + functions + checks)

@@ -4501,9 +4501,17 @@ function cutSelectedRegion() {
     : `已剪切 ${snapshot.count} 个 Cell，源区域保留 acwx 与 minimap_color`;
   return true;
 }
+// 按钮与快捷键共用同一粘贴入口，复制模式由快照字段集合决定。
+function pasteSelectedRegion() {
+  const snapshot = state.regionClipboard || state.compositeObjects.find(item => item.id === state.activeCompositeId);
+  if (!snapshot || !state.selected) return false;
+  if (!pasteRegionSnapshot(snapshot)) return false;
+  els.status.textContent = '已粘贴 ' + snapshot.name;
+  return true;
+}
 els.copyRegion.addEventListener('click', copySelectedRegion);
 els.cutRegion.addEventListener('click', cutSelectedRegion);
-els.pasteRegion.addEventListener('click', () => { const snapshot = state.regionClipboard || state.compositeObjects.find(item => item.id === state.activeCompositeId); if (!snapshot || !state.selected) return; if (pasteRegionSnapshot(snapshot)) els.status.textContent = '已粘贴 ' + snapshot.name; });
+els.pasteRegion.addEventListener('click', pasteSelectedRegion);
 els.saveComposite.addEventListener('click', () => { const snapshot = captureRegionSnapshot('合成对象 ' + (state.compositeObjects.length + 1)); if (!snapshot) return; state.compositeObjects.push(snapshot); state.regionClipboard = snapshot; state.activeCompositeId = snapshot.id; refreshCompositeList(); els.status.textContent = '已保存 ' + snapshot.name; });
 els.regionCopyMode.addEventListener('change', () => { state.regionCopyMode = els.regionCopyMode.value === 'non-base' ? 'non-base' : 'full'; refreshCompositeList(); });
 document.querySelectorAll('.panel-collapse').forEach(button => {
@@ -4547,10 +4555,11 @@ els.resourceList.addEventListener('click', ev => {
 });
 window.addEventListener('keydown', ev => {
   const shortcutKey = ev.key.toLowerCase();
-  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && !isEditableTarget(ev.target) && (shortcutKey === 'c' || shortcutKey === 'x')) {
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && !isEditableTarget(ev.target) && (shortcutKey === 'c' || shortcutKey === 'x' || shortcutKey === 'v')) {
     ev.preventDefault();
     if (shortcutKey === 'c') copySelectedRegion();
-    else cutSelectedRegion();
+    else if (shortcutKey === 'x') cutSelectedRegion();
+    else pasteSelectedRegion();
     return;
   }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
@@ -4607,7 +4616,7 @@ async function boot() {
   resetEditState(state.meta);
   await loadStagePicker();
 }
-window.sanEditor = { state, els, applyImportedPatchPayload, loadPatchFile, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, cutRegionSnapshot, copySelectedRegion, cutSelectedRegion, pasteRegionSnapshot, validationIssues };
+window.sanEditor = { state, els, applyImportedPatchPayload, loadPatchFile, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, cutRegionSnapshot, copySelectedRegion, cutSelectedRegion, pasteSelectedRegion, pasteRegionSnapshot, validationIssues };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>
