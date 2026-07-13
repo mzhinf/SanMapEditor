@@ -48,18 +48,18 @@ def parse_dor(dor_file: str | Path) -> list[dict[str, object]]:
             values = struct.unpack_from("<15i", data, record_offset)
             door_group.append(
                 {
-                    "group": group_index,
-                    "index": index,
-                    "record_offset": record_offset,
-                    "door_x": values[0],
-                    "door_y": values[1] * 2 + 4,
-                    "dir": values[2],
-                    "site_x": values[12],
-                    "site_y": values[13],
-                    "unk_28": values[10],
-                    "unk_2c": values[11],
-                    "extra": values[14],
-                    "raw": list(values),
+                    "group": group_index,           #
+                    "index": index,                 #
+                    "record_offset": record_offset, #
+                    "door_x": values[0],            # 城门 x 轴坐标
+                    "door_y": values[1] * 2 + 4,    # 城门 y 轴坐标
+                    "dir": values[2],               # 门朝向
+                    "site_x": values[12],           # 据点 x 轴坐标
+                    "site_y": values[13],           # 据点 y 轴坐标
+                    "unk_28": values[10],           #
+                    "unk_2c": values[11],           #
+                    "extra": values[14],            #
+                    "raw": list(values),            #
                 }
             )
 

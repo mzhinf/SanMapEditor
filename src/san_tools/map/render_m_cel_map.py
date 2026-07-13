@@ -7,7 +7,10 @@ from pathlib import Path
 
 from PIL import Image
 
-from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
+try:
+    from extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
+except ImportError:
+    from san_tools.map.extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
 
 DIAMOND_ROWS = [
     (19, 0, 2), (17, 2, 6), (15, 8, 10), (13, 18, 14), (11, 32, 18),

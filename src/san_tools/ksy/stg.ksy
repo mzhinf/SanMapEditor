@@ -144,15 +144,15 @@ types:
         terminator: 0
         pad-right: 0
         doc: 剧本名称，Big5 定长 16 字节；长标题可能刚好占满无 0 结尾。
-      - id: root1_unknown_10
+      - id: root1_special_mode_or_title_tail_10
         type: u4
-        doc: 剧本级保留/模式字段。普通大剧本常见 0x4000。
-      - id: root1_unknown_14
+        doc: +0x10 剧本级特殊模式/长标题残留候选；42 样本中 39 个为 0，3 个为非零。
+      - id: reserved_zero_14
         type: u4
-        doc: 剧本级保留字段。
-      - id: root1_unknown_18
+        doc: +0x14 保留字段；42 样本固定为 0。
+      - id: reserved_zero_18
         type: u4
-        doc: 剧本级保留字段。
+        doc: +0x18 保留字段；42 样本固定为 0。
       - id: scenario_year_start
         type: u4
         doc: 剧本起始年份。
@@ -162,9 +162,9 @@ types:
       - id: scenario_mode_flag_a
         type: u4
         doc: 剧本模式标志。普通大剧本常见 1，剧情剧本常见 0。
-      - id: root1_unknown_28
+      - id: reserved_zero_28
         type: u4
-        doc: 剧本级保留字段。
+        doc: +0x28 保留字段；42 样本固定为 0。
       - id: scenario_mode_flag_b
         type: u4
         doc: 剧本模式标志。普通大剧本常见 1，剧情剧本常见 0。
@@ -174,22 +174,22 @@ types:
       - id: scenario_id_or_duplicate
         type: u4
         doc: 剧本 ID 镜像/子编号。剧情剧本常与 scenario_id 相同。
-      - id: root1_unknown_38
+      - id: root1_variant_38
         type: u4
-        doc: 剧本级保留字段；stage00 等样本可为非零。
-      - id: root1_unknown_3c
+        doc: +0x38 剧本级变体字段；42 样本中 3 个非零。
+      - id: root1_variant_3c
         type: u4
-        doc: 剧本级保留字段；stage00 等样本可为非零。
-      - id: root1_unknown_40
+        doc: +0x3C 剧本级变体字段；42 样本中 3 个非零。
+      - id: reserved_zero_40
         type: u4
-        doc: 剧本级保留字段。
-      - id: root1_unknown_44
+        doc: +0x40 保留字段；42 样本固定为 0。
+      - id: root1_scenario_type_44
         type: u4
-        doc: 剧本级保留字段；部分剧情剧本常见 99。
-      - id: root1_unknown_48
+        doc: +0x44 剧本类型/剧情模式候选；样本值为 0 或 99。
+      - id: reserved_zero_48
         type: u4
         if: _io.size >= 0x4c
-        doc: 仅 0x4C payload 版本存在的尾部保留字段。
+        doc: +0x48 仅 0x4C payload 版本存在；41 样本固定为 0。
 
   root_part2_payload:
     doc: root_part2 payload。固定 13 个 u32，偏移相对于 payload 起点。
@@ -206,30 +206,30 @@ types:
       - id: root2_value_0c
         type: u4
         doc: 剧本级数值字段，样本常见 5。
-      - id: root2_unknown_10
+      - id: root2_pointer_or_mode_10
         type: u4
-        doc: 剧本级保留字段，可为非零。
+        doc: +0x10 剧本级指针/模式残留候选；允许非零，回写时原样保留。
       - id: force_count_mirror_candidate
         type: u4
         doc: 势力数量镜像候选；在样本中通常等于顶层 force_count。
-      - id: root2_unknown_18
+      - id: reserved_zero_18
         type: u4
-        doc: 剧本级保留字段。
+        doc: +0x18 保留字段；42 样本固定为 0。
       - id: root2_mode_1c
         type: u4
         doc: 剧本级模式/状态字段。
-      - id: root2_unknown_20
+      - id: reserved_zero_20
         type: u4
-        doc: 剧本级保留字段。
-      - id: root2_unknown_24
+        doc: +0x20 保留字段；42 样本固定为 0。
+      - id: root2_pointer_or_mode_24
         type: u4
-        doc: 剧本级保留字段，可为非零。
+        doc: +0x24 剧本级指针/模式残留候选；允许非零，回写时原样保留。
       - id: root2_mode_28
         type: u4
         doc: 剧本级模式/状态字段。
-      - id: root2_unknown_2c
+      - id: reserved_zero_2c
         type: u4
-        doc: 剧本级保留字段。
+        doc: +0x2C 保留字段；42 样本固定为 0。
       - id: root2_mode_30
         type: u4
         doc: 剧本级模式/状态字段。
@@ -267,33 +267,117 @@ types:
         terminator: 0
         pad-right: 0
         doc: 势力名，Big5 定长 20 字节。
-      - id: force_index_1based
+
+      - id: force_slot_or_index_14
         type: u4
-        doc: 势力序号候选，1-based；多数普通剧本与列表顺序一致。
+        doc: +0x14 势力槽/序号候选；236 样本中 181 个等于父 force 序号，不能视为强一致索引。
       - id: force_lord_person_id
         type: u4
-        doc: 君主/代表武将人物编号候选；可与 general.txt 关联。
-      - id: force_part1_words_after_lord
-        type: u4_words
-        size-eos: true
-        doc: 势力基础状态余下 u32 字段。可为非零，回写时应保留。
+        doc: +0x18 君主/代表武将人物编号候选。
+      - id: force_ai_or_diplomacy_mode_1c
+        type: u4
+        doc: +0x1C 势力 AI/外交模式候选；样本值 0..3。
+      - id: force_flag_20
+        type: u4
+        doc: +0x20 势力标志；样本值 0 或 1。
+      - id: force_level_or_group_24
+        type: u4
+        doc: +0x24 势力等级/分组候选；样本值 0..3。
+      - id: force_policy_28
+        type: u4
+        doc: +0x28 势力策略候选；样本值 0..4。
+      - id: force_policy_2c
+        type: u4
+        doc: +0x2C 势力策略候选；样本值 0..3。
+      - id: reserved_zero_30
+        type: u4
+        doc: +0x30 保留字段；236 样本固定为 0。
+      - id: reserved_zero_34
+        type: u4
+        doc: +0x34 保留字段；236 样本固定为 0。
+      - id: force_timer_or_score_38
+        type: u4
+        doc: +0x38 势力计时/评分候选；允许非零。
+      - id: force_timer_or_score_3c
+        type: u4
+        doc: +0x3C 势力计时/评分候选；允许非零。
+      - id: force_flag_40
+        type: u4
+        doc: +0x40 势力标志；样本值 0、1 或 2。
+      - id: reserved_zero_44
+        type: u4
+        doc: +0x44 保留字段；236 样本固定为 0。
+      - id: force_rare_flag_48
+        type: u4
+        doc: +0x48 稀有势力标志；236 样本仅 1 个非零。
+      - id: force_ai_mode_4c
+        type: u4
+        doc: +0x4C 势力 AI 模式候选；允许非零。
+      - id: force_rare_flag_50
+        type: u4
+        doc: +0x50 稀有势力标志；236 样本仅 1 个非零。
+      - id: force_rare_value_54
+        type: u4
+        doc: +0x54 稀有势力数值；236 样本仅 2 个非零。
+      - id: force_budget_or_delay_58
+        type: u4
+        doc: +0x58 势力预算/延迟候选；常见 0、25、1000、5000。
+      - id: force_ai_mode_5c
+        type: u4
+        doc: +0x5C 势力 AI 模式候选；样本值 0、2、3、4。
+
 
   force_part2_payload:
     doc: force_part2 payload。字段偏移相对于 payload 起点。
     seq:
       - id: site_count
         type: u4
-        doc: 该势力拥有的 Site 数量；EXE 按此值循环读取 Site。
+        doc: +0x00 该势力拥有的 Site 数量；236 样本恒等于后续 site 列表数量。
       - id: force_index_1based
         type: u4
-        doc: 势力序号镜像候选，1-based。
+        doc: +0x04 势力序号镜像；236 样本恒等于父 force 1-based 序号。
       - id: force_lord_person_id_or_ref
         type: u4
-        doc: 君主/势力引用候选。
-      - id: force_part2_words_after_header
-        type: u4_words
-        size-eos: true
-        doc: 势力 AI、资源、外交或策略状态余下 u32 字段。0x7C/0x84 版本长度不同。
+        doc: +0x08 君主/势力引用候选。
+      - id: reserved_zero_0c
+        type: u4
+        doc: +0x0C 保留字段；236 样本固定为 0。
+      - id: force_runtime_ref_10
+        type: u4
+        doc: +0x10 运行时引用/指针残留候选；允许非零。
+      - id: force_runtime_ref_14
+        type: u4
+        doc: +0x14 运行时引用/指针残留候选；允许非零。
+      - id: reserved_zero_18
+        type: u4
+        doc: +0x18 保留字段；236 样本固定为 0。
+      - id: reserved_zero_1c
+        type: u4
+        doc: +0x1C 保留字段；236 样本固定为 0。
+      - id: reserved_zero_20
+        type: u4
+        doc: +0x20 保留字段；236 样本固定为 0。
+      - id: resource_slots_24_48
+        type: u4
+        repeat: expr
+        repeat-expr: 10
+        doc: +0x24..+0x48 资源/外交数值槽；样本通常为 0/20/40/60/80。
+      - id: ai_relation_flags_4c_74
+        type: u4
+        repeat: expr
+        repeat-expr: 11
+        doc: +0x4C..+0x74 AI/外交关系标志；常见 3 或 0。
+      - id: force_strategy_budget_78
+        type: u4
+        doc: +0x78 势力策略预算/评分候选；常见 0、1000、4600 等。
+      - id: reserved_zero_7c
+        type: u4
+        if: _io.size >= 0x84
+        doc: +0x7C 仅 0x84 payload 版本存在；222 样本固定为 0。
+      - id: reserved_zero_80
+        type: u4
+        if: _io.size >= 0x84
+        doc: +0x80 仅 0x84 payload 版本存在；222 样本固定为 0。
 
   site:
     doc: 据点/城市/山寨对象。
@@ -332,12 +416,6 @@ types:
         type: entity
         if: part2.body.optional_entity_flag_28c != 0
         doc: site_part2 +0x28C 非 0 时跟随的可选 Entity。
-      - id: extra_entities_2ac
-        type: entity
-        repeat: expr
-        repeat-expr: part2.body.extra_entity_count_candidate_2ac
-        if: part2.body.extra_entity_count_candidate_2ac != 0
-        doc: site_part2 +0x2AC 控制的额外 Entity 候选列表；样本中下一块符合 Entity 形态时成立。
     instances:
       site_name:
         value: part1.body.site_name
@@ -414,46 +492,117 @@ types:
         size-eos: true
         doc: 0x5C 版本比 0x58 版本多出的尾部 u32 字段；按原值保留。
 
+
   site_part2_payload:
-    doc: site_part2 payload。运行态/AI/可选实体控制区。
+    doc: site_part2 payload。运行态 AI/可选实体控制区。+0x27C..+0x28C 是五个可选 Entity flag；+0x2AC 在 1043 个据点样本中固定为 0，不是额外 Entity 数量。
     seq:
-      - id: runtime_00
+      - id: reserved_zero_000
         type: u4
-        doc: 未命名运行态字段。
-      - id: runtime_x_or_state_04
+        doc: +0x000 保留字段；1043 样本固定为 0。
+      - id: runtime_coord_or_spawn_x_004
         type: s4
-        doc: 运行态坐标/状态候选；不是 castle.txt 座标X。
-      - id: runtime_y_or_state_08
+        doc: +0x004 运行时坐标/生成点 X 候选；不等于 castle.txt 坐标 X。
+      - id: runtime_coord_or_spawn_y_008
         type: s4
-        doc: 运行态坐标/状态候选；不是 castle.txt 座标Y。
-      - id: runtime_words_0c_27b
+        doc: +0x008 运行时坐标/生成点 Y 候选；不等于 castle.txt 坐标 Y。
+      - id: site_kind_or_force_group_00c
+        type: u4
+        doc: +0x00C 据点类别/势力组候选；样本值 1..10。
+      - id: site_serial_010
+        type: u4
+        doc: +0x010 据点序号候选；样本值 1..99。
+      - id: site_flag_014
+        type: u4
+        doc: +0x014 稀有标志；样本值 0 或 1。
+      - id: reserved_zero_018
+        type: u4
+        doc: +0x018 保留字段；1043 样本固定为 0。
+      - id: site_small_counter_01c
+        type: u4
+        doc: +0x01C 据点小计数/等级候选；样本值 0..16。
+      - id: reserved_zero_020
+        type: u4
+        doc: +0x020 保留字段；1043 样本固定为 0。
+      - id: sentinel_minus_one_024
+        type: u4
+        doc: +0x024 固定哨兵值 0xFFFFFFFF；1043 样本恒定。
+      - id: reserved_zero_028
+        type: u4
+        doc: +0x028 保留字段；1043 样本固定为 0。
+      - id: reserved_zero_02c
+        type: u4
+        doc: +0x02C 保留字段；1043 样本固定为 0。
+      - id: site_flag_030
+        type: u4
+        doc: +0x030 稀有标志；样本值 0 或 1。
+      - id: reserved_zero_034
+        type: u4
+        doc: +0x034 保留字段；1043 样本固定为 0。
+      - id: reserved_zero_038
+        type: u4
+        doc: +0x038 保留字段；1043 样本固定为 0。
+      - id: site_flag_03c
+        type: u4
+        doc: +0x03C 稀有标志；样本值 0 或 1。
+      - id: reserved_zero_040_054
         type: u4
         repeat: expr
-        repeat-expr: 0x9c
-        doc: site_part2 +0x0C..+0x27B 的运行态/AI 保留 u32 字段。
+        repeat-expr: 6
+        doc: +0x040..+0x054 保留字段；1043 样本全部为 0。
+      - id: ai_template_params_058_130
+        type: u4
+        repeat: expr
+        repeat-expr: 55
+        doc: +0x058..+0x130 AI/行动模板参数表；包含 5/6、40、20、4、50、100 等固定或低基数参数。
+      - id: reserved_zero_134_20c
+        type: u4
+        repeat: expr
+        repeat-expr: 55
+        doc: +0x134..+0x20C 保留带；1043 样本全部为 0。
+      - id: runtime_tail_words_210_278
+        type: u4
+        repeat: expr
+        repeat-expr: 27
+        doc: +0x210..+0x278 运行时引用/脚本/浮点位型/状态尾字段；允许非零，回写时必须保留。
       - id: optional_entity_flag_27c
         type: u4
-        doc: 非 0 时，site 后跟随一个可选 Entity。
+        doc: +0x27C 非 0 时 site 后跟随一个可选 Entity；1043 样本中 19 个为 1。
       - id: optional_entity_flag_280
         type: u4
-        doc: 非 0 时，site 后跟随一个可选 Entity。
+        doc: +0x280 非 0 时 site 后跟随一个可选 Entity；1043 样本中 1 个为 1。
       - id: optional_entity_flag_284
         type: u4
-        doc: 非 0 时，site 后跟随一个可选 Entity。
+        doc: +0x284 非 0 时 site 后跟随一个可选 Entity；当前样本固定为 0，EXE 有对应槽位。
       - id: optional_entity_flag_288
         type: u4
-        doc: 非 0 时，site 后跟随一个可选 Entity。
+        doc: +0x288 非 0 时 site 后跟随一个可选 Entity；1043 样本中 1 个为 1。
       - id: optional_entity_flag_28c
         type: u4
-        doc: 非 0 时，site 后跟随一个可选 Entity。
-      - id: runtime_words_290_2ab
+        doc: +0x28C 非 0 时 site 后跟随一个可选 Entity；1043 样本中 1 个为 1。
+      - id: reserved_zero_290
         type: u4
-        repeat: expr
-        repeat-expr: 7
-        doc: site_part2 +0x290..+0x2AB 的运行态/AI 保留 u32 字段。
-      - id: extra_entity_count_candidate_2ac
+        doc: +0x290 保留字段；1043 样本固定为 0。
+      - id: runtime_rare_flag_294
         type: u4
-        doc: 额外 Entity 数量候选；样本中下一块符合 Entity 形态时成立。
+        doc: +0x294 稀有标志；1043 样本中 2 个为 1。
+      - id: runtime_budget_298
+        type: u4
+        doc: +0x298 运行时预算/延迟候选；常见 0、100、200、300。
+      - id: runtime_bitfield_29c
+        type: u4
+        doc: +0x29C 运行时位域候选；常见 0 或 65536。
+      - id: runtime_mode_2a0
+        type: u4
+        doc: +0x2A0 运行时模式候选；常见 0 或 1。
+      - id: reserved_zero_2a4
+        type: u4
+        doc: +0x2A4 保留字段；1043 样本固定为 0。
+      - id: reserved_zero_2a8
+        type: u4
+        doc: +0x2A8 保留字段；1043 样本固定为 0。
+      - id: reserved_zero_2ac
+        type: u4
+        doc: +0x2AC 保留字段；1043 样本固定为 0。它不是额外 Entity 数量。
 
   entity:
     doc: 实体对象。通常代表武将、普通士兵、盗贼或剧情单位。
@@ -471,52 +620,29 @@ types:
         value: part2.body.person_id
       troop_count:
         value: part2.body.troop_count
-      owner_force_index_runtime:
-        value: part1.body.owner_force_index_runtime
+
 
   entity_part1_payload:
-    doc: entity_part1 payload。运行态/位置/状态字段；已见 0x30 或 0x34 版本。
+    doc: entity_part1 payload。运行时状态字段；已见 0x30 或 0x34 版本。+0x00..+0x20 在 4472 个实体样本中全部为 0，不是所属势力。
     seq:
-      - id: owner_force_index_runtime
+      - id: reserved_zero_00_20
         type: u4
-        doc: 运行时所属势力序号候选，通常与父 Force 一致。
-      - id: runtime_04
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_08
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_0c
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_10
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_14
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_18
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_1c
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_20
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_24
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_28
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_2c
-        type: s4
-        doc: 运行态/位置/状态字段。
-      - id: runtime_30
-        type: s4
+        repeat: expr
+        repeat-expr: 9
+        doc: +0x00..+0x20 保留/填充字段；4472 个实体样本全部为 0。
+      - id: runtime_value_24
+        type: u4
+        doc: +0x24 运行时状态值；4472 样本中 87 个非零，常见 260、30、110 等。
+      - id: runtime_ref_28
+        type: u4
+        doc: +0x28 运行时引用/位域候选；4472 样本中 5 个非零。
+      - id: runtime_float_or_state_2c
+        type: u4
+        doc: +0x2C 运行时浮点位型/状态候选；常见 0、0x3F800000、0x3F19999A、0xFFFF。
+      - id: runtime_force_or_ai_side_30
+        type: u4
         if: _io.size >= 0x34
-        doc: 仅 0x34 payload 版本存在的运行态/位置/状态字段。
+        doc: +0x30 仅 0x34 payload 版本存在；运行时势力/AI 阵营候选，约 74.6% 样本等于父 Force 序号，不能写死为 owner。
 
   entity_part2_payload:
     doc: "entity_part2 payload。与 general.txt: 名称 + 数值列 对齐。"
@@ -536,7 +662,7 @@ types:
         doc: general.txt 头像编号。
       - id: static_owner_id
         type: s4
-        doc: general.txt 所属君主；运行时归属优先看 entity_part1.owner_force_index_runtime 和父 Force。
+        doc: general.txt 所属君主；运行时归属需结合父 Force、父 Site 和 entity_part1 的运行时阵营候选判断。
       - id: static_location_id
         type: s4
         doc: general.txt 所在地；运行时位置优先看父 Site。
@@ -660,7 +786,7 @@ types:
       - id: action_policy
         type: s4
         doc: general.txt 行动方针。
-      - id: ambush_unknown
+      - id: ambush_field
         type: s4
         doc: general.txt 伏兵=?。
       - id: betrayal_force_id

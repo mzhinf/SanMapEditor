@@ -21,9 +21,9 @@ except ImportError:
     from san_tools.map.extract_kingdom import DEFAULT_PALETTE_SOURCE, load_palette
 
 try:
-    from palette import PAINT_RGB_TEXT_PALETTE
+    from palette import PAINT_RGB_PALETTE_HEX
 except ImportError:
-    from san_tools.map.palette import PAINT_RGB_TEXT_PALETTE
+    from san_tools.map.palette import PAINT_RGB_PALETTE_HEX
 
 try:
     from render_m_cel_map import canvas_size, cell_xy, parse_counted_cel, render_stage
@@ -82,7 +82,7 @@ def build_cells(width: int, records: list[bytes]) -> list[dict[str, int]]:
 def color_for_index(index: int) -> str:
     """按稳定顺序为分组分配颜色。"""
 
-    return PAINT_RGB_TEXT_PALETTE[index % len(PAINT_RGB_TEXT_PALETTE)]
+    return PAINT_RGB_PALETTE_HEX[index % len(PAINT_RGB_PALETTE_HEX)]
 
 
 def write_raw_byte_maps(stage_dir: Path, width: int, height: int, cells: list[dict[str, int]], byte_start: int, byte_end: int) -> dict[str, object]:
