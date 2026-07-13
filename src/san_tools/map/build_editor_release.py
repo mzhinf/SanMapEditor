@@ -7,7 +7,7 @@ import json
 import shutil
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from san_tools.map.export_editor_bundle import export_editor_bundle
@@ -45,8 +45,9 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
     output_dir.mkdir(parents=True, exist_ok=True)
 
     build_date = date.today().isoformat()
+    build_time = datetime.now().isoformat(sep=" ", timespec="seconds")
     export_result = export_editor_bundle(root, stage, bundle_dir, "stagger", "xyz", "SAN_RGB_PALETTE")
-    release_info = {"creator": RELEASE_CREATOR, "build_date": build_date, "stage": stage}
+    release_info = {"creator": RELEASE_CREATOR, "build_date": build_date, "build_time": build_time, "stage": stage}
     (bundle_dir / "release-info.json").write_text(json.dumps(release_info, ensure_ascii=False, indent=2), encoding="utf-8")
     launcher = root / "src" / "san_tools" / "map" / "editor_desktop_launcher.py"
     command = [
@@ -75,7 +76,7 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
     (package_dir / "使用说明.txt").write_text(
         "三国霸业地图编辑器 2.0\n\n"
         f"创建者：{RELEASE_CREATOR}\n"
-        f"打包日期：{build_date}\n\n"
+        f"打包时间：{build_time}\n\n"
         "1. 双击 SanMapEditor.exe。\n"
         "2. 编辑器会在默认浏览器中打开。\n"
         "3. 保持启动器小窗口运行；关闭小窗口会停止编辑器服务。\n"
@@ -83,7 +84,7 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
         encoding="utf-8-sig",
     )
 
-    archive_base = output_dir / f"{EXE_NAME}-{stage}"
+    archive_base = output_dir / f"{EXE_NAME}-{stage}-{build_date}"
     archive_path = Path(shutil.make_archive(str(archive_base), "zip", package_dir))
     result = {
         "stage": stage,
@@ -92,6 +93,7 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
         "archive_bytes": archive_path.stat().st_size,
         "creator": RELEASE_CREATOR,
         "build_date": build_date,
+        "build_time": build_time,
         "bundle": export_result,
     }
     (output_dir / f"{EXE_NAME}-{stage}.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

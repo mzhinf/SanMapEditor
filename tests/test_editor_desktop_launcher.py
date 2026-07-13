@@ -37,8 +37,8 @@ class TestEditorDesktopLauncher(unittest.TestCase):
         self.assertEqual(find_editor_data_dir(root), root.resolve())
         self.assertEqual(editor_entry_path(root, "stage01"), "/stage01/editor.html")
         self.assertEqual(check_editor_data(root, "stage01"), 0)
-        (root / 'release-info.json').write_text('{"creator": "mzhinf", "build_date": "2026-07-13"}', encoding='utf-8')
-        self.assertEqual(load_release_info(root), {'creator': 'mzhinf', 'build_date': '2026-07-13'})
+        (root / 'release-info.json').write_text('{"creator": "mzhinf", "build_date": "2026-07-13", "build_time": "2026-07-13 17:30:00"}', encoding='utf-8')
+        self.assertEqual(load_release_info(root), {'creator': 'mzhinf', 'build_date': '2026-07-13', 'build_time': '2026-07-13 17:30:00'})
 
     def test_server_only_listens_on_loopback(self) -> None:
         """桌面服务必须使用本机随机端口，不能暴露到局域网。"""

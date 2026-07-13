@@ -61,13 +61,14 @@ def load_release_info(data_dir: Path) -> dict[str, str]:
 
     info_path = data_dir / "release-info.json"
     if not info_path.is_file():
-        return {"creator": APP_CREATOR, "build_date": "开发版"}
+        return {"creator": APP_CREATOR, "build_date": "开发版", "build_time": "开发版"}
     import json
 
     payload = json.loads(info_path.read_text(encoding="utf-8"))
     return {
         "creator": str(payload.get("creator") or APP_CREATOR),
         "build_date": str(payload.get("build_date") or "未知"),
+        "build_time": str(payload.get("build_time") or "未知"),
     }
 
 
@@ -111,7 +112,7 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
     root.columnconfigure(0, weight=1)
 
     ttk.Label(root, text="地图编辑器正在运行", font=("Microsoft YaHei UI", 13, "bold")).grid(row=0, column=0, padx=20, pady=(20, 8))
-    ttk.Label(root, text=f"创建者：{release_info['creator']}    打包日期：{release_info['build_date']}").grid(row=1, column=0, padx=20, pady=2)
+    ttk.Label(root, text=f"创建者：{release_info['creator']}    打包时间：{release_info['build_time']}").grid(row=1, column=0, padx=20, pady=2)
     ttk.Label(root, text="编辑器已在默认浏览器中打开。关闭此窗口将停止本地服务。", wraplength=370, justify="center").grid(row=2, column=0, padx=20, pady=4)
     controls = ttk.Frame(root)
     controls.grid(row=3, column=0, pady=12)
