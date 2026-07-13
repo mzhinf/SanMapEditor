@@ -23,7 +23,7 @@
 - [x] 复核 `master` 历史，不存在 GitHub 100 MiB 单文件阻断。
 - [x] 删除未被应用引用的 `_editor_app_check.js`。
 - [x] 确认旧 `tools` 目录仅剩 Python 转发层，命令已迁移到 `python -m san_tools`。
-- [ ] 删除 40 个已跟踪的旧 `tools` 转发文件；安全审查要求维护者再次明确批准。
+- [ ] 删除 38 个已跟踪的旧 `tools` 转发文件；安全审查要求维护者再次明确批准。
 - [x] 统一本地资源入口为 `data/game`、`data/text` 和两个环境变量。
 - [x] 移除源码、测试中的本机盘符路径与个人缓存路径。
 - [x] 删除只有打印输出且依赖绝对路径的 `tests/test_assets.py`。
