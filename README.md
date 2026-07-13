@@ -26,6 +26,7 @@
 - [docs/FORMAT_NOTES.zh.md](docs/FORMAT_NOTES.zh.md)
 - [docs/EDITOR_UI_V2_DESIGN.zh.md](docs/EDITOR_UI_V2_DESIGN.zh.md)
 - [docs/DOC_WORKFLOW.zh.md](docs/DOC_WORKFLOW.zh.md)
+- [docs/GITHUB_RELEASE_CHECKLIST.zh.md](docs/GITHUB_RELEASE_CHECKLIST.zh.md)
 
 ## 目录说明
 
