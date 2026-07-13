@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 APP_TITLE = "三国霸业地图编辑器 2.0"
+APP_CREATOR = "mzhinf"
 DATA_DIR_NAME = "editor-data"
 
 
@@ -55,6 +56,21 @@ def editor_entry_path(data_dir: Path, stage: str = "stage01") -> str:
     return "/index.html"
 
 
+def load_release_info(data_dir: Path) -> dict[str, str]:
+    """读取发布包元数据；开发目录不存在时使用明确默认值。"""
+
+    info_path = data_dir / "release-info.json"
+    if not info_path.is_file():
+        return {"creator": APP_CREATOR, "build_date": "开发版"}
+    import json
+
+    payload = json.loads(info_path.read_text(encoding="utf-8"))
+    return {
+        "creator": str(payload.get("creator") or APP_CREATOR),
+        "build_date": str(payload.get("build_date") or "未知"),
+    }
+
+
 def create_editor_server(data_dir: Path) -> http.server.ThreadingHTTPServer:
     """创建仅监听本机随机端口的静态文件服务器。"""
 
@@ -86,17 +102,19 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
     url = f"http://127.0.0.1:{port}{editor_entry_path(data_dir, stage)}"
     server_thread = threading.Thread(target=server.serve_forever, name="editor-http", daemon=True)
     server_thread.start()
+    release_info = load_release_info(data_dir)
 
     root = tk.Tk()
     root.title(APP_TITLE)
     root.resizable(False, False)
-    root.geometry("420x166")
+    root.geometry("420x194")
     root.columnconfigure(0, weight=1)
 
     ttk.Label(root, text="地图编辑器正在运行", font=("Microsoft YaHei UI", 13, "bold")).grid(row=0, column=0, padx=20, pady=(20, 8))
-    ttk.Label(root, text="编辑器已在默认浏览器中打开。关闭此窗口将停止本地服务。", wraplength=370, justify="center").grid(row=1, column=0, padx=20, pady=4)
+    ttk.Label(root, text=f"创建者：{release_info['creator']}    打包日期：{release_info['build_date']}").grid(row=1, column=0, padx=20, pady=2)
+    ttk.Label(root, text="编辑器已在默认浏览器中打开。关闭此窗口将停止本地服务。", wraplength=370, justify="center").grid(row=2, column=0, padx=20, pady=4)
     controls = ttk.Frame(root)
-    controls.grid(row=2, column=0, pady=16)
+    controls.grid(row=3, column=0, pady=12)
     ttk.Button(controls, text="打开编辑器", command=lambda: webbrowser.open(url)).grid(row=0, column=0, padx=6)
 
     def close_launcher() -> None:

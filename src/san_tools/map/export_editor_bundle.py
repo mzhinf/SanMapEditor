@@ -7,6 +7,7 @@ import shutil
 import struct
 import uuid
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -50,6 +51,7 @@ except ImportError:
     from san_tools.map.minimap_sidecar import ACTIVE_ROWS, GRID_SIZE, validate_sidecar_blob
 
 MAIN_HEADER_SIZE = stage_ini_codec.MAIN_HEADER_SIZE
+EDITOR_BUILD_DATE_TOKEN = "__SAN_EDITOR_BUILD_DATE__"
 
 FIELD_NAMES = [
     "acwx",
@@ -105,6 +107,16 @@ def read_stage_records(stage_path: Path) -> tuple[int, int, list[list[int]]]:
             struct.unpack_from("<H", blob, off + 14)[0],
         ])
     return width, height, records
+
+
+def write_editor_template(template: Path, out_path: Path, build_date: str | None = None) -> None:
+    """写入编辑器模板，并把打包日期占位符替换为当天日期。"""
+
+    source = template.read_text(encoding="utf-8")
+    if EDITOR_BUILD_DATE_TOKEN not in source:
+        raise ValueError(f"编辑器模板缺少打包日期占位符：{template}")
+    source = source.replace(EDITOR_BUILD_DATE_TOKEN, build_date or date.today().isoformat())
+    out_path.write_text(source, encoding="utf-8")
 
 
 def write_stage_json(
@@ -1074,7 +1086,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
         common_model,
     )
     template = resolve_editor_template(root)
-    shutil.copyfile(template, stage_dir / "editor.html")
+    write_editor_template(template, stage_dir / "editor.html")
 
     index_path = out_dir / "index.json"
     existing = {"stages": []}

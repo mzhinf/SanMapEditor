@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from san_tools.map.build_editor_release import ensure_safe_work_dir
-from san_tools.map.editor_desktop_launcher import check_editor_data, create_editor_server, editor_entry_path, find_editor_data_dir
+from san_tools.map.editor_desktop_launcher import check_editor_data, create_editor_server, editor_entry_path, find_editor_data_dir, load_release_info
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +37,8 @@ class TestEditorDesktopLauncher(unittest.TestCase):
         self.assertEqual(find_editor_data_dir(root), root.resolve())
         self.assertEqual(editor_entry_path(root, "stage01"), "/stage01/editor.html")
         self.assertEqual(check_editor_data(root, "stage01"), 0)
+        (root / 'release-info.json').write_text('{"creator": "mzhinf", "build_date": "2026-07-13"}', encoding='utf-8')
+        self.assertEqual(load_release_info(root), {'creator': 'mzhinf', 'build_date': '2026-07-13'})
 
     def test_server_only_listens_on_loopback(self) -> None:
         """桌面服务必须使用本机随机端口，不能暴露到局域网。"""

@@ -173,6 +173,16 @@
 - `.s/.x` 的稳定拆分方式已经收口为：上 `128` 行由 `.m` 的 `minimap_color` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
 - `tools/apply_editor_patch.py` 现在会在写回 `.m` 后默认同步生成同名 `.s/.x`；编辑器导出的 bundle 也会内嵌 sidecar 尾区参考，支持页面内一键导出 `.m/.s/.x`。
 - 在 33 个关卡里，`.x` 的有效区始终比 `.s` 更接近 `.m` 派生结果，平均匹配率分别为 `0.620744 / 0.47098`；保留尾区后，生成结果的尾区匹配率恒为 `1.0`。
+### `minimap_color` 与资源索引分析
+
+全量统计 `acwx/acwy/acwz` 与 `minimap_color`，并生成跨关卡留一验证报告：
+
+```powershell
+& $py -m san_tools.analysis.analyze_minimap_color_relation . --out derived/minimap_color_relation/report.json
+```
+
+分析模块提供 `MinimapColorPredictor` 和 `build_minimap_color_function`。当前 33 个关卡的 `xyz` 众数样本内命中率为 95.091%，跨关卡验证为 83.471%，因此预测值只能作为编辑建议，不能替代 `.m` 中独立保存的 `minimap_color`。详细结论见 [docs/MINIMAP_COLOR_RELATION.zh.md](docs/MINIMAP_COLOR_RELATION.zh.md)。
+
 ### stage.ini 结构化导出与回写
 
 导出 `stage.ini` JSON：

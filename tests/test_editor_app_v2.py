@@ -20,6 +20,8 @@ class TestEditorAppV2Template(unittest.TestCase):
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
         for marker in (
             '地图编辑器 2.0',
+            '创建者：mzhinf',
+            '__SAN_EDITOR_BUILD_DATE__',
             '合成对象 / 区域操作',
             '势力管理',
             '据点 / 城门',
@@ -97,6 +99,9 @@ class TestEditorAppV2Template(unittest.TestCase):
         self.assertIn('parentSiteKey', html)
         self.assertIn('selectedCells', html)
         self.assertIn('cutRegionSnapshot', html)
+        self.assertIn('copySelectedRegion()', html)
+        self.assertIn('cutSelectedRegion()', html)
+        self.assertIn("shortcutKey === 'c' || shortcutKey === 'x'", html)
         self.assertIn("regionCopyMode: 'full'", html)
         self.assertIn("mode === 'non-base'", html)
         self.assertNotIn('setRegionAnchor', html)

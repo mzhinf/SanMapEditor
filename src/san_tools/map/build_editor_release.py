@@ -7,12 +7,14 @@ import json
 import shutil
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 from san_tools.map.export_editor_bundle import export_editor_bundle
 
 
 EXE_NAME = "SanMapEditor"
+RELEASE_CREATOR = "mzhinf"
 
 
 def ensure_safe_work_dir(root: Path, work_dir: Path) -> Path:
@@ -42,7 +44,10 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
     bundle_dir.mkdir(parents=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    build_date = date.today().isoformat()
     export_result = export_editor_bundle(root, stage, bundle_dir, "stagger", "xyz", "SAN_RGB_PALETTE")
+    release_info = {"creator": RELEASE_CREATOR, "build_date": build_date, "stage": stage}
+    (bundle_dir / "release-info.json").write_text(json.dumps(release_info, ensure_ascii=False, indent=2), encoding="utf-8")
     launcher = root / "src" / "san_tools" / "map" / "editor_desktop_launcher.py"
     command = [
         sys.executable,
@@ -69,6 +74,8 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
     shutil.copytree(bundle_dir, package_dir / "editor-data")
     (package_dir / "使用说明.txt").write_text(
         "三国霸业地图编辑器 2.0\n\n"
+        f"创建者：{RELEASE_CREATOR}\n"
+        f"打包日期：{build_date}\n\n"
         "1. 双击 SanMapEditor.exe。\n"
         "2. 编辑器会在默认浏览器中打开。\n"
         "3. 保持启动器小窗口运行；关闭小窗口会停止编辑器服务。\n"
@@ -83,6 +90,8 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
         "archive": str(archive_path),
         "package": str(package_dir),
         "archive_bytes": archive_path.stat().st_size,
+        "creator": RELEASE_CREATOR,
+        "build_date": build_date,
         "bundle": export_result,
     }
     (output_dir / f"{EXE_NAME}-{stage}.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
