@@ -36,3 +36,9 @@
 - 同步更新 `docs/FORMAT_NOTES.zh.md` 的 `.stg` 章节，移除旧的 76 字节记录主格式说法，并说明旧工作簿链路仅作为兼容视图。
 - 验证：42 个 `.stg` 样本使用 `stg_stream_codec_refactored.py` roundtrip 全部 OK；KSY 规则模拟解析 42 个样本全部走完整个文件边界。
 - 验证：`python -m unittest tests.test_assets tests.test_stg_workbook_roundtrip tests.test_stg_troop_analysis` 通过 11 个测试。未找到本机 Kaitai 编译器，因此未运行 `ksc`。
+
+## 2026-07-08 STG 深度修订补充
+
+- 安装并使用 `capstone`、`pefile`、`pyyaml`，对 `Emperor.exe` 做函数级静态反汇编聚类，辅助确认 STG 相关运行时字段语义。
+- 修正 `src/san_tools/ksy/stg.ksy`：移除错误的 `owner_force_index_runtime`、`extra_entity_count_candidate_2ac` 和大段未拆分 `runtime_words_0c_27b` / `force_part*_words_*`。
+- `stg.ksy` 已通过 YAML 解析校验，并通过人工长度核对：`force_part1=0x60`、`force_part2=0x7C/0x84`、`site_part2=0x2B0`、`entity_part1=0x30/0x34`、`entity_part2=0xE0`。

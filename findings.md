@@ -118,3 +118,11 @@
 - 已见块大小变体：`root_part1=0x48/0x4C`、`force_part2=0x7C/0x84`、`site_part1=0x58/0x5C`、`entity_part1=0x30/0x34`；其余核心块为 `root_part2=0x34`、`force_part1=0x60`、`site_part2=0x2B0`、`entity_part2=0xE0`。
 - `site_part2 +0x27C..+0x28C` 是可选 Entity 控制 flag；`+0x2AC` 当前 42 个样本均为 0，仍作为额外 Entity 数量候选保留。
 - `after_forces_tail` 不是固定 0xA0：尾区小于等于 0xA0 时整体保留，尾区大于 0xA0 时按“前置尾区 + 最后 0xA0 候选尾块”保留；全部按 u32 words 保存。
+
+## 2026-07-08 STG 深度字段修订
+
+- `entity_part1 +0x00..+0x20` 经 4472 个实体样本复核全部为 0，上一版把 `+0x00` 命名为运行时所属势力是错误结论；当前 `stg.ksy` 已改为 `reserved_zero_00_20`。
+- `entity_part1 +0x30` 仅在 0x34 payload 版本存在，约 74.6% 样本等于父 Force 序号，应视为运行时势力/AI 阵营候选，而不是强 owner 字段。
+- `force_part2 +0x00`、`force_part2 +0x04`、force 前置 site 数均为 100% 强关系；`force_part2 +0x24..+0x48` 是资源/外交数值槽，`+0x4C..+0x74` 是 AI/外交关系标志组。
+- `site_part2 +0x27C..+0x28C` 是五个可选 Entity flag；`+0x2AC` 在 1043 个据点样本中固定为 0，不是额外 Entity 数量。
+- `site_part2 +0x058..+0x130` 已拆为 AI/行动模板参数表，`+0x134..+0x20C` 是全零保留带，`+0x210..+0x278` 是运行时引用/脚本/浮点位型/状态尾字段。
