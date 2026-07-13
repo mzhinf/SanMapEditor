@@ -84,7 +84,7 @@ python -m san_tools.map.build_editor_release . --stage stage01
 
 ## 命令入口
 
-旧 `tools/` 转发入口已停止使用，所有正式命令通过统一入口执行：
+旧 `tools/` 转发目录已移除，所有正式命令通过统一入口执行：
 
 ```powershell
 python -m san_tools list
@@ -117,7 +117,7 @@ src/san_tools/
 └── text/         # 游戏文本编码转换
 ```
 
-格式结论见 [二进制格式笔记](docs/FORMAT_NOTES.zh.md)，字段间转换见 [编辑器字段转换](docs/EDITOR_FIELD_CONVERSION.zh.md)，关联维护规则见 [编辑器数据管理](docs/EDITOR_DATA_MANAGEMENT.zh.md)。
+文档职责与阅读顺序见 [文档索引](docs/DOCUMENT_INDEX.zh.md)。格式结论见 [二进制格式笔记](docs/FORMAT_NOTES.zh.md)，字段间转换见 [编辑器字段转换](docs/EDITOR_FIELD_CONVERSION.zh.md)，关联维护规则见 [编辑器数据管理](docs/EDITOR_DATA_MANAGEMENT.zh.md)，重要演进记录见 [项目历史](docs/PROJECT_HISTORY.zh.md)。
 
 ## 贡献与许可
 

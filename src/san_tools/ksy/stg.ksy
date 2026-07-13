@@ -30,7 +30,7 @@ doc: |
           Block entity_part1
           Block entity_part2
         optional Entity blocks controlled by site_part2 flags
-        extra Entity blocks controlled by site_part2 +0x2AC
+        site_part2 +0x2AC 固定为保留零值，不作为 Entity 数量解析
     after_forces_tail
 
   每个 Block 都是 `u32 size + payload[size]`，size 不包含自身 4 字节。
