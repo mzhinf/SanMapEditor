@@ -4,8 +4,11 @@ import argparse
 import collections
 import math
 import struct
+from pathlib import Path
 
 from PIL import Image, ImageDraw
+
+from san_tools.project_paths import find_game_data_dir
 
 try:
     from palette import SAN_RGB_PALETTE
@@ -18,12 +21,9 @@ VALID_CODES = {b"acwx", b"acwy", b"acwz"}
 
 
 def find_game_dir(root: Path) -> Path:
-    if (root / "Emperor.exe").exists():
-        return root
-    for child in root.iterdir():
-        if child.is_dir() and (child / "Emperor.exe").exists():
-            return child
-    raise FileNotFoundError("Could not find game directory containing Emperor.exe")
+    """兼容旧调用名称，实际使用统一的数据目录解析规则。"""
+
+    return find_game_data_dir(root)
 
 
 def load_palette(game_dir: Path, palette_source: str | None = DEFAULT_PALETTE_SOURCE) -> list[int]:

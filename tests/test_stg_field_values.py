@@ -5,6 +5,7 @@ from pathlib import Path
 
 from san_tools.analysis.analyze_stg_field_values import collect_field_rows, filter_uncertain_rows, summarize_rows
 from san_tools.codecs.stg_stream_codec_refactored import load_txt_tables, parse_stage_file
+from tests.sample_support import require_game_data
 
 
 class TestStgFieldValues(unittest.TestCase):
@@ -12,7 +13,7 @@ class TestStgFieldValues(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.game_dir = Path("H:/Workstation/san/三国霸业")
+        cls.game_dir = require_game_data(Path(__file__).resolve().parents[1])
         cls.stage_path = cls.game_dir / "stage01.stg"
         if not cls.stage_path.exists():
             raise unittest.SkipTest("缺少 stage01.stg，跳过字段统计测试。")

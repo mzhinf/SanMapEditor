@@ -5,6 +5,9 @@ import json
 import re
 import struct
 from collections import Counter
+from pathlib import Path
+
+from san_tools.project_paths import find_game_data_dir
 
 SIDECAR_MODELS = {
     "spr": {"header": 12, "stride": 36, "confidence": "medium"},
@@ -23,12 +26,9 @@ CITY_TAG_HINTS = {"W城市", "W城市3", "城市", "市", "軍寨", "山寨", "�
 
 
 def find_game_dir(root: Path) -> Path:
-    if (root / "Emperor.exe").exists():
-        return root
-    for child in root.iterdir():
-        if child.is_dir() and (child / "Emperor.exe").exists():
-            return child
-    raise FileNotFoundError("Could not find game directory containing Emperor.exe")
+    """兼容旧调用名称，实际使用统一的数据目录解析规则。"""
+
+    return find_game_data_dir(root)
 
 
 def parse_m(path: Path) -> tuple[int, int, list[bytes]]:

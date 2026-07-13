@@ -19,6 +19,7 @@ from san_tools.codecs.stage_ini_excel_codec import write_workbook
 from san_tools.codecs.stage_ini_txt_linkage import build_bundle as build_stage_ini_linkage_bundle
 from san_tools.map.editor_model import StgFile
 from san_tools.map.stg_editor_patch import build_stg_layout_index, build_stg_patch_index
+from san_tools.project_paths import find_text_data_dir
 
 try:
     from .extract_kingdom import DEFAULT_PALETTE_SOURCE, find_game_dir, load_palette
@@ -740,17 +741,20 @@ def _stage_ini_append_layout(
 def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]:
     """\u4e3a\u6d4f\u89c8\u5668\u4fdd\u5b58 stage.ini \u51c6\u5907 dword \u7ea7\u5b57\u6bb5\u6620\u5c04\u4e0e\u5de5\u4f5c\u7c3f\u57fa\u51c6\u884c\u3002"""
 
-    txt_dir = root / "other" / "uft8-game-txt"
     stage_ini = game_dir / "stage.ini"
-    if not stage_ini.exists() or not txt_dir.exists():
-        return {"available": False, "reason": "\u7f3a\u5c11 stage.ini \u6216 other/uft8-game-txt"}
+    try:
+        txt_dir = find_text_data_dir(root)
+    except FileNotFoundError as exc:
+        return {"available": False, "reason": str(exc)}
+    if not stage_ini.exists():
+        return {"available": False, "reason": f"缺少 {stage_ini}"}
     try:
         tmp_parent = root / "derived" / "test_tmp" / "stage_ini_patch_model_runs"
         tmp_parent.mkdir(parents=True, exist_ok=True)
         tmp_root = tmp_parent / f"stage_ini_patch_model_{uuid.uuid4().hex}"
         tmp_root.mkdir(parents=False, exist_ok=False)
         shutil.copyfile(stage_ini, tmp_root / "stage.ini")
-        shutil.copytree(txt_dir, tmp_root / "uft8-game-txt", dirs_exist_ok=True)
+        shutil.copytree(txt_dir, tmp_root / "data" / "text", dirs_exist_ok=True)
         bundle = build_stage_ini_linkage_bundle(tmp_root)
         shutil.rmtree(tmp_root, ignore_errors=True)
     except (FileNotFoundError, ValueError, OSError) as exc:

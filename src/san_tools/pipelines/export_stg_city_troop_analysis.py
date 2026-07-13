@@ -5,6 +5,8 @@ import csv
 import json
 from pathlib import Path
 
+from san_tools.project_paths import find_text_data_dir
+
 from san_tools.pipelines.export_stg_phase7_links import (
     load_castle_table,
     load_history_table,
@@ -234,7 +236,7 @@ def normalize_troop_block(
 
 
 def build_city_rows(root: Path, raw_records: list[dict[str, object]], hierarchy: dict[str, object]) -> list[dict[str, object]]:
-    txt_dir = root / "uft8-game-txt"
+    txt_dir = find_text_data_dir(root)
     castle_by_name = load_castle_table(txt_dir)
     history_by_name = load_history_table(txt_dir)
     history_by_id = {int(info["general_id"]): name for name, info in history_by_name.items()}
@@ -281,7 +283,7 @@ def build_city_rows(root: Path, raw_records: list[dict[str, object]], hierarchy:
 def build_troop_rows(root: Path, raw_records: list[dict[str, object]], hierarchy: dict[str, object]) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     raw_by_index = {int(record["record_index"]): record for record in raw_records}
-    soldier_by_name = load_soldier_table(root / "uft8-game-txt")
+    soldier_by_name = load_soldier_table(find_text_data_dir(root))
     for force in hierarchy["forces"]:
         for city in force["cities"]:
             for troop_order, troop in enumerate(city["troops"], start=1):

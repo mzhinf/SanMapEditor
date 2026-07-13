@@ -9,6 +9,7 @@ SRC = ROOT / 'src'
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from tests.sample_support import require_game_data
 from san_tools.map.minimap_sidecar import (
     ACTIVE_ROWS,
     GRID_SIZE,
@@ -25,7 +26,7 @@ class TestMinimapSidecarBuilder(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.root = Path(__file__).resolve().parents[1]
-        cls.game_dir = cls.root / '三国霸业'
+        cls.game_dir = require_game_data(cls.root)
         cls.stage_path = cls.game_dir / 'stage11.m'
         cls.s_path = cls.game_dir / 'stage11.s'
         cls.x_path = cls.game_dir / 'stage11.x'

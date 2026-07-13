@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from san_tools.codecs.stg_stream_codec_refactored import load_txt_tables, parse_stage_file
+from san_tools.project_paths import find_game_data_dir
 
 
 DEFAULT_UNCERTAIN_CONFIDENCES = ("candidate", "unknown")
@@ -356,7 +357,7 @@ def write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="统计 `.stg` 各字段取值，并额外导出含义不确定字段的明细与聚合表。")
     parser.add_argument("inputs", nargs="*", help="可选：`.stg` 文件或目录；为空时自动扫描游戏目录与 `new_san`。")
-    parser.add_argument("--game-dir", type=Path, default=Path("H:/Workstation/san/三国霸业"), help="游戏根目录，同时作为 txt 表和默认扫描目录。")
+    parser.add_argument("--game-dir", type=Path, help="游戏数据目录；默认自动查找 data/game。")
     parser.add_argument("--out-dir", type=Path, default=Path("derived/stg_field_statistics"), help="输出目录。")
     parser.add_argument(
         "--uncertain-confidence",
@@ -370,7 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    game_dir = args.game_dir.resolve()
+    game_dir = args.game_dir.resolve() if args.game_dir else find_game_data_dir()
     stage_files = discover_stage_files(args.inputs, game_dir)
     if not stage_files:
         raise SystemExit("未找到可分析的 `.stg` 文件。")

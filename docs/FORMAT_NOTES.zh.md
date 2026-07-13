@@ -100,11 +100,11 @@ screen_y = row * 10
 
 现有脚本：
 
-- `tools/export_stage_ini_tables.py`
-- `tools/build_stage_ini.py`
-- `tools/export_stage_ini_txt_workbook.py`
-- `tools/import_stage_ini_txt_workbook.py`
-- `tools/build_stage_ini_from_txt_workbook.py`
+- `python -m san_tools run export-stage-ini-json`
+- `python -m san_tools run build-stage-ini`
+- `python -m san_tools run export-stage-ini-workbook`
+- `python -m san_tools run import-stage-ini-workbook`
+- `python -m san_tools run build-stage-ini-from-workbook`
 
 这些脚本已经能在未修改工作簿的情况下回写出与原始 `stage.ini` 字节完全一致的新文件。
 
@@ -221,7 +221,7 @@ after_forces_tail
 
 ### 5.5 旧 76 字节工作簿链路的适用范围
 
-`tools/export_stg_workbook.py` / `tools/import_stg_workbook.py` 的 76 字节记录工作簿仍可作为 `stage01.stg` 的局部编辑兼容链路使用，尤其是 `city_state` 中已确认的候选字段回写。
+`export-stg-workbook` / `import-stg-workbook` 统一命令 的 76 字节记录工作簿仍可作为 `stage01.stg` 的局部编辑兼容链路使用，尤其是 `city_state` 中已确认的候选字段回写。
 
 但它现在不是 `.stg` 的主格式定义：
 
@@ -235,7 +235,7 @@ after_forces_tail
 ### `.evt`
 
 - 当前最稳的结构观察是：8 字节头 + 72 字节记录体。
-- 已新增 `tools/analyze_evt_resources.py`，会把全量统计写入 `derived/sidecar_analysis/evt_resource_linkage.json`。
+- 已新增 `python -m san_tools run analyze-evt-resources`，会把全量统计写入 `derived/sidecar_analysis/evt_resource_linkage.json`。
 - 全量结果显示：38 个 `.evt` 都能对上对应 `TalkNN.txt`，说明 `TalkNN.txt` 可以视为事件文本资源池。
 - `stage17.txt` 是可读的 CP950 松散脚本原型，能和 `stage17.evt` 中的 `呂翔死`、`徐庶回軍寨`、`碼頭` 等标签互相印证。
 - `stage01.txt` 不是普通文本，而是二进制 blob；不能把所有 `stageNN.txt` 都当成剧情脚本。
@@ -260,10 +260,10 @@ after_forces_tail
 ### `.s/.x`
 
 - 两者大小都固定为 `160 * 160 = 25600` 字节。
-- 已新增 `tools/analyze_minimap_sidecars.py`，会把全量统计写入 `derived/sidecar_analysis/minimap_sidecar_analysis.json`。
-- 已新增 `tools/build_minimap_sidecars.py`，按当前最稳的规则把 `.m` 转回 `.s/.x`：上 `128` 行由 `.m` 的 `byte13 / minimap_color` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
-- 已更新 `tools/apply_editor_patch.py`，编辑器 patch 写回 `.m` 后会默认同步生成同名 `.s/.x`，闭环沿用同一套“上 128 行派生、下 32 行保留”的保守规则。
-- 已更新 `tools/export_editor_bundle.py` 与编辑页模板：导出的 `stage.json` 会携带 `.s/.x` 尾区参考，编辑页侧边栏固定为 `Minimap -> Cell -> Record -> Resources -> Stage`，并支持直接一键导出 `.m/.s/.x`。
+- 已新增 `python -m san_tools run analyze-minimap-sidecars`，会把全量统计写入 `derived/sidecar_analysis/minimap_sidecar_analysis.json`。
+- 已新增 `python -m san_tools run build-minimap-sidecars`，按当前最稳的规则把 `.m` 转回 `.s/.x`：上 `128` 行由 `.m` 的 `byte13 / minimap_color` 缩放生成，下 `32` 行直接保留原始 sidecar 尾区。
+- 已更新 `python -m san_tools run apply-editor-patch`，编辑器 patch 写回 `.m` 后会默认同步生成同名 `.s/.x`，闭环沿用同一套“上 128 行派生、下 32 行保留”的保守规则。
+- 已更新 `python -m san_tools run export-editor-bundle` 与编辑页模板：导出的 `stage.json` 会携带 `.s/.x` 尾区参考，编辑页侧边栏固定为 `Minimap -> Cell -> Record -> Resources -> Stage`，并支持直接一键导出 `.m/.s/.x`。
 - 在 33 个带 `.m/.s/.x` 的关卡里，`.s` 与 `.x` 平均仍有 `0.80094` 的逐字节相同率，说明二者高度相关。
 - 若只比较有效区，上 `128` 行中，`.m byte13/minimap_color -> 160x128` 与 `.s/.x` 的平均匹配率分别为 `0.47098 / 0.620744`；`.x` 明显更接近 `.m` 派生结果。
 - 若采用“上 128 行派生 + 下 32 行保留”的保守写回策略，生成结果与原始 `.s/.x` 的平均全图匹配率分别为 `0.576784 / 0.696596`，且尾区匹配率恒为 `1.0`。

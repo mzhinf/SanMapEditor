@@ -7,7 +7,18 @@ name = "san-map-tools"
 version = "0.1.0"
 description = "三国霸业地图逆向、导出与编辑工具"
 readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "mzhinf" }]
 requires-python = ">=3.11"
+keywords = ["三国霸业", "地图编辑器", "二进制格式", "Kaitai Struct"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Win32 (MS Windows)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
 dependencies = [
   "openpyxl>=3.1,<4",
   "Pillow>=10,<12",
@@ -30,6 +41,9 @@ san-tools = "san_tools.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["san_tools*"]
+
+[tool.setuptools.package-data]
+san_tools = ["map/editor_app.html", "ksy/*.ksy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,33 @@
+name: 错误报告
+description: 报告可复现的编辑器或数据处理问题
+title: "[错误] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: 请勿上传原始游戏文件、个人路径或敏感信息。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 说明实际行为和预期行为。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 提供最小、稳定的复现流程。
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息
+      description: Windows、Python、浏览器或发布包版本。

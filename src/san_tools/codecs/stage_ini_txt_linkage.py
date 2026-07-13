@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 import san_tools.codecs.stage_ini_codec as stage_ini_codec
+from san_tools.project_paths import find_game_data_dir, find_text_data_dir
 
 TXT_DIRNAME = "uft8-game-txt"
 OUTPUT_DIR = Path("derived/stage_ini_txt_analysis")
@@ -421,8 +422,9 @@ def build_notes_rows(stage_payload: dict[str, object], file_summaries: list[dict
 
 def build_bundle(root: Path) -> dict[str, object]:
     root = root.resolve()
-    txt_dir = root / TXT_DIRNAME
-    stage_payload = stage_ini_codec.build_payload(root)
+    txt_dir = find_text_data_dir(root)
+    game_dir = find_game_data_dir(root)
+    stage_payload = stage_ini_codec.build_payload(game_dir)
 
     general_rows = read_tsv_rows(txt_dir / "general.txt")
     castle_rows = read_tsv_rows(txt_dir / "castle.txt")

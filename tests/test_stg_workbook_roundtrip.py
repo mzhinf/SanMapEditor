@@ -14,6 +14,7 @@ from san_tools.pipelines.export_stg_city_troop_analysis import CITY_FIELD_OFFSET
 from san_tools.pipelines.export_stg_workbook import build_workbook_sheets
 from san_tools.pipelines.import_stg_workbook import apply_city_state_sheet, load_meta, load_record_buffers, rebuild_blob
 from san_tools.codecs.stage_ini_excel_codec import read_workbook_tables, write_workbook
+from tests.sample_support import require_game_data
 
 
 class StgWorkbookRoundTripTest(unittest.TestCase):
@@ -22,7 +23,7 @@ class StgWorkbookRoundTripTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.root = Path(__file__).resolve().parents[1]
-        cls.stage_path = cls.root / "三国霸业" / "stage01.stg"
+        cls.stage_path = require_game_data(cls.root) / "stage01.stg"
         if not cls.stage_path.exists():
             raise unittest.SkipTest("缺少 三国霸业/stage01.stg，跳过 .stg 工作簿互转测试。")
 

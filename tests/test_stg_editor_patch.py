@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from san_tools.map.editor_model import StgFile
-from san_tools.map.extract_kingdom import find_game_dir
+from tests.sample_support import require_game_data
 from san_tools.map.stg_editor_patch import apply_stg_scenario_changes, build_stg_layout_index, build_stg_patch_index, encode_big5_fixed
 
 
@@ -19,7 +19,7 @@ class TestStgEditorPatch(unittest.TestCase):
         self.assertEqual(encoded, b'ABC\x00\x00\x00')
 
     def test_stage01_patch_index_contains_ksy_fields(self) -> None:
-        game_dir = find_game_dir(ROOT)
+        game_dir = require_game_data(ROOT)
         path = game_dir / 'stage01.stg'
         if not path.exists():
             self.skipTest('缺少 stage01.stg 样本')
@@ -32,7 +32,7 @@ class TestStgEditorPatch(unittest.TestCase):
         self.assertIn('person_id', index['force:0/site:0/entity:0'])
 
     def test_stage01_layout_index_contains_object_stream_offsets(self) -> None:
-        game_dir = find_game_dir(ROOT)
+        game_dir = require_game_data(ROOT)
         path = game_dir / 'stage01.stg'
         if not path.exists():
             self.skipTest('缺少 stage01.stg 样本')
@@ -54,7 +54,7 @@ class TestStgEditorPatch(unittest.TestCase):
             ['optional_entity_27c', 'optional_entity_280', 'optional_entity_284', 'optional_entity_288', 'optional_entity_28c'],
         )
     def test_stage01_updates_existing_force_site_and_entity_fields(self) -> None:
-        game_dir = find_game_dir(ROOT)
+        game_dir = require_game_data(ROOT)
         path = game_dir / 'stage01.stg'
         if not path.exists():
             self.skipTest('缺少 stage01.stg 样本')

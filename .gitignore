@@ -1,15 +1,24 @@
-# Original game files and generated binary outputs are not committed.
-.idea/
-__pycache__/
-*.pyc
-
-.planning/
-.venv/
-.tmp/
-.uv-cache/
-
+# 游戏原始文件与本地资源不提交。
 三国霸业/
+data/game/*
+data/text/*
+
+# 生成物、发布物与分析输出不提交。
 derived/
 dist/
-derived/other/
 outputs/
+build/
+*.egg-info/
+
+# 开发环境、缓存和编辑器状态不提交。
+.idea/
+.planning/
+.tmp/
+.uv-cache/
+.venv/
+node_modules/
+.pytest_cache/
+.coverage
+htmlcov/
+__pycache__/
+*.py[cod]

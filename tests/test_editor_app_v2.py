@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 
 from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, build_editor_site_links, build_stage_ini_patch_model, build_stage_ini_workbook_sheets, copy_scenario_reference_files, export_heads_atlas, write_stage_json
+from san_tools.project_paths import find_text_data_dir
+from tests.sample_support import require_game_data
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -340,7 +342,7 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_stage_ini_reference_and_workbook_are_exported_for_stage01(self) -> None:
-        game_dir = ROOT / ''.join(chr(code) for code in (0x4e09, 0x56fd, 0x9738, 0x4e1a))
+        game_dir = require_game_data(ROOT)
         if not (game_dir / 'stage.ini').exists() or not (game_dir / 'stage01.dor').exists():
             self.skipTest('missing stage01 or stage.ini sample')
 
@@ -365,8 +367,12 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
 
 
     def test_stage_ini_patch_model_maps_stage_ini_offsets(self) -> None:
-        game_dir = ROOT / ''.join(chr(code) for code in (0x4e09, 0x56fd, 0x9738, 0x4e1a))
-        if not (game_dir / 'stage.ini').exists() or not (ROOT / 'other' / 'uft8-game-txt').exists():
+        game_dir = require_game_data(ROOT)
+        try:
+            find_text_data_dir(ROOT)
+        except FileNotFoundError:
+            self.skipTest('缺少 stage.ini 文本映射样本')
+        if not (game_dir / 'stage.ini').exists():
             self.skipTest('missing stage.ini or txt mapping sample')
 
         model = build_stage_ini_patch_model(ROOT, game_dir)
@@ -386,7 +392,7 @@ class TestEditorBundleScenarioFiles(unittest.TestCase):
 
     def test_stage01_scenario_and_common_models_use_stg_and_stage_ini(self) -> None:
         """验证编辑器 bundle 使用 .stg 和 stage.ini 生成管理面板数据源。"""
-        game_dir = ROOT / '三国霸业'
+        game_dir = require_game_data(ROOT)
         if not (game_dir / 'stage01.stg').exists() or not (game_dir / 'stage.ini').exists():
             self.skipTest('缺少 stage01.stg 或 stage.ini 样本')
 

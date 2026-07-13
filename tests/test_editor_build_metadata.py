@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -34,6 +35,14 @@ class TestEditorBuildMetadata(unittest.TestCase):
         rendered = output.read_text(encoding="utf-8")
         self.assertEqual(rendered, "创建者：mzhinf 打包日期：2026-07-13")
         self.assertNotIn(EDITOR_BUILD_DATE_TOKEN, rendered)
+
+    def test_pyproject_declares_editor_and_ksy_package_data(self) -> None:
+        """正式安装包必须包含编辑器模板和三种格式定义。"""
+
+        config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        package_data = config["tool"]["setuptools"]["package-data"]["san_tools"]
+        self.assertIn("map/editor_app.html", package_data)
+        self.assertIn("ksy/*.ksy", package_data)
 
 
 if __name__ == "__main__":

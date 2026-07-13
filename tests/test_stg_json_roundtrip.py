@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from san_tools.codecs.stg_stream_codec_refactored import build_stage_bytes, load_txt_tables, parse_stage_file
+from tests.sample_support import require_game_data
 from san_tools.pipelines.roundtrip_stg_json import (
     reserved_zero_ranges,
     strip_reserved_fields_inplace,
@@ -17,7 +18,7 @@ class TestStgJsonRoundtrip(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.game_dir = Path("H:/Workstation/san/三国霸业")
+        cls.game_dir = require_game_data(Path(__file__).resolve().parents[1])
         cls.stage_path = cls.game_dir / "stage01.stg"
         if not cls.stage_path.exists():
             raise unittest.SkipTest("缺少 stage01.stg，跳过 JSON roundtrip 测试。")

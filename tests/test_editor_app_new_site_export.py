@@ -9,6 +9,7 @@ from pathlib import Path
 
 from san_tools.map.editor_model import StgFile
 from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model
+from tests.sample_support import require_game_data
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +19,7 @@ class TestEditorNewSiteExport(unittest.TestCase):
     """验证新增城池触发的 .stg 对象流重写。"""
 
     def test_stage01_new_city_can_rebuild_stg(self) -> None:
-        game_dir = ROOT / "三国霸业"
+        game_dir = require_game_data(ROOT)
         source_stg = game_dir / "stage01.stg"
         if not source_stg.exists() or not shutil.which("node"):
             self.skipTest("缺少 stage01.stg 或 node")

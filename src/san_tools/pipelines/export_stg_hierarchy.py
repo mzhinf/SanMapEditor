@@ -6,6 +6,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from san_tools.project_paths import find_text_data_dir
+
 from san_tools.pipelines.export_stg_phase7_links import load_castle_table, load_history_table, normalize_words
 from san_tools.pipelines.export_stg_raw_chain import build_rows as build_raw_chain
 
@@ -137,7 +139,7 @@ def add_role_count(target: dict[str, object], role: str) -> None:
 def build_hierarchy(root: Path, stage: str) -> dict[str, object]:
     raw_payload = build_raw_chain(root, stage)
     records = list(raw_payload["records"])
-    txt_dir = root / "uft8-game-txt"
+    txt_dir = find_text_data_dir(root)
     castle_by_name = load_castle_table(txt_dir)
     history_by_name = load_history_table(txt_dir)
     castle_by_id = {int(info["city_id"]): {"name": name, **info} for name, info in castle_by_name.items()}

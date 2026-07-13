@@ -5,6 +5,8 @@ import csv
 import json
 from pathlib import Path
 
+from san_tools.project_paths import find_text_data_dir
+
 import san_tools.pipelines.export_stage_sidecar_tables as sidecar_tables
 
 
@@ -110,7 +112,7 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 def build_stage_links(root: Path, stage: str) -> dict[str, object]:
-    txt_dir = root / "uft8-game-txt"
+    txt_dir = find_text_data_dir(root)
     history_map = load_history_table(txt_dir)
     castle_map = load_castle_table(txt_dir)
 
