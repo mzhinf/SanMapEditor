@@ -782,7 +782,7 @@ def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]
             workbook_sheets.append({"name": sheet["name"], "headers": sheet["headers"], "rows": sheet["rows"]})
     return {
         "available": True,
-        "source": "stage.ini + uft8-game-txt",
+        "source": "stage.ini + data/text",
         "fileSize": int(header["file_size"]),
         "fieldMap": STAGE_INI_FIELD_MAP,
         "fieldLocations": field_locations,

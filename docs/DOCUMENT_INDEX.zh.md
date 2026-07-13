@@ -8,15 +8,17 @@
 
 1. 首次使用：`README.md`、`data/README.zh.md`。
 2. 参与开发：`AGENTS.md`、`CONTRIBUTING.zh.md`、本文档。
-3. 修改编辑器：编辑器设计、数据管理、字段转换。
-4. 修改二进制格式：KSY 文件、格式笔记、字段转换。
-5. 发布前：已知问题、GitHub 上传清单、版权说明。
+3. 执行脚本：命令执行参考。
+4. 修改编辑器：编辑器设计、数据管理、字段转换。
+5. 修改二进制格式：KSY 文件、格式笔记、字段转换。
+6. 发布前：已知问题、GitHub 上传清单、版权说明。
 
 ## 技术文档
 
 | 文档 | 主要内容 | 状态 | 需要更新的情况 |
 | --- | --- | --- | --- |
 | `docs/DOCUMENT_INDEX.zh.md` | 全部文档的职责、状态和维护入口 | 持续维护 | 新增、删除、合并或改名任何文档时 |
+| `docs/COMMAND_REFERENCE.zh.md` | 统一命令入口、全部命令参数、示例、产物与风险 | 当前有效 | 注册命令、参数、默认路径或输出行为变化时 |
 | `docs/EDITOR_UI_V2_DESIGN.zh.md` | 编辑器布局、工作流、管理界面和运行时架构 | 当前有效 | UI 结构、主要工作流或功能边界变化时 |
 | `docs/EDITOR_DATA_MANAGEMENT.zh.md` | 源字段、关系字段、派生字段及跨文件同步规则 | 当前有效 | CRUD、关联关系、Patch 或导入导出行为变化时 |
 | `docs/EDITOR_FIELD_CONVERSION.zh.md` | `.m/.dor/.stg/stage.ini/History.txt` 字段级转换与写回 | 当前有效 | 字段偏移、类型、转换或写回规则变化时 |

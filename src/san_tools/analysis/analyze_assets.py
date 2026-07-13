@@ -5,6 +5,7 @@ import collections
 import math
 import re
 import struct
+from pathlib import Path
 
 
 INTERESTING = (

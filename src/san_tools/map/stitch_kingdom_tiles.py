@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from extract_kingdom import find_game_dir, load_palette, parse_cel
+from san_tools.map.extract_kingdom import find_game_dir, load_palette, parse_cel
 
 
 DEFAULT_ACWZ_GROUPS = [

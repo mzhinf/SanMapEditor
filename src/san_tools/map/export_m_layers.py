@@ -4,10 +4,11 @@ import argparse
 import collections
 import json
 import struct
+from pathlib import Path
 
 from PIL import Image
 
-from extract_kingdom import find_game_dir, load_palette
+from san_tools.map.extract_kingdom import find_game_dir, load_palette
 
 BLOCKS = ["acwx", "acwy", "acwz"]
 

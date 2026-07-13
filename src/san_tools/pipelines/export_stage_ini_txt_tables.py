@@ -8,8 +8,8 @@ import san_tools.codecs.stage_ini_txt_linkage as linkage
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="分析 uft8-game-txt 与 stage.ini 的文本关联，导出给工作簿使用的 JSON。")
-    parser.add_argument("root", nargs="?", default=".", help="包含 stage.ini 与 uft8-game-txt 目录的工作区根目录")
+    parser = argparse.ArgumentParser(description="分析 data/text 与 stage.ini 的文本关联，导出给工作簿使用的 JSON。")
+    parser.add_argument("root", nargs="?", default=".", help="包含 stage.ini 与 data/text 目录的工作区根目录")
     args = parser.parse_args()
 
     root = Path(args.root).resolve()

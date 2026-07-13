@@ -9,7 +9,6 @@ from typing import Iterable
 import san_tools.codecs.stage_ini_codec as stage_ini_codec
 from san_tools.project_paths import find_game_data_dir, find_text_data_dir
 
-TXT_DIRNAME = "uft8-game-txt"
 OUTPUT_DIR = Path("derived/stage_ini_txt_analysis")
 DIRECT_SHEETS = ["general", "castle", "magic", "soldier"]
 SUPPLEMENTAL_SHEETS = ["history"]

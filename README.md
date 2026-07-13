@@ -77,7 +77,7 @@ python -m san_tools run export-editor-bundle . --stage stage01 --out derived/edi
 
 ```powershell
 python -m pip install -e ".[release]"
-python -m san_tools.map.build_editor_release . --stage stage01
+python -m san_tools run build-editor-release . --stage stage01
 ```
 
 输出位于 `dist/`。发布包可能含游戏素材，目前仅供本机使用，不应直接上传 GitHub Release。
@@ -94,7 +94,7 @@ python -m san_tools run export-stage-ini-workbook .
 python -m san_tools run export-stg-workbook . --stage stage01
 ```
 
-命令后的参数原样传给对应模块；如参数与统一入口冲突，可在命令名后加 `--`。
+命令后的参数原样传给对应模块；如参数与统一入口冲突，可在命令名后加 `--`。全部命令、参数、产物和风险说明见 [命令执行参考](docs/COMMAND_REFERENCE.zh.md)。
 
 ## 测试
 
