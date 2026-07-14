@@ -669,36 +669,36 @@ STAGE_INI_FIELD_MAP = {
         "row_key": "city_index",
         "sheet": "castle",
         "fields": {
-            "city_index": "\u90fd\u5e02\u7d22\u5f15",
-            "house_attr": "\u623f\u5b50\u5c6c\u6027",
-            "castle_scale": "\u57ce\u898f\u6a21",
-            "population": "\u4eba\u53e3",
-            "gold": "\u91d1",
-            "food": "\u7ce7",
-            "standby_soldier": "\u5f85\u547d\u58eb\u5175",
-            "develop": "\u958b\u767c\u503c",
-            "commerce": "\u5546\u696d\u503c",
-            "security": "\u6cbb\u5b89\u503c",
-            "coord_x": "\u5ea7\u6a19X",
-            "coord_y": "\u5ea7\u6a19Y",
-            "governor": "\u592a\u5b88",
+            "city_index": "都市索引",
+            "house_attr": "房子屬性",
+            "castle_scale": "城規模",
+            "population": "人口",
+            "gold": "金",
+            "food": "糧",
+            "standby_soldier": "待命士兵",
+            "develop": "開發值",
+            "commerce": "商業值",
+            "security": "治安值",
+            "coord_x": "座標X",
+            "coord_y": "座標Y",
+            "governor": "太守",
         },
     },
     "entity": {
         "row_key": "person_id",
         "sheet": "general",
         "fields": {
-            "person_id": "\u4eba\u7269\u7de8\u865f",
-            "portrait_id": "\u982d\u50cf\u7de8\u865f",
-            "static_owner_id": "\u6240\u5c6c\u541b\u4e3b",
-            "static_location_id": "\u6240\u5728\u5730",
-            "command": "\u7d71\u5fa1\u529b",
-            "soldier_type_id": "\u5175\u7a2e\u865f",
-            "level": "\u7b49\u7d1a",
-            "troop_count": "\u5e36\u5175\u6578",
-            "martial_force": "\u6b66\u529b",
-            "intellect": "\u667a\u529b",
-            "loyalty": "\u5fe0\u8aa0\u503c",
+            "person_id": "人物編號",
+            "portrait_id": "頭像編號",
+            "static_owner_id": "所屬君主",
+            "static_location_id": "所在地",
+            "command": "統御力",
+            "soldier_type_id": "兵種號",
+            "level": "等級",
+            "troop_count": "帶兵數",
+            "martial_force": "武力",
+            "intellect": "智力",
+            "loyalty": "忠誠值",
         },
     },
 }
@@ -797,7 +797,7 @@ def _stage_ini_append_layout(
 
 
 def build_stage_ini_patch_model(root: Path, game_dir: Path) -> dict[str, object]:
-    """\u4e3a\u6d4f\u89c8\u5668\u4fdd\u5b58 stage.ini \u51c6\u5907 dword \u7ea7\u5b57\u6bb5\u6620\u5c04\u4e0e\u5de5\u4f5c\u7c3f\u57fa\u51c6\u884c\u3002"""
+    """为浏览器保存 stage.ini 准备 dword 级字段映射与工作簿基准行。"""
 
     stage_ini = game_dir / "stage.ini"
     try:
