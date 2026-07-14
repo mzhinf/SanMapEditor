@@ -547,6 +547,44 @@ applyWorkbookRowPatch(sheetMap, site, 'site');
 if (sheets[0].rows[0][0] !== '9' || sheets[0].rows[0][1] !== 'C' || sheets[0].rows[0][2] !== '9') throw new Error('新增城池工作簿标题或字段错误');
 """
         self.run_node(harness + functions + checks)
+    def test_project_snapshots_restore_ui_without_reapplying_binary_changes(self) -> None:
+        """验证完整项目的 JSON 仅恢复界面状态，不再形成重复写回 Patch。"""
+
+        source = script_source()
+        start = source.index("function hydrateProjectSnapshotPayload")
+        end = source.index("async function loadPatchFile", start)
+        functions = source[start:end]
+        harness = """
+const state = {
+  meta: { stage: 'stage01', siteLinks: {} },
+  localScenarioFiles: new Map([['stg', {}], ['dor', {}], ['history', {}]]),
+  scenario: { available: true, forces: [], sites: [], entities: [] }, scenarioPatches: new Map([['old', {}]]),
+  gates: [], gatePatches: new Map([['old', {}]]),
+  commonModel: { historyTable: { available: true, headers: ['編號', '武將名'], rawHeaders: ['編號', '武將名'], rows: [] } },
+  historyEdits: new Map([['old', {}]]), newHistoryRows: [{ rowKey: 'old' }], deletedHistoryRowKeys: new Set(['old']), historyPatches: new Map([['old', {}]])
+};
+function normalizeScenarioModel(model) { return { ...model }; }
+function normalizeGateRows(rows) { return rows.map(row => ({ ...row })); }
+function refreshScenarioRelations() {}
+function buildSiteIndex() { return null; }
+function renderSitePicker() {}
+function renderDomainManagers() {}
+function refreshSide() {}
+function refreshPatches() {}
+function scheduleDraw() {}
+"""
+        checks = """
+const scenario = { format: 'san-editor-scenario-patch-v1', stage: 'stage01', forces: [{ forceKey: 'force:0' }], sites: [{ siteKey: 'site:new', site_name: '晉都' }], entities: [{ entityKey: 'entity:new', person_id: 278 }] };
+if (!hydrateProjectSnapshotPayload(scenario) || state.scenario.sites[0].site_name !== '晉都' || state.scenarioPatches.size) throw new Error('场景快照未正确恢复');
+const dor = { format: 'san-editor-dor-patch-v1', stage: 'stage01', gates: [{ gateKey: 'gate:new:1', siteKey: 'site:new', doorIndex: 4 }] };
+if (!hydrateProjectSnapshotPayload(dor) || state.gates.length !== 1 || state.gatePatches.size) throw new Error('城门快照被重复登记');
+const history = { format: 'san-editor-history-patch-v1', stage: 'stage01', rows: [{ 編號: '278', 武將名: '劉飛羽', rowKey: '278' }] };
+if (!hydrateProjectSnapshotPayload(history) || state.commonModel.historyTable.rows[0].rowKey !== '278' || state.historyPatches.size || state.newHistoryRows.length) throw new Error('History 快照被重复登记');
+state.localScenarioFiles.delete('stg');
+if (hydrateProjectSnapshotPayload(scenario)) throw new Error('缺少本地 STG 时不应把迁移 Patch 当快照');
+"""
+        self.run_node(harness + functions + checks)
+
     def test_unedited_stage_ini_stays_byte_identical(self) -> None:
         """验证仅加载剧本不会把 STG 当前值批量覆盖回 stage.ini。"""
 

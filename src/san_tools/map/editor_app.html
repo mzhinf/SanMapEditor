@@ -162,7 +162,7 @@ canvas { display: block; width: 100%; height: 100%; }
     </div>
     <div class="toolbar-group">
       <input id="loadMFile" type="file" accept=".m,.dor,.stg,.ini,.dat,.txt,.xlsx,.json" multiple hidden>
-      <button id="openMFile" title="导入 stageXX.m 及配套文件，或重新载入以前导出的 Patch JSON。">导入</button>
+      <button id="openMFile" title="导入 stageXX.m 及配套文件；完整项目可同时选择导出的 JSON 快照，迁移时再单独载入 Patch。">导入</button>
       <button id="exportFiles" class="primary">导出</button>
       <button id="exportPatch" class="secondary">Patch</button>
     </div>
@@ -3553,11 +3553,55 @@ function applyImportedPatchPayload(rawPayload, fileName = 'patch.json') {
   els.status.textContent = '已导入 ' + fileName + '（地图/场景/城门/History/ini：' + counts.join('/') + '）';
   return counts;
 }
-async function loadPatchFile(file) {
+function hydrateProjectSnapshotPayload(payload) {
+  const format = String(payload?.format || '');
+  if (payload?.stage && String(payload.stage) !== String(state.meta.stage)) return false;
+  if (format === 'san-editor-scenario-patch-v1' && state.localScenarioFiles.has('stg')
+      && Array.isArray(payload.forces) && Array.isArray(payload.sites) && Array.isArray(payload.entities)) {
+    state.scenario = normalizeScenarioModel({
+      available: true, source: 'local-stg-snapshot',
+      forces: payload.forces, sites: payload.sites, entities: payload.entities,
+    });
+    state.scenarioPatches.clear();
+  } else if (format === 'san-editor-dor-patch-v1' && state.localScenarioFiles.has('dor') && Array.isArray(payload.gates)) {
+    state.gates = normalizeGateRows(payload.gates);
+    state.gatePatches.clear();
+  } else if (format === 'san-editor-history-patch-v1' && state.localScenarioFiles.has('history') && Array.isArray(payload.rows)) {
+    const current = state.commonModel?.historyTable || {};
+    const sample = payload.rows[0] || {};
+    const headers = Array.isArray(current.headers) && current.headers.length
+      ? current.headers.slice()
+      : Object.keys(sample).filter(key => key !== 'rowKey');
+    state.commonModel = {
+      ...state.commonModel,
+      historyTable: {
+        ...current, available: true, source: 'local-history-snapshot', path: 'History.txt',
+        headers, rawHeaders: Array.isArray(current.rawHeaders) && current.rawHeaders.length ? current.rawHeaders.slice() : headers.slice(),
+        rows: payload.rows.map((row, index) => ({ ...row, rowKey: String(row.rowKey ?? index + 1) })),
+      },
+    };
+    state.historyEdits.clear();
+    state.newHistoryRows = [];
+    state.deletedHistoryRowKeys.clear();
+    state.historyPatches.clear();
+  } else {
+    return false;
+  }
+  refreshScenarioRelations();
+  state.siteIndex = buildSiteIndex(state.meta.siteLinks);
+  renderSitePicker();
+  renderDomainManagers();
+  refreshSide();
+  refreshPatches();
+  scheduleDraw();
+  return true;
+}
+async function loadPatchFile(file, preferProjectSnapshot = false) {
   let payload;
   try { payload = JSON.parse(await file.text()); }
   catch (err) { throw new Error(file.name + ' 不是有效 JSON：' + String(err.message || err)); }
-  return applyImportedPatchPayload(payload, file.name);
+  if (preferProjectSnapshot && hydrateProjectSnapshotPayload(payload)) return { snapshot: true, counts: [0, 0, 0, 0, 0] };
+  return { snapshot: false, counts: applyImportedPatchPayload(payload, file.name) };
 }
 function localScenarioFileKey(file, stageName) {
   const name = String(file?.name || '').toLowerCase();
@@ -3609,10 +3653,15 @@ async function loadLocalProjectFiles(fileList) {
       renderDomainManagers();
     }
   }
-  for (const patchFile of patchFiles) await loadPatchFile(patchFile);
-  if (!patchFiles.length && mapFile) {
+  let snapshotCount = 0;
+  for (const patchFile of patchFiles) {
+    const result = await loadPatchFile(patchFile, !!mapFile);
+    if (result.snapshot) snapshotCount += 1;
+  }
+  if (mapFile) {
     const loaded = [...state.localScenarioFiles.values()].map(item => item.name);
-    els.status.textContent = '已加载 ' + mapFile.name + (loaded.length ? '，配套文件：' + loaded.join('、') : '');
+    const snapshotNote = snapshotCount ? '，已恢复 ' + snapshotCount + ' 个项目快照' : '';
+    els.status.textContent = '已加载 ' + mapFile.name + (loaded.length ? '，配套文件：' + loaded.join('、') : '') + snapshotNote;
   }
 }
 async function loadLocalMFile(file) {
