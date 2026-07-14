@@ -699,6 +699,9 @@ STAGE_INI_FIELD_MAP = {
             "martial_force": "武力",
             "intellect": "智力",
             "loyalty": "忠誠值",
+            "max_troop_count": "最大帶兵數",
+            "max_martial_force": "最大武力",
+            "max_intellect": "最大智力",
         },
     },
 }

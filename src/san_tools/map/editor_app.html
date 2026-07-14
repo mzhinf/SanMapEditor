@@ -1900,19 +1900,37 @@ function addExistingGeneralToSite(siteKey, rowKey) {
   renderSitePicker();
   renderDomainManagers();
 }
+function newGeneralDefaults() {
+  // 这些值只用于新建母表武将；导入和编辑已有武将时不覆盖原值。
+  return {
+    level: 1,
+    troop_count: 50,
+    command: 60,
+    martial_force: 60,
+    intellect: 60,
+    loyalty: 100,
+    max_troop_count: 50,
+    max_martial_force: 60,
+    max_intellect: 60,
+  };
+}
 function addScenarioEntity() {
   const sheet = stageIniGeneralSheet();
   if (!sheet) return;
   const rows = stageIniGeneralRows();
   const personId = Math.max(0, ...rows.map(row => Number(row.person_id || 0))) + 1;
   const rowKey = String(personId);
+  const defaults = newGeneralDefaults();
   const values = Object.fromEntries(sheet.headers.map(header => [header, '0']));
   values.row_id = rowKey;
   values.title = 'New General ' + personId;
   const fieldHeaders = stageIniGeneralFieldHeaders();
   if (fieldHeaders.person_id) values[fieldHeaders.person_id] = String(personId);
   if (fieldHeaders.portrait_id) values[fieldHeaders.portrait_id] = '0';
-  if (fieldHeaders.command) values[fieldHeaders.command] = '1';
+  for (const [field, value] of Object.entries(defaults)) {
+    const header = fieldHeaders[field];
+    if (header) values[header] = String(value);
+  }
   const general = {
     isNew: true,
     stageIniOnly: true,
@@ -1921,7 +1939,7 @@ function addScenarioEntity() {
     entityKey: 'stageini:' + rowKey,
     person_id: personId,
     portrait_id: 0,
-    command: 1,
+    ...defaults,
     entity_name: values.title,
     name: values.title,
     stageIniValues: values,

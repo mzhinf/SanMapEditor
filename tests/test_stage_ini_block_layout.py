@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from san_tools.codecs.stage_ini_codec import parse_stage_ini_block_layout
-from san_tools.map.export_editor_bundle import build_stage_ini_patch_model
+from san_tools.map.export_editor_bundle import STAGE_INI_FIELD_MAP, build_stage_ini_patch_model
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +18,14 @@ def size_block(payload: bytes) -> bytes:
 
 class TestStageIniBlockLayout(unittest.TestCase):
     """验证 stage.ini 真实块流边界及编辑器追加布局。"""
+
+    def test_general_field_map_contains_new_general_maximum_fields(self) -> None:
+        """三项最大值必须进入通用字段映射，供新 Entity 继承。"""
+
+        fields = STAGE_INI_FIELD_MAP["entity"]["fields"]
+        self.assertEqual(fields["max_troop_count"], "最大帶兵數")
+        self.assertEqual(fields["max_martial_force"], "最大武力")
+        self.assertEqual(fields["max_intellect"], "最大智力")
 
     def test_synthetic_block_stream_boundaries(self) -> None:
         """验证主表单块和城池双块均按 size 字段推进。"""

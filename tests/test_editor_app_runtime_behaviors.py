@@ -217,7 +217,11 @@ if (appended.stageIniValues.row_id !== '3' || appended.stageIniValues.title !== 
         harness = """
 const force = { forceKey: 'force:0', forceIndex: 0, force_name: '测试势力', force_lord_person_id: 1 };
 const site = { siteKey: 'site:0', site_name: '测试城', city_index: 2, parentForceKey: force.forceKey, entityKeys: [] };
-const general = { stageIniGeneralKey: 'stageini:88', stageIniRowKey: '88', name: '测试武将', person_id: 88, portrait_id: 3, command: 70 };
+const general = {
+  stageIniGeneralKey: 'stageini:88', stageIniRowKey: '88', name: '测试武将', person_id: 88, portrait_id: 3,
+  level: 1, troop_count: 50, command: 60, martial_force: 60, intellect: 60, loyalty: 100,
+  max_troop_count: 50, max_martial_force: 60, max_intellect: 60
+};
 let siteRefreshes = 0;
 const state = {
   activeSiteKey: site.siteKey, activeEntityKey: '', activeHistoryGeneralKey: '',
@@ -235,7 +239,10 @@ function renderDomainManagers() {}
         checks = """
 addExistingGeneralToSite(site.siteKey, general.stageIniGeneralKey);
 if (state.scenario.entities.length !== 1 || site.entityKeys.length !== 1) throw new Error('武将关系未立即生效');
-if (state.scenario.entities[0].person_id !== 88 || siteRefreshes !== 1) throw new Error('据点 UI 未同步刷新');
+const added = state.scenario.entities[0];
+if (added.person_id !== 88 || siteRefreshes !== 1) throw new Error('据点 UI 未同步刷新');
+if (added.level !== 1 || added.troop_count !== 50 || added.command !== 60 || added.martial_force !== 60 || added.intellect !== 60 || added.loyalty !== 100) throw new Error('新 Entity 未继承武将默认属性');
+if (added.max_troop_count !== 50 || added.max_martial_force !== 60 || added.max_intellect !== 60) throw new Error('新 Entity 未继承最大属性');
 if ('stageIniValues' in state.scenario.entities[0] || 'stageIniGeneralKey' in state.scenario.entities[0]) throw new Error('母表 UI 元数据泄漏到 STG Entity');
 """
         self.run_node(harness + functions + checks)
@@ -244,16 +251,22 @@ if ('stageIniValues' in state.scenario.entities[0] || 'stageIniGeneralKey' in st
         """验证武将管理新增只创建母表行，不写入据点 Entity。"""
 
         source = script_source()
-        functions = function_range(source, "addScenarioEntity", "scenarioFieldLabel")
+        functions = function_range(source, "newGeneralDefaults", "scenarioFieldLabel")
         harness = """
-const headers = ['row_id', 'title', '人物编号', '头像编号', '统御力'];
+const headers = ['row_id', 'title', '人物編號', '頭像編號', '統御力', '等級', '帶兵數', '武力', '智力', '忠誠值', '最大帶兵數', '最大武力', '最大智力'];
 const state = {
   newStageIniGenerals: [], activeEntityKey: 'old', activeHistoryGeneralKey: '',
   stageIniGeneralPatches: new Map(), scenario: { entities: [] }
 };
 function stageIniGeneralSheet() { return { headers }; }
 function stageIniGeneralRows() { return [{ person_id: 272 }]; }
-function stageIniGeneralFieldHeaders() { return { person_id: '人物编号', portrait_id: '头像编号', command: '统御力' }; }
+function stageIniGeneralFieldHeaders() {
+  return {
+    person_id: '人物編號', portrait_id: '頭像編號', command: '統御力', level: '等級',
+    troop_count: '帶兵數', martial_force: '武力', intellect: '智力', loyalty: '忠誠值',
+    max_troop_count: '最大帶兵數', max_martial_force: '最大武力', max_intellect: '最大智力'
+  };
+}
 function schedulePatchRefresh() {}
 function ensureHistoryRow() {}
 function renderDomainManagers() {}
@@ -262,7 +275,17 @@ function renderDomainManagers() {}
 addScenarioEntity();
 if (state.newStageIniGenerals.length !== 1) throw new Error('未创建 stage.ini 武将');
 if (state.scenario.entities.length !== 0) throw new Error('错误加入了据点 Entity');
-if (state.activeHistoryGeneralKey !== 'stageini:273' || state.newStageIniGenerals[0].command !== 1) throw new Error('新武将状态错误');
+const general = state.newStageIniGenerals[0];
+if (state.activeHistoryGeneralKey !== 'stageini:273') throw new Error('新武将选中状态错误');
+const expectedFields = {
+  level: 1, troop_count: 50, command: 60, martial_force: 60, intellect: 60, loyalty: 100,
+  max_troop_count: 50, max_martial_force: 60, max_intellect: 60
+};
+const headersByField = stageIniGeneralFieldHeaders();
+for (const [field, expected] of Object.entries(expectedFields)) {
+  if (general[field] !== expected) throw new Error(`新武将属性默认值错误：${field}`);
+  if (general.stageIniValues[headersByField[field]] !== String(expected)) throw new Error(`新武将母表默认值错误：${field}`);
+}
 """
         self.run_node(harness + functions + checks)
 
