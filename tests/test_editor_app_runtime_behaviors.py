@@ -548,6 +548,51 @@ applyWorkbookRowPatch(sheetMap, site, 'site');
 if (sheets[0].rows[0][0] !== '9' || sheets[0].rows[0][1] !== 'C' || sheets[0].rows[0][2] !== '9') throw new Error('新增城池工作簿标题或字段错误');
 """
         self.run_node(harness + functions + checks)
+    def test_local_stage_ini_parser_restores_appended_general_rows(self) -> None:
+        """验证本地母表解析可恢复新增武将字段、偏移和动态追加边界。"""
+
+        source_path = ROOT / "data" / "game" / "stage.ini"
+        if not source_path.exists():
+            self.skipTest("缺少 data/game/stage.ini")
+        from san_tools.codecs.stage_ini_codec import parse_stage_ini_block_layout
+        from san_tools.map.export_editor_bundle import build_stage_ini_patch_model
+
+        base = build_stage_ini_patch_model(ROOT, source_path.parent)
+        slim = {
+            "available": base["available"],
+            "fieldMap": base["fieldMap"],
+            "appendLayout": base["appendLayout"],
+            "workbookSheets": [
+                {"name": sheet["name"], "headers": sheet["headers"], "rows": []}
+                for sheet in base["workbookSheets"]
+            ],
+        }
+        layout = parse_stage_ini_block_layout(source_path.read_bytes())
+        script = script_source()
+        functions = function_range(script, "stgReadU32", "patchValuesEqual")
+        output_path = ROOT / "outputs" / "stage.ini"
+        output_layout = parse_stage_ini_block_layout(output_path.read_bytes()) if output_path.exists() else None
+        checks = f"""
+const fs = require('fs');
+const baseModel = {json.dumps(slim, ensure_ascii=False)};
+const parsed = parseLocalStageIniBytes(new Uint8Array(fs.readFileSync({json.dumps(str(source_path))})), baseModel);
+if (parsed.appendLayout.general.count !== {layout['main_count']} || parsed.appendLayout.castle.count !== {layout['city_count']}) throw new Error('基准母表计数错误');
+if (parsed.workbookSheets.find(sheet => sheet.name === 'general').rows[0][1] !== '劉備') throw new Error('母表标题解码错误');
+if (!parsed.fieldLocations.general['1'] || parsed.appendLayout.general.insertOffset !== {layout['main_blocks_end']}) throw new Error('基准字段偏移错误');
+"""
+        if output_layout is not None:
+            checks += f"""
+const exported = parseLocalStageIniBytes(new Uint8Array(fs.readFileSync({json.dumps(str(output_path))})), baseModel);
+const generalSheet = exported.workbookSheets.find(sheet => sheet.name === 'general');
+const personColumn = generalSheet.headers.indexOf(exported.fieldMap.entity.fields.person_id);
+const row278 = generalSheet.rows.find(row => String(row[0]) === '278');
+if (!row278 || row278[1] !== '劉飛羽' || String(row278[personColumn]) !== '278') throw new Error('新增武将 ini 行未恢复');
+if (!exported.fieldLocations.general['278']) throw new Error('新增武将字段偏移缺失');
+if (exported.appendLayout.general.count !== {output_layout['main_count']} || exported.appendLayout.general.insertOffset !== {output_layout['main_blocks_end']}) throw new Error('新增母表追加边界错误');
+if (exported.appendLayout.castle.count !== {output_layout['city_count']} || exported.appendLayout.castle.insertOffset !== {output_layout['city_records_end']}) throw new Error('新增城池追加边界错误');
+"""
+        self.run_node(functions + checks)
+
     def test_local_stg_parser_matches_python_field_model(self) -> None:
         """验证浏览器解析出的势力、据点和 Entity 顺序与字段模型一致。"""
 

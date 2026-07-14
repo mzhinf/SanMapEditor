@@ -3462,6 +3462,70 @@ function parseLocalStgBytes(rawBytes) {
     big5CharMap, stgLayout: { prefixSpan: [0, forcesStart], tailSpan: [offset, bytes.length], forceCountOffset, root2ForceCountOffset: root2.payload + 0x14 }, forces, sites, entities,
   };
 }
+// 本地母表沿用 bundle 的字段表头，但块计数、行偏移和追加边界全部取自导入字节。
+function parseLocalStageIniBytes(rawBytes, baseModel) {
+  if (!baseModel?.available) throw new Error('当前 bundle 缺少 stage.ini 字段表头，无法解析本地母表');
+  const bytes = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes || []);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const sheets = (baseModel.workbookSheets || []).map(sheet => ({ name: sheet.name, headers: [...sheet.headers], rows: [] }));
+  const generalSheet = sheets.find(sheet => sheet.name === 'general');
+  const castleSheet = sheets.find(sheet => sheet.name === 'castle');
+  const generalLayout = baseModel.appendLayout?.general;
+  const castleLayout = baseModel.appendLayout?.castle;
+  if (!generalSheet || !castleSheet || !generalLayout || !castleLayout) throw new Error('stage.ini 工作表或块布局不完整');
+  const big5CharMap = {};
+  for (let code = 0x20; code < 0x7F; code += 1) big5CharMap[String.fromCharCode(code)] = [code];
+  const fieldLocations = { general: {}, castle: {} };
+  const readLogicalRow = (sheet, rowId, title, headers, numericOffset, locationGroup) => {
+    const values = { row_id: rowId, title };
+    const locations = {};
+    headers.forEach((header, index) => {
+      const byteOffset = numericOffset + index * 4;
+      values[header] = String(stgReadU32(view, byteOffset, `stage.ini.${sheet.name}[${rowId}].${header}`));
+      locations[header] = { byteOffset, size: 4 };
+    });
+    locationGroup[String(rowId)] = locations;
+    return sheet.headers.map(header => values[header] ?? '');
+  };
+  const mainCount = stgCheckedCount(stgReadU32(view, 0, 'stage.ini.main_count'), 4096, 'stage.ini 主块');
+  let offset = 4;
+  for (let index = 0; index < mainCount; index += 1) {
+    const block = stgReadBlock(view, offset, `stage.ini.main[${index}]`);
+    if (block.size !== 224) throw new Error(`stage.ini.main[${index}] 长度异常：${block.size}`);
+    const rowId = index + 1;
+    const title = stgDecodeBig5(bytes, block.payload, Number(generalLayout.titleBytes || 20), big5CharMap);
+    generalSheet.rows.push(readLogicalRow(generalSheet, rowId, title, generalLayout.numericHeaders || [], block.payload + Number(generalLayout.titleBytes || 20), fieldLocations.general));
+    offset = block.end;
+  }
+  const mainBlocksEnd = offset;
+  const cityCountOffset = offset;
+  const cityCount = stgCheckedCount(stgReadU32(view, offset, 'stage.ini.city_count'), 4096, 'stage.ini 城池');
+  offset += 4;
+  for (let index = 0; index < cityCount; index += 1) {
+    const primary = stgReadBlock(view, offset, `stage.ini.city[${index}].primary`); offset = primary.end;
+    const secondary = stgReadBlock(view, offset, `stage.ini.city[${index}].secondary`); offset = secondary.end;
+    if (primary.size !== 92 || secondary.size !== 0) throw new Error(`stage.ini.city[${index}] 双块长度异常`);
+    const rowId = index + 1;
+    const titleOffset = primary.payload + 4;
+    const title = stgDecodeBig5(bytes, titleOffset, Number(castleLayout.titleBytes || 20), big5CharMap);
+    castleSheet.rows.push(readLogicalRow(castleSheet, rowId, title, castleLayout.numericHeaders || [], titleOffset + Number(castleLayout.titleBytes || 20), fieldLocations.castle));
+  }
+  const appendLayout = {
+    ...baseModel.appendLayout,
+    general: { ...generalLayout, countOffset: 0, count: mainCount, insertOffset: mainBlocksEnd },
+    castle: { ...castleLayout, countOffset: cityCountOffset, count: cityCount, insertOffset: offset },
+  };
+  return { ...baseModel, available: true, source: 'local stage.ini + bundle headers', fileSize: bytes.length, fieldLocations, appendLayout, workbookSheets: sheets, big5CharMap };
+}
+function linkLocalStageIniRows() {
+  const byCityIndex = new Map(stageIniSiteRows().map(row => [Number(row.city_index || 0), row]));
+  for (const site of state.scenario?.sites || []) {
+    const row = byCityIndex.get(Number(site.city_index || 0));
+    if (!row) continue;
+    site.stageIniRowKey = row.stageIniRowKey;
+    site.stageIniValues = { ...row.stageIniValues };
+  }
+}
 function patchValuesEqual(left, right) {
   if (left === right) return true;
   return JSON.stringify(left) === JSON.stringify(right);
@@ -3779,6 +3843,17 @@ async function loadLocalProjectFiles(fileList) {
       state.scenario = normalizeScenarioModel(scenarioModel);
       state.scenarioPatches.clear();
     }
+    const localStageIni = state.localScenarioFiles.get('stageIni');
+    if (localStageIni?.bytes) {
+      const stageIniModel = parseLocalStageIniBytes(localStageIni.bytes, state.commonModel.stageIniPatchModel);
+      state.commonModel.stageIniPatchModel = stageIniModel;
+      state.meta.commonModel = {
+        ...state.meta.commonModel,
+        stageIniPatchModel: stageIniModel,
+        big5CharMap: { ...(state.meta.commonModel?.big5CharMap || {}), ...stageIniModel.big5CharMap },
+      };
+      linkLocalStageIniRows();
+    }
     const localDor = state.localScenarioFiles.get('dor');
     if (localDor?.bytes && state.scenario?.available) {
       const siteByCoord = new Map(scenarioRows('site').map(site => [String(site.coord_x) + ',' + String(site.coord_y), site]));
@@ -3798,6 +3873,8 @@ async function loadLocalProjectFiles(fileList) {
         }
       }
       state.gates = normalizeGateRows(gates);
+    }
+    if (localStg?.bytes || localStageIni?.bytes || localDor?.bytes) {
       refreshScenarioRelations();
       renderSitePicker();
       renderDomainManagers();
