@@ -17,6 +17,7 @@ CellColorRow = tuple[int, int, int, int]
 KEY_LEVELS: tuple[tuple[str, tuple[int, ...]], ...] = (
     ("xyz", (0, 1, 2)),
     ("xy", (0, 1)),
+    ("xz", (0, 2)),
     ("x", (0,)),
 )
 ANALYSIS_LEVELS: tuple[tuple[str, tuple[int, ...]], ...] = (
@@ -75,7 +76,7 @@ def _majority(counts: Counter[int]) -> tuple[int, int]:
 
 
 class MinimapColorPredictor:
-    """使用 xyz 众数和分级回退预测小地图颜色。"""
+    """使用当前样本的 xyz→xy→xz→x 分级众数预测小地图颜色。"""
 
     def __init__(self, rows: Iterable[CellColorRow]) -> None:
         materialized = tuple(rows)
@@ -140,7 +141,7 @@ def _majority_excluding(global_counts: Counter[int], held_counts: Counter[int]) 
 
 
 def leave_one_stage_out(stage_rows: dict[str, Sequence[CellColorRow]]) -> dict[str, float | int]:
-    """按关卡留一验证 xyz→xy→x→全局众数预测器。"""
+    """按关卡留一验证 xyz→xy→xz→x→全局众数预测器。"""
 
     all_rows = tuple(row for rows in stage_rows.values() for row in rows)
     global_tables = {name: _build_table(all_rows, indexes) for name, indexes in KEY_LEVELS}
@@ -209,7 +210,7 @@ def analyze_stage_files(paths: Sequence[Path]) -> dict[str, object]:
         "predictors": stats,
         "leave_one_stage_out": leave_one_stage_out(stage_rows),
         "top_xyz_conflicts": conflicts[:20],
-        "conclusion": "xyz 不是 minimap_color 的确定函数；众数模型只能作为建议值，不能替代原字段。",
+        "conclusion": "xyz 不是 minimap_color 的确定函数；编辑器仅在 xyz 真实变化时使用当前地图众数模型派生颜色。",
     }
 
 

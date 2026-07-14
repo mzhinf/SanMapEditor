@@ -1,10 +1,10 @@
-# minimap_color 与 xyz 关系分析
+# minimap_color 与 xyz 自动派生
 
-## 样本与方法
+## 目标与边界
 
-本报告于 2026-07-13 对游戏目录内 33 个 `stage*.m` 进行全量统计，共分析 1,222,256 个 Cell、140 种 `minimap_color`。字段严格按 `m.ksy` 读取：`acwx/acwy/acwz` 位于 Cell 的 `+0x00/+0x02/+0x04`，`minimap_color` 位于 `+0x0D`。
+地图编辑器把 `minimap_color` 作为 `.m` 的存储字段保留，但编辑人员不再直接维护它。仅当某个 Cell 的 `acwx/acwy/acwz` 最终值真实变化时，编辑器自动计算颜色，并把颜色修改与 xyz 修改放进同一个撤销/重做事务。导入时不会重算全图；“恢复当前 Cell”和“恢复全部”会精确恢复原始颜色。
 
-对每一种输入组合建立 `color -> 次数` 计数，并以众数作为预测值。除样本内拟合外，另做按关卡留一验证：每次完全排除一个关卡，用其余 32 个关卡训练，再预测被排除关卡。
+`minimap_color` 不是 xyz 的无损确定函数。本报告于 2026-07-14 对 `data/game` 内 33 个 `stage*.m` 进行全量统计，共分析 1,222,256 个 Cell、140 种颜色。字段严格按 `m.ksy` 读取：`acwx/acwy/acwz` 位于 Cell 的 `+0x00/+0x02/+0x04`，`minimap_color` 位于 `+0x0D`。
 
 ## 统计结果
 
@@ -18,30 +18,39 @@
 | `acwy+acwz` | 10,163 | 1,332 | 86.894% | 4.977% | 41.147% |
 | `acwx+acwy+acwz` | 138,589 | 6,265 | 95.479% | 26.765% | 95.091% |
 
-`xyz` 的唯一键中有 95.479% 只观察到一种颜色，但这些多数是低频组合。按 Cell 数量计算，只有 26.765% 的记录处于完全确定的 `xyz` 组合中；大量高频地形组合对应多个颜色。
+典型冲突是 `(acwx=2254, acwy=-1, acwz=-1)`：9,840 个 Cell 中颜色 243 有 8,683 个，但还存在 244、246、245、190 等颜色。因此函数必须明确采用统计规则，不能声称能还原游戏原始颜色。
 
-典型冲突是 `(acwx=2254, acwy=-1, acwz=-1)`：共 9,840 个 Cell，其中颜色 243 有 8,683 个，但还出现 244、246、245、190 等颜色。因此不存在无损的纯 `xyz -> minimap_color` 确定函数。
+## 派生函数
 
-## 跨关卡验证
+编辑器加载 `.m` 后，以该地图的原始 Cell 构建计数表。函数签名为：
 
-预测器采用以下回退顺序：
+```text
+derive_minimap_color(acwx, acwy, acwz) -> 0..255
+```
 
-1. 完整 `(acwx, acwy, acwz)` 众数。
-2. `(acwx, acwy)` 众数。
-3. `acwx` 众数。
-4. 全局颜色众数。
+按以下顺序查找颜色计数并取众数：
 
-按关卡留一验证结果：
+1. 完整 `(acwx, acwy, acwz)`。
+2. `(acwx, acwy)`。
+3. `(acwx, acwz)`。
+4. `acwx`。
+5. 当前地图全局颜色。
 
-- 总记录数：1,222,256。
-- 其他关卡存在完全相同 `xyz` 的覆盖率：88.195%。
-- 最终预测准确率：83.471%。
+同频时固定选择较小的颜色索引，使函数结果稳定可复现。`xy` 先于 `xz`，因为全量样本中的众数拟合率分别为 89.309% 和 72.680%。模型同时保留 `level/confidence/support`，便于诊断，但普通编辑流程只消费最终颜色。
 
-该准确率足以生成编辑建议或新 Cell 的初始候选颜色，但约每六个 Cell 就可能有一个错误，不能在导出时静默覆盖原始 `minimap_color`。
+按关卡留一验证会完全排除目标关卡并使用其余 32 个关卡训练。加入 `xz` 回退后的结果是：完全相同 xyz 覆盖率 88.195%，最终准确率 83.618%。编辑器使用当前地图训练，常见资源组合通常能命中完整 xyz；新组合则按上述层级回退。
 
-## 可复用函数
+## 编辑规则
 
-实现位于 `src/san_tools/analysis/analyze_minimap_color_relation.py`：
+1. `minimap_color` 不进入 Raw 可编辑字段、数据层色板或复制快照。
+2. 笔刷、Raw xyz 修改、区域粘贴和剪切先合并同一 Cell 的 xyz，随后只对最终值预测一次。
+3. 旧 Patch 或快照中的显式 `minimap_color` 修改会被忽略，避免旧颜色覆盖派生结果。
+4. 自动颜色与 xyz 一起撤销和重做；小地图在颜色变化后立即重建。
+5. 全量恢复和单 Cell 恢复使用导入时原始值，不经过统计函数，保证恢复结果逐字段一致。
+
+## 可复用实现
+
+Python 分析函数位于 `src/san_tools/analysis/analyze_minimap_color_relation.py`：
 
 ```python
 from san_tools.analysis.analyze_minimap_color_relation import (
@@ -54,20 +63,12 @@ rows = list(iter_m_color_rows(stage_path))
 predict_color = build_minimap_color_function(rows)
 color = predict_color(acwx, acwy, acwz)
 
-predictor = MinimapColorPredictor(rows)
-detail = predictor.predict_detail(acwx, acwy, acwz)
+detail = MinimapColorPredictor(rows).predict_detail(acwx, acwy, acwz)
 print(detail.color, detail.confidence, detail.support, detail.level)
 ```
 
-命令行重新生成全量 JSON 报告：
+重新生成全量报告：
 
 ```powershell
-python -m san_tools.analysis.analyze_minimap_color_relation . --out derived/minimap_color_relation/report.json
+python -m san_tools run analyze-minimap-color-relation .
 ```
-
-## 管理结论
-
-1. `minimap_color` 继续作为 `.m` 的独立可编辑字段保存和导出。
-2. `xyz` 预测只能用于“建议颜色”“新建内容初始值”或人工确认后的批量填充。
-3. 自动应用时应展示 `confidence/support/level`；低置信度或仅命中全局回退时不得直接写入。
-4. 若要进一步提高准确率，需要研究 Cell 坐标、邻域地形和数据标记字段，而不是假定颜色只由当前 Cell 的 xyz 决定。

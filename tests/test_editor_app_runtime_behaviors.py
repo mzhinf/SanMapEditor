@@ -49,6 +49,7 @@ const state = {
   originalRecords: [[1]], undoStack: [], redoStack: []
 };
 function canonicalFieldName(value) { return value; }
+function deriveMinimapColorChanges(changes) { return changes; }
 function fieldIndex() { return 0; }
 function recordAt() { return state.meta.records[0]; }
 function updateLayerStats() {}
@@ -62,6 +63,42 @@ undoLastEdit();
 if (state.meta.records[0][0] !== 1 || state.redoStack.length !== 1) throw new Error('撤销错误');
 redoLastEdit();
 if (state.meta.records[0][0] !== 9 || state.undoStack.length !== 1 || state.redoStack.length !== 0) throw new Error('重做错误');
+"""
+        self.run_node(harness + functions + checks)
+
+    def test_xyz_change_derives_minimap_color_in_same_transaction(self) -> None:
+        """验证 xyz 修改自动派生颜色，并与源字段共同撤销和重做。"""
+
+        source = script_source()
+        start = source.index("const MINIMAP_PREDICTION_LEVELS")
+        end = source.index("function resetSelectedLayerChange", start)
+        functions = source[start:end]
+        harness = """
+const fields = ['acwx', 'acwy', 'acwz', 'minimap_color'];
+const records = [[1, 2, 3, 10], [1, 2, 4, 12], [1, 2, 4, 12]];
+const state = {
+  meta: { width: 3, height: 1, fields, records: records.map(row => row.slice()), editableLayers: ['acwx', 'acwy', 'acwz'] },
+  originalRecords: records.map(row => row.slice()), undoStack: [], redoStack: [], patches: new Map(), recentMapPatchKeys: [],
+  minimapColorPredictor: null
+};
+function canonicalFieldName(value) { return value; }
+function fieldIndex(field) { return fields.indexOf(field); }
+function recordAt(cell) { return state.meta.records[cell.row * state.meta.width + cell.col]; }
+function updateLayerStats() {}
+function syncPatchFor() {}
+function refreshAfterRecordEdit() {}
+"""
+        checks = """
+state.minimapColorPredictor = buildMinimapColorPredictor(state.originalRecords, fields);
+const detail = state.minimapColorPredictor.predictDetail(1, 99, 4);
+if (detail.level !== 'xz' || detail.color !== 12) throw new Error('xz 回退错误');
+if (!applyChangeSet([{ x: 0, y: 0, field: 'acwz', after: 4 }])) throw new Error('xyz 修改未生效');
+if (state.meta.records[0].join(',') !== '1,2,4,12' || state.undoStack[0].length !== 2) throw new Error('颜色未并入同一事务');
+undoLastEdit();
+if (state.meta.records[0].join(',') !== '1,2,3,10') throw new Error('组合撤销错误');
+redoLastEdit();
+if (state.meta.records[0].join(',') !== '1,2,4,12') throw new Error('组合重做错误');
+if (applyChangeSet([{ x: 0, y: 0, field: 'minimap_color', after: 99 }])) throw new Error('派生字段不应允许直接修改');
 """
         self.run_node(harness + functions + checks)
 
@@ -279,7 +316,7 @@ if (findCellByCoordinates()) throw new Error('越界坐标未被拒绝');
         self.run_node(harness + functions + checks)
 
     def test_full_copy_captures_every_selected_cell_and_cut_clears_non_base_fields(self) -> None:
-        """验证全复制包含全部选中 Cell，剪切后源区域只保留底层地表。"""
+        """验证全复制包含全部选中 Cell，但不携带自动派生的小地图颜色。"""
 
         source = script_source()
         functions = function_range(source, "regionCellHasContent", "refreshCompositeList")
@@ -310,9 +347,9 @@ function applyChangeSet(changes) {
         checks = """
 const snapshot = cutRegionSnapshot();
 if (!snapshot || snapshot.copyMode !== 'full' || snapshot.cells.length !== 2) throw new Error('全复制未包含全部选中 Cell');
-if (snapshot.fields.join(',') !== fields.join(',')) throw new Error('全复制未保留全部字段');
-if (state.meta.records[0].join(',') !== '10,-1,-1,0,0,0,0,0') throw new Error('全复制剪切未清理到底层地表');
-if (state.meta.records[1].join(',') !== '11,-1,-1,0,0,0,0,0') throw new Error('纯底层 Cell 未参与全复制剪切');
+if (snapshot.fields.includes('minimap_color') || snapshot.fields.length !== fields.length - 1) throw new Error('全复制携带了派生颜色');
+if (state.meta.records[0].join(',') !== '10,-1,-1,0,0,0,0,60') throw new Error('全复制剪切未清理到底层地表');
+if (state.meta.records[1].join(',') !== '11,-1,-1,0,0,0,0,61') throw new Error('纯底层 Cell 未参与全复制剪切');
 if (appliedBatches !== 1) throw new Error('区域剪切未作为单次撤销事务提交');
 """
         self.run_node(harness + functions + checks)

@@ -7,6 +7,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from san_tools.map.export_editor_bundle import EDITABLE_RECORD_FIELDS, FIELD_META
 from san_tools.map.export_editor_bundle import build_editor_common_model, build_editor_scenario_model, build_editor_site_links, build_stage_ini_patch_model, build_stage_ini_workbook_sheets, copy_scenario_reference_files, export_heads_atlas, write_stage_json
 from san_tools.project_paths import find_text_data_dir
 from tests.sample_support import require_game_data
@@ -39,6 +40,14 @@ class TestEditorAppV2Template(unittest.TestCase):
             'minimap_color',
         ):
             self.assertIn(marker, html)
+
+    def test_minimap_color_is_derived_bundle_field(self) -> None:
+        """验证新旧 bundle 都不会把小地图颜色暴露为普通编辑字段。"""
+
+        color_meta = next(entry for entry in FIELD_META if entry["name"] == "minimap_color")
+        self.assertFalse(color_meta["editable"])
+        self.assertTrue(color_meta["derived"])
+        self.assertNotIn("minimap_color", EDITABLE_RECORD_FIELDS)
 
     def test_editor_app_script_passes_node_syntax_check(self) -> None:
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
@@ -95,6 +104,8 @@ class TestEditorAppV2Template(unittest.TestCase):
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
         self.assertIn('terrain_tag', html)
         self.assertIn('minimap_color', html)
+        self.assertIn("label: '小地图颜色（自动）', editable: false", html)
+        self.assertIn('buildMinimapColorPredictor', html)
         self.assertIn('scenarioModel', html)
         self.assertIn('stgLayout', html)
         self.assertIn('buildRewrittenStgBytes', html)

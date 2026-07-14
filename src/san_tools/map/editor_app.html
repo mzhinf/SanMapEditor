@@ -291,7 +291,7 @@ const DEFAULT_FIELD_META = [
   { name: 'site_trigger', alias: '', label: '据点势力范围', editable: true, reserved: false },
   { name: 'site_area', alias: '', label: '据点核心区域', editable: true, reserved: false },
   { name: 'reserved1', alias: '', label: '保留字段 1', editable: false, reserved: true },
-  { name: 'minimap_color', alias: '', label: '小地图颜色', editable: true, reserved: false, sidecarSource: true },
+  { name: 'minimap_color', alias: '', label: '小地图颜色（自动）', editable: false, reserved: false, derived: true, sidecarSource: true },
   { name: 'reserved2', alias: '', label: '保留字段 2', editable: false, reserved: true },
 ];
 const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
@@ -401,6 +401,7 @@ const state = {
   localScenarioFiles: new Map(),
   newStageIniGenerals: [],
   fieldMetaByName: new Map(),
+  minimapColorPredictor: null,
   resourceListModel: null,
   resourceRenderQueued: false,
   baseImageMode: 'pending',
@@ -670,19 +671,23 @@ function normalizeMeta(meta) {
   const fieldMeta = fields.map(name => {
     const base = defaultMeta.get(name) || { name, alias: name, label: name, editable: true, reserved: false };
     const raw = rawMetaByName.get(name) || {};
+    const derived = name === 'minimap_color';
     return {
       name,
       alias: typeof raw.alias === 'string' ? raw.alias : base.alias,
       label: typeof raw.label === 'string' ? raw.label : base.label,
-      editable: raw.editable ?? base.editable,
+      editable: derived ? false : (raw.editable ?? base.editable),
       reserved: raw.reserved ?? base.reserved,
+      derived,
       sidecarSource: raw.sidecarSource ?? !!base.sidecarSource,
     };
   });
   const editableLayers = (Array.isArray(meta.editableLayers) && meta.editableLayers.length ? meta.editableLayers : RESOURCE_LAYER_OPTIONS).map(canonicalFieldName);
   const resourceLayers = (Array.isArray(meta.resourceLayers) && meta.resourceLayers.length ? meta.resourceLayers : editableLayers).map(canonicalFieldName);
   const pointLayers = (Array.isArray(meta.pointLayers) && meta.pointLayers.length ? meta.pointLayers : POINT_LAYER_OPTIONS).map(canonicalFieldName);
-  const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name)).map(canonicalFieldName);
+  const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name))
+    .map(canonicalFieldName)
+    .filter(name => name !== 'minimap_color');
   const pointPalette = Array.isArray(meta.pointPalette) ? meta.pointPalette.slice(0, 256) : [];
   const minimapPalette = Array.isArray(meta.minimapPalette) ? meta.minimapPalette.slice(0, 256) : pointPalette.slice();
   return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, minimapPalette, sidecars: normalizeSidecars(meta.sidecars), siteLinks: normalizeSiteLinks(meta.siteLinks), scenarioModel: meta.scenarioModel || { available: false }, commonModel: meta.commonModel || { available: false } };
@@ -1427,9 +1432,11 @@ function captureRegionSnapshot(name = '区域复制', mode = state.regionCopyMod
   const bounds = selectedCellBounds();
   if (!bounds) return null;
   const normalizedMode = mode === 'non-base' ? 'non-base' : 'full';
-  const fields = normalizedMode === 'non-base'
-    ? state.meta.fields.filter(field => !['acwx', 'minimap_color'].includes(canonicalFieldName(field)))
-    : state.meta.fields.slice();
+  const fields = state.meta.fields.filter(field => {
+    const normalizedField = canonicalFieldName(field);
+    if (normalizedField === 'minimap_color') return false;
+    return normalizedMode !== 'non-base' || normalizedField !== 'acwx';
+  });
   const fieldIndexes = fields.map(fieldIndex);
   const capturedCells = normalizedMode === 'non-base'
     ? selectedCells.filter(cell => regionCellHasContent(recordAt(cell)))
@@ -3073,9 +3080,93 @@ function refreshAfterRecordEdit(cell = null, editedCells = null, changedFields =
   schedulePatchRefresh();
   scheduleDraw();
 }
-function applyChangeSet(changes) {
+// 原始颜色存在一对多关系；按当前地图的高信息量字段组合逐级回退。
+const MINIMAP_PREDICTION_LEVELS = [
+  { name: 'xyz', indexes: [0, 1, 2] },
+  { name: 'xy', indexes: [0, 1] },
+  { name: 'xz', indexes: [0, 2] },
+  { name: 'x', indexes: [0] },
+];
+function minimapPredictionKey(values, indexes) {
+  return indexes.map(index => values[index]).join(',');
+}
+function incrementMinimapCount(table, key, color) {
+  if (!table.has(key)) table.set(key, new Map());
+  const counts = table.get(key);
+  counts.set(color, (counts.get(color) || 0) + 1);
+}
+function minimapMajority(counts) {
+  let color = 0;
+  let frequency = -1;
+  let support = 0;
+  for (const [candidate, count] of counts.entries()) {
+    support += count;
+    if (count > frequency || (count === frequency && candidate < color)) {
+      color = candidate;
+      frequency = count;
+    }
+  }
+  return { color, confidence: support ? frequency / support : 0, support };
+}
+function buildMinimapColorPredictor(records, fields) {
+  const normalizedFields = fields.map(canonicalFieldName);
+  const sourceIndexes = ['acwx', 'acwy', 'acwz'].map(field => normalizedFields.indexOf(field));
+  const colorIndex = normalizedFields.indexOf('minimap_color');
+  if (!Array.isArray(records) || !records.length || colorIndex < 0 || sourceIndexes.some(index => index < 0)) return null;
+  const tables = new Map(MINIMAP_PREDICTION_LEVELS.map(level => [level.name, new Map()]));
+  const globalCounts = new Map();
+  for (const record of records) {
+    const values = sourceIndexes.map(index => Number(record[index]));
+    const color = Number(record[colorIndex]);
+    if (values.some(value => !Number.isFinite(value)) || !Number.isInteger(color) || color < 0 || color > 255) continue;
+    for (const level of MINIMAP_PREDICTION_LEVELS) incrementMinimapCount(tables.get(level.name), minimapPredictionKey(values, level.indexes), color);
+    globalCounts.set(color, (globalCounts.get(color) || 0) + 1);
+  }
+  if (!globalCounts.size) return null;
+  return {
+    predictDetail(acwx, acwy, acwz) {
+      const values = [Number(acwx), Number(acwy), Number(acwz)];
+      for (const level of MINIMAP_PREDICTION_LEVELS) {
+        const counts = tables.get(level.name).get(minimapPredictionKey(values, level.indexes));
+        if (counts) return { ...minimapMajority(counts), level: level.name };
+      }
+      return { ...minimapMajority(globalCounts), level: 'global' };
+    },
+    predictColor(acwx, acwy, acwz) {
+      return this.predictDetail(acwx, acwy, acwz).color;
+    },
+  };
+}
+// 同一批修改先计算每个 Cell 的最终 xyz，再追加一次派生颜色修改。
+function deriveMinimapColorChanges(changes) {
+  const prepared = [];
+  const xyzChangesByCell = new Map();
+  for (const change of changes || []) {
+    const field = canonicalFieldName(change.field);
+    if (field === 'minimap_color') continue;
+    prepared.push({ ...change, field });
+    if (!['acwx', 'acwy', 'acwz'].includes(field)) continue;
+    const key = `${change.x},${change.y}`;
+    if (!xyzChangesByCell.has(key)) xyzChangesByCell.set(key, { x: change.x, y: change.y, values: new Map() });
+    xyzChangesByCell.get(key).values.set(field, change.after);
+  }
+  if (!state.minimapColorPredictor) return prepared;
+  const sourceFields = ['acwx', 'acwy', 'acwz'];
+  for (const group of xyzChangesByCell.values()) {
+    if (group.x < 0 || group.y < 0 || group.x >= state.meta.width || group.y >= state.meta.height) continue;
+    const record = recordAt({ col: group.x, row: group.y });
+    const current = sourceFields.map(field => record[fieldIndex(field)]);
+    const next = sourceFields.map((field, index) => group.values.has(field) ? group.values.get(field) : current[index]);
+    if (next.every((value, index) => value === current[index])) continue;
+    const prediction = state.minimapColorPredictor.predictDetail(next[0], next[1], next[2]);
+    prepared.push({ x: group.x, y: group.y, field: 'minimap_color', after: prediction.color, derived: true });
+  }
+  return prepared;
+}
+function applyChangeSet(changes, options = {}) {
   const applied = [];
-  for (const change of changes) {
+  const preparedChanges = options.deriveMinimap === false ? changes : deriveMinimapColorChanges(changes);
+  for (const change of preparedChanges) {
     const cell = { col: change.x, row: change.y };
     const normalizedField = canonicalFieldName(change.field);
     const fi = fieldIndex(normalizedField);
@@ -3151,11 +3242,12 @@ function resetSelectedRecord() {
   const original = state.originalRecords[idx];
   const current = state.meta.records[idx];
   const changes = [];
-  for (const field of state.meta.editableRecordFields) {
+  const resetFields = [...new Set([...state.meta.editableRecordFields, 'minimap_color'])];
+  for (const field of resetFields) {
     const fi = fieldIndex(field);
     if (fi >= 0 && current[fi] !== original[fi]) changes.push({ x: state.selected.col, y: state.selected.row, field, after: original[fi] });
   }
-  applyChangeSet(changes);
+  applyChangeSet(changes, { deriveMinimap: false });
 }
 function focusSelectedCell() {
   if (!state.selected) {
@@ -3184,7 +3276,7 @@ function findCellByCoordinates() {
 }
 function resetAllChanges() {
   const changes = [...state.patches.values()].map(patch => ({ x: patch.x, y: patch.y, field: patch.field, after: patch.before }));
-  applyChangeSet(changes);
+  applyChangeSet(changes, { deriveMinimap: false });
 }
 function applyPaint(cell) {
   const field = canonicalFieldName(els.layer.value);
@@ -3223,6 +3315,7 @@ function resetEditState(meta) {
   state.fieldMetaByName = new Map(state.meta.fieldMeta.map(entry => [entry.name, entry]));
   renderLayerOptions();
   state.originalRecords = state.meta.records.map(record => record.slice());
+  state.minimapColorPredictor = buildMinimapColorPredictor(state.originalRecords, state.meta.fields);
   state.patches.clear();
   state.recentMapPatchKeys = [];
   state.scenarioPatches.clear();
@@ -4849,7 +4942,7 @@ function cutSelectedRegion() {
   refreshCompositeList();
   els.status.textContent = snapshot.copyMode === 'full'
     ? `已剪切 ${snapshot.count} 个 Cell，源区域仅保留底层地表`
-    : `已剪切 ${snapshot.count} 个 Cell，源区域保留 acwx 与 minimap_color`;
+    : `已剪切 ${snapshot.count} 个 Cell，源区域保留底层地表，颜色自动推导`;
   return true;
 }
 // 按钮与快捷键共用同一粘贴入口，复制模式由快照字段集合决定。
