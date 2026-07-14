@@ -66,7 +66,7 @@
 
 地图 Cell 修改使用独立的撤销栈和重做栈。执行新修改会清空重做栈；撤销后可通过工具栏“重做”、Ctrl+Y 或 Ctrl+Shift+Z 恢复。
 
-本地导入允许一次选择 stageXX.m 及同名 .dor/.stg、stage.ini、History.txt、heads.dat、stage_ini.xlsx。完整项目还应同时选择导出的 scenario/dor/history JSON：在已提供对应二进制时，它们只恢复右侧管理 UI 的快照，不会再次写入新增对象；单独导入 JSON 才按跨版本 Patch 处理。当前浏览器端不把本地 `.stg` 反向解析为新增据点和武将管理对象，因此只选择二进制时新增对象不会出现在管理 UI 中，但原始二进制数据不会丢失。导出优先使用本次导入的本地二进制。
+本地导入允许一次选择 stageXX.m 及同名 .dor/.stg、stage.ini、History.txt、heads.dat、stage_ini.xlsx。完整项目还应同时选择导出的 scenario/dor/history JSON：在已提供对应二进制时，它们只恢复右侧管理 UI 的快照，不会再次写入新增对象；单独导入 JSON 才按跨版本 Patch 处理。浏览器端会按 `stg.ksy` 已确认的 `u32 size + payload` 对象流解析本地 `.stg`，恢复势力、据点、主 Entity、五类可选 Entity、字段偏移和重建布局；因此只选择二进制项目时，新增据点及已加入剧本的武将也会出现在管理 UI 中。导出优先使用本次导入的本地二进制。
 
 `stage.ini` 按 `u32 size + payload` 块流管理。新增对象没有既有母表行时，母表行号与都市索引分别递增，并从合法模板继承全部数值字段；当前名称强制写入 20 字节标题/类型槽和 XLSX `title`。新增武将按人物 ID 顺序追加到全部既有主块之后，直接写入完整的 228 字节块（`size=224`）；新增城池直接插入 100 字节双块（`size=92` 主块加 `size=0` 次块），分别更新主块数和城池数；禁止按旧兼容视图的 224/76 字节步长补齐。只有旧 bundle 缺少块流布局时才阻断导出。
 

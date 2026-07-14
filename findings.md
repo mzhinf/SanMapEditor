@@ -44,3 +44,9 @@
 - 原导入流程先读取本地 `.dor`，再把同一批导出的 `stage01_dor_patch.json` 当作增量 Patch 再应用一次，因此四个城门被重复登记。
 - 只选择 `.m/.dor/.stg/.ini/.s/.x/History.txt` 时，浏览器端不会把本地 `.stg` 重新解析为据点、武将管理模型；新增对象仍在二进制中，但 UI 没有可显示的场景快照。
 - 修复后，当 `.m` 与对应本地二进制同时载入时，`scenario/dor/history` JSON 仅用于恢复管理 UI 快照，并清空对应 Patch 集合；单独导入 JSON 仍按跨版本 Patch 执行。
+
+## 2026-07-14 本地 STG 二进制导入
+
+- 原导入流程只保存本地 `.stg` 字节，管理 UI 仍沿用内置 bundle 的旧场景模型，因此新增的晉都和武将在二进制中存在但不可见。
+- 浏览器现按 `stg.ksy` 已确认的块流顺序解析 root、force、site、primary Entity 和五类可选 Entity，并同步生成字段 Patch 偏移与对象重建布局。
+- 当前 `outputs/stage01.stg` 可解析出劉備势力下的晉都，以及人物 ID 278 的劉飛羽；随后 `.dor` 按解析后的据点坐标关联，不再依赖旧据点表。

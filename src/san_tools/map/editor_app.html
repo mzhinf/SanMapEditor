@@ -3319,6 +3319,149 @@ function parseStageM(buffer, name = 'local.m') {
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
   });
 }
+// 本地 STG 仅按 KSY 已确认的块流与字段偏移解析，异常长度和数量立即终止导入。
+function stgReadU32(view, offset, label) {
+  if (offset < 0 || offset + 4 > view.byteLength) throw new Error(`${label} 越界：${offset}`);
+  return view.getUint32(offset, true);
+}
+function stgReadI32(view, offset, label) {
+  if (offset < 0 || offset + 4 > view.byteLength) throw new Error(`${label} 越界：${offset}`);
+  return view.getInt32(offset, true);
+}
+function stgReadBlock(view, offset, label) {
+  const size = stgReadU32(view, offset, `${label}.size`);
+  const payload = offset + 4;
+  const end = payload + size;
+  if (end > view.byteLength) throw new Error(`${label} 块越界：size=${size}`);
+  return { start: offset, payload, size, end };
+}
+function stgCheckedCount(value, limit, label) {
+  if (!Number.isInteger(value) || value < 0 || value > limit) throw new Error(`${label} 数量异常：${value}`);
+  return value;
+}
+function stgDecodeBig5(bytes, offset, size, charMap) {
+  const decoder = new TextDecoder('big5');
+  let text = '';
+  for (let index = 0; index < size && offset + index < bytes.length;) {
+    const first = bytes[offset + index];
+    if (first === 0) break;
+    const width = first < 0x80 ? 1 : 2;
+    if (index + width > size || offset + index + width > bytes.length) break;
+    const raw = bytes.slice(offset + index, offset + index + width);
+    const char = decoder.decode(raw);
+    text += char;
+    if (char && char !== '\ufffd' && !charMap[char]) charMap[char] = [...raw];
+    index += width;
+  }
+  return text;
+}
+function stgPatchField(offset, type, size = 0) {
+  return type === 'str' ? { offset, type, size, encoding: 'big5' } : { offset, type };
+}
+function stgForcePatchFields(offset) {
+  return { force_name: stgPatchField(offset, 'str', 20), force_lord_person_id: stgPatchField(offset + 0x18, 'u4') };
+}
+function stgSitePatchFields(offset) {
+  const result = { site_name: stgPatchField(offset, 'str', 20) };
+  const fields = ['city_index', 'house_attr', 'castle_scale', 'population', 'gold', 'food', 'standby_soldier', 'develop', 'commerce', 'security'];
+  fields.forEach((field, index) => { result[field] = stgPatchField(offset + 0x14 + index * 4, 's4'); });
+  result.coord_x = stgPatchField(offset + 0x48, 's4');
+  result.coord_y = stgPatchField(offset + 0x4C, 's4');
+  result.governor = stgPatchField(offset + 0x50, 's4');
+  return result;
+}
+function stgEntityPatchFields(offset) {
+  const result = { entity_name: stgPatchField(offset, 'str', 20) };
+  const fields = ['person_id', 'portrait_id', 'static_owner_id', 'static_location_id', 'command', 'soldier_type_id', 'level', 'troop_count', 'martial_force', 'intellect', 'loyalty'];
+  fields.forEach((field, index) => { result[field] = stgPatchField(offset + 0x14 + index * 4, 's4'); });
+  return result;
+}
+function parseLocalStgBytes(rawBytes) {
+  const bytes = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes || []);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 16) throw new Error('本地 .stg 长度不足');
+  const big5CharMap = {};
+  for (let code = 0x20; code < 0x7F; code += 1) big5CharMap[String.fromCharCode(code)] = [code];
+  let offset = 4;
+  const root1 = stgReadBlock(view, offset, 'root_part1'); offset = root1.end;
+  const root2 = stgReadBlock(view, offset, 'root_part2'); offset = root2.end;
+  const forceCountOffset = offset;
+  const forceCount = stgCheckedCount(stgReadU32(view, offset, 'force_count'), 256, '势力'); offset += 4;
+  const forcesStart = offset;
+  const forces = [];
+  const sites = [];
+  const entities = [];
+  for (let forceIndex = 0; forceIndex < forceCount; forceIndex += 1) {
+    const forceKey = `force:${forceIndex}`;
+    const forceStart = offset;
+    const part1 = stgReadBlock(view, offset, `${forceKey}.part1`); offset = part1.end;
+    const part2 = stgReadBlock(view, offset, `${forceKey}.part2`); offset = part2.end;
+    const siteCountOffset = part2.payload;
+    const siteCount = stgCheckedCount(stgReadU32(view, siteCountOffset, `${forceKey}.site_count`), 4096, '据点');
+    const siteListPreCountOffset = offset;
+    const siteListCount = stgCheckedCount(stgReadU32(view, offset, `${forceKey}.site_list_count`), 4096, '据点列表'); offset += 4;
+    if (siteListCount !== siteCount) throw new Error(`${forceKey} 据点计数镜像不一致`);
+    const forceHeaderEnd = offset;
+    const forceName = stgDecodeBig5(bytes, part1.payload, 20, big5CharMap);
+    const siteKeys = [];
+    for (let siteIndex = 0; siteIndex < siteCount; siteIndex += 1) {
+      const siteKey = `${forceKey}/site:${siteIndex}`;
+      const siteStart = offset;
+      const site1 = stgReadBlock(view, offset, `${siteKey}.part1`); offset = site1.end;
+      const site2 = stgReadBlock(view, offset, `${siteKey}.part2`); offset = site2.end;
+      const primaryEntityCountOffset = offset;
+      const primaryCount = stgCheckedCount(stgReadU32(view, offset, `${siteKey}.primary_entity_count`), 65536, '实体'); offset += 4;
+      const siteHeaderEnd = offset;
+      const siteName = stgDecodeBig5(bytes, site1.payload, 20, big5CharMap);
+      const entityKeys = [];
+      const readEntity = (entityKey, entityIndex, entityGroup) => {
+        const entityStart = offset;
+        const entity1 = stgReadBlock(view, offset, `${entityKey}.part1`); offset = entity1.end;
+        const entity2 = stgReadBlock(view, offset, `${entityKey}.part2`); offset = entity2.end;
+        entities.push({
+          entityKey, entityIndex, entityGroup,
+          entity_name: stgDecodeBig5(bytes, entity2.payload, 20, big5CharMap),
+          person_id: stgReadI32(view, entity2.payload + 0x14, `${entityKey}.person_id`), portrait_id: stgReadI32(view, entity2.payload + 0x18, `${entityKey}.portrait_id`),
+          static_owner_id: stgReadI32(view, entity2.payload + 0x1C, `${entityKey}.static_owner_id`), static_location_id: stgReadI32(view, entity2.payload + 0x20, `${entityKey}.static_location_id`),
+          command: stgReadI32(view, entity2.payload + 0x24, `${entityKey}.command`), soldier_type_id: stgReadI32(view, entity2.payload + 0x28, `${entityKey}.soldier_type_id`),
+          level: stgReadI32(view, entity2.payload + 0x2C, `${entityKey}.level`), troop_count: stgReadI32(view, entity2.payload + 0x30, `${entityKey}.troop_count`),
+          martial_force: stgReadI32(view, entity2.payload + 0x34, `${entityKey}.martial_force`), intellect: stgReadI32(view, entity2.payload + 0x38, `${entityKey}.intellect`), loyalty: stgReadI32(view, entity2.payload + 0x3C, `${entityKey}.loyalty`),
+          parentSiteKey: siteKey, parent_site_name: siteName, parentForceKey: forceKey, parent_force_index: forceIndex, parent_force_name: forceName, actual_force_index: forceIndex, actual_force_name: forceName,
+          patchFields: stgEntityPatchFields(entity2.payload), stgLayout: { span: [entityStart, offset], kind: entityGroup, entityPart1PayloadOffset: entity1.payload, entityPart1PayloadSize: entity1.size, entityPart2PayloadOffset: entity2.payload, entityPart2PayloadSize: entity2.size },
+        });
+        entityKeys.push(entityKey);
+      };
+      for (let entityIndex = 0; entityIndex < primaryCount; entityIndex += 1) readEntity(`${siteKey}/entity:${entityIndex}`, entityIndex, 'primary');
+      const optionalEntityFlagOffsets = {};
+      ['optional_entity_27c', 'optional_entity_280', 'optional_entity_284', 'optional_entity_288', 'optional_entity_28c'].forEach((name, index) => {
+        const flagOffset = site2.payload + 0x27C + index * 4;
+        optionalEntityFlagOffsets[name] = flagOffset;
+        if (stgReadU32(view, flagOffset, `${siteKey}.${name}`) !== 0) readEntity(`${siteKey}/${name}`, entityKeys.length, name);
+      });
+      sites.push({
+        siteKey, siteIndex, site_name: siteName,
+        city_index: stgReadI32(view, site1.payload + 0x14, `${siteKey}.city_index`), house_attr: stgReadI32(view, site1.payload + 0x18, `${siteKey}.house_attr`), castle_scale: stgReadI32(view, site1.payload + 0x1C, `${siteKey}.castle_scale`),
+        population: stgReadI32(view, site1.payload + 0x20, `${siteKey}.population`), gold: stgReadI32(view, site1.payload + 0x24, `${siteKey}.gold`), food: stgReadI32(view, site1.payload + 0x28, `${siteKey}.food`), standby_soldier: stgReadI32(view, site1.payload + 0x2C, `${siteKey}.standby_soldier`),
+        develop: stgReadI32(view, site1.payload + 0x30, `${siteKey}.develop`), commerce: stgReadI32(view, site1.payload + 0x34, `${siteKey}.commerce`), security: stgReadI32(view, site1.payload + 0x38, `${siteKey}.security`),
+        coord_x: stgReadI32(view, site1.payload + 0x48, `${siteKey}.coord_x`), coord_y: stgReadI32(view, site1.payload + 0x4C, `${siteKey}.coord_y`), governor: stgReadI32(view, site1.payload + 0x50, `${siteKey}.governor`),
+        site_serial_010: stgReadU32(view, site2.payload + 0x10, `${siteKey}.site_serial_010`), primary_entity_count: primaryCount, entityKeys,
+        parentForceKey: forceKey, parent_force_index: forceIndex, parent_force_name: forceName,
+        patchFields: stgSitePatchFields(site1.payload), stgLayout: { span: [siteStart, offset], headerSpan: [siteStart, siteHeaderEnd], sitePart1PayloadOffset: site1.payload, sitePart1PayloadSize: site1.size, sitePart2PayloadOffset: site2.payload, primaryEntityCountOffset, optionalEntityFlagOffsets, entityKeys },
+      });
+      siteKeys.push(siteKey);
+    }
+    forces.push({
+      forceKey, forceIndex, force_name: forceName, force_slot_or_index_14: stgReadU32(view, part1.payload + 0x14, `${forceKey}.slot`), force_lord_person_id: stgReadU32(view, part1.payload + 0x18, `${forceKey}.lord`),
+      force_index_1based: stgReadU32(view, part2.payload + 0x04, `${forceKey}.index`), site_count: siteCount, siteKeys,
+      patchFields: stgForcePatchFields(part1.payload), stgLayout: { span: [forceStart, offset], headerSpan: [forceStart, forceHeaderEnd], siteCountOffset, siteListPreCountOffset, siteKeys },
+    });
+  }
+  return {
+    available: true, source: 'local-stg', path: state.localScenarioFiles.get('stg')?.name || `${state.meta.stage}.stg`, force_count: forceCount,
+    scenario_title: stgDecodeBig5(bytes, root1.payload, 16, big5CharMap), scenario_year_start: stgReadU32(view, root1.payload + 0x1C, 'scenario_year_start'), scenario_year_end: stgReadU32(view, root1.payload + 0x20, 'scenario_year_end'),
+    big5CharMap, stgLayout: { prefixSpan: [0, forcesStart], tailSpan: [offset, bytes.length], forceCountOffset, root2ForceCountOffset: root2.payload + 0x14 }, forces, sites, entities,
+  };
+}
 function patchValuesEqual(left, right) {
   if (left === right) return true;
   return JSON.stringify(left) === JSON.stringify(right);
@@ -3629,6 +3772,13 @@ async function loadLocalProjectFiles(fileList) {
       state.localScenarioFiles.set(key, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
     }
     await loadLocalMFile(mapFile);
+    const localStg = state.localScenarioFiles.get('stg');
+    if (localStg?.bytes) {
+      const scenarioModel = parseLocalStgBytes(localStg.bytes);
+      state.meta.scenarioModel = scenarioModel;
+      state.scenario = normalizeScenarioModel(scenarioModel);
+      state.scenarioPatches.clear();
+    }
     const localDor = state.localScenarioFiles.get('dor');
     if (localDor?.bytes && state.scenario?.available) {
       const siteByCoord = new Map(scenarioRows('site').map(site => [String(site.coord_x) + ',' + String(site.coord_y), site]));

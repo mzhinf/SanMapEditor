@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -547,6 +548,44 @@ applyWorkbookRowPatch(sheetMap, site, 'site');
 if (sheets[0].rows[0][0] !== '9' || sheets[0].rows[0][1] !== 'C' || sheets[0].rows[0][2] !== '9') throw new Error('新增城池工作簿标题或字段错误');
 """
         self.run_node(harness + functions + checks)
+    def test_local_stg_parser_matches_python_field_model(self) -> None:
+        """验证浏览器解析出的势力、据点和 Entity 顺序与字段模型一致。"""
+
+        source_path = ROOT / "data" / "game" / "stage01.stg"
+        if not source_path.exists():
+            self.skipTest("缺少 data/game/stage01.stg")
+        from san_tools.map.editor_model import StgFile
+
+        stg = StgFile.from_file(source_path)
+        site_names: list[str] = []
+        entity_names: list[str] = []
+        optional_names = (
+            "optional_entity_27c", "optional_entity_280", "optional_entity_284",
+            "optional_entity_288", "optional_entity_28c",
+        )
+        for force in stg.forces:
+            for site in force.sites:
+                site_names.append(site.site_name)
+                entity_names.extend(entity.part2.body.entity_name for entity in site.entities)
+                entity_names.extend(
+                    entity.part2.body.entity_name
+                    for name in optional_names
+                    if (entity := getattr(site, name)) is not None
+                )
+        script = script_source()
+        functions = function_range(script, "stgReadU32", "patchValuesEqual")
+        harness = "const state = { meta: { stage: 'stage01' }, localScenarioFiles: new Map([['stg', { name: 'stage01.stg' }]]) };\n"
+        checks = f"""
+const fs = require('fs');
+const bytes = new Uint8Array(fs.readFileSync({json.dumps(str(source_path))}));
+const model = parseLocalStgBytes(bytes);
+if (model.force_count !== {stg.force_count}) throw new Error('势力数量不一致');
+if (JSON.stringify(model.sites.map(row => row.site_name)) !== JSON.stringify({json.dumps(site_names, ensure_ascii=False)})) throw new Error('据点名称或顺序不一致');
+if (JSON.stringify(model.entities.map(row => row.entity_name)) !== JSON.stringify({json.dumps(entity_names, ensure_ascii=False)})) throw new Error('Entity 名称或顺序不一致');
+if (!model.stgLayout || !model.sites.every(row => row.patchFields && row.stgLayout)) throw new Error('字段偏移或布局缺失');
+"""
+        self.run_node(harness + functions + checks)
+
     def test_project_snapshots_restore_ui_without_reapplying_binary_changes(self) -> None:
         """验证完整项目的 JSON 仅恢复界面状态，不再形成重复写回 Patch。"""
 
