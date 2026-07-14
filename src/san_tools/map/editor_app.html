@@ -1800,37 +1800,50 @@ function nextStageIniSiteRowKey() {
   const rowIds = stageIniSiteRows().map(row => Number.parseInt(row.stageIniRowKey, 10)).filter(Number.isFinite);
   return String((rowIds.length ? Math.max(...rowIds) : 0) + 1);
 }
+function newSiteDefaults() {
+  // 新建据点只使用固定业务初值，不继承种子城池或二进制模板的数值。
+  return {
+    house_attr: 0,
+    castle_scale: 1,
+    population: 1200,
+    gold: 3000,
+    food: 7500,
+    standby_soldier: 0,
+    develop: 40,
+    commerce: 40,
+    security: 50,
+    governor: 0,
+  };
+}
 function addScenarioSite(forceKey = '') {
   if (!state.scenario) return;
   const force = state.scenario.forceByKey.get(forceKey || state.activeForceKey) || scenarioRows('force')[0] || null;
   const cell = state.selected || { col: 0, row: 0 };
   const index = state.scenario.sites.length;
   const seed = nextAvailableStageIniSite();
-  const template = seed || stageIniSiteTemplate();
+  const defaults = newSiteDefaults();
   const cityIndex = Number(seed?.city_index || 0) || Math.max(0, ...stageIniSiteRows().map(row => Number(row.city_index || 0))) + 1;
   const stageIniRowKey = seed?.stageIniRowKey || nextStageIniSiteRowKey();
   const siteName = seed?.title || ('Site ' + (index + 1));
-  const stageIniValues = template?.stageIniValues ? { ...template.stageIniValues } : {};
+  const model = stageIniPatchModel();
+  const sheet = (model?.workbookSheets || []).find(item => item.name === 'castle');
+  const stageIniValues = Object.fromEntries((sheet?.headers || []).map(header => [header, '0']));
   stageIniValues.row_id = stageIniRowKey;
   stageIniValues.title = siteName;
+  const fieldValues = { city_index: cityIndex, ...defaults, coord_x: cell.col, coord_y: cell.row };
+  for (const [field, value] of Object.entries(fieldValues)) {
+    const header = model?.fieldMap?.site?.fields?.[field];
+    if (header) stageIniValues[header] = String(value);
+  }
   const site = {
     siteKey: 'site:new:' + Date.now() + ':' + state.scenario.sites.length,
     isNew: true,
     siteIndex: index,
     site_name: siteName,
     city_index: cityIndex,
-    house_attr: Number(template?.house_attr || 0),
-    castle_scale: Number(template?.castle_scale || 1),
-    population: Number(template?.population || 0),
-    gold: Number(template?.gold || 0),
-    food: Number(template?.food || 0),
-    standby_soldier: Number(template?.standby_soldier || 0),
-    develop: Number(template?.develop || 0),
-    commerce: Number(template?.commerce || 0),
-    security: Number(template?.security || 0),
+    ...defaults,
     coord_x: cell.col,
     coord_y: cell.row,
-    governor: Number(template?.governor || 0),
     stageIniRowKey,
     stageIniValues,
     parentForceKey: force?.forceKey || '',
