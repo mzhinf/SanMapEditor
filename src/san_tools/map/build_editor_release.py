@@ -15,6 +15,27 @@ from san_tools.map.export_editor_bundle import export_editor_bundle
 
 EXE_NAME = "SanMapEditor"
 RELEASE_CREATOR = "mzhinf"
+USER_GUIDE_SOURCE = Path("docs") / "EDITOR_USER_GUIDE.zh.md"
+
+
+def write_release_guides(root: Path, package_dir: Path, build_time: str) -> None:
+    """写入最短启动说明，并把仓库内完整用户指南复制到发布目录。"""
+
+    guide_source = root / USER_GUIDE_SOURCE
+    if not guide_source.is_file():
+        raise FileNotFoundError(f"缺少编辑器用户指南：{guide_source}")
+    shutil.copy2(guide_source, package_dir / "编辑器使用指南.md")
+    (package_dir / "使用说明.txt").write_text(
+        "三国霸业地图编辑器 2.0\n\n"
+        f"创建者：{RELEASE_CREATOR}\n"
+        f"打包时间：{build_time}\n\n"
+        "1. 请先把整个 ZIP 完整解压。\n"
+        "2. 保持 SanMapEditor.exe 与 editor-data 文件夹在同一目录。\n"
+        "3. 双击 SanMapEditor.exe，并保持启动器小窗口运行。\n"
+        "4. 浏览器未自动打开时，点击启动器中的“打开编辑器”。\n"
+        "5. 详细操作请阅读同目录的《编辑器使用指南.md》。\n",
+        encoding="utf-8-sig",
+    )
 
 
 def ensure_safe_work_dir(root: Path, work_dir: Path) -> Path:
@@ -73,16 +94,7 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
     package_dir.mkdir(parents=True)
     shutil.copy2(pyinstaller_dist / f"{EXE_NAME}.exe", package_dir / f"{EXE_NAME}.exe")
     shutil.copytree(bundle_dir, package_dir / "editor-data")
-    (package_dir / "使用说明.txt").write_text(
-        "三国霸业地图编辑器 2.0\n\n"
-        f"创建者：{RELEASE_CREATOR}\n"
-        f"打包时间：{build_time}\n\n"
-        "1. 双击 SanMapEditor.exe。\n"
-        "2. 编辑器会在默认浏览器中打开。\n"
-        "3. 保持启动器小窗口运行；关闭小窗口会停止编辑器服务。\n"
-        "4. 在页面中导入 stageXX.m 及其配套文件，完成后导出 ZIP。\n",
-        encoding="utf-8-sig",
-    )
+    write_release_guides(root, package_dir, build_time)
 
     archive_base = output_dir / f"{EXE_NAME}-{stage}-{build_date}"
     archive_path = Path(shutil.make_archive(str(archive_base), "zip", package_dir))

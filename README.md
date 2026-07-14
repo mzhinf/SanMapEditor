@@ -13,7 +13,7 @@
 - 导出 `.m/.dor/.stg/.ini/.s/.x` 及 ZIP 数据包。
 - 对未确认的二进制字段采用原始字节保留和局部覆写策略。
 
-编辑器已经可用于 `stage01` 样本，但二进制写回仍应在游戏副本中验证。已知限制见 [已知问题](docs/KNOWN_ISSUES.zh.md)。
+编辑器已经可用于 `stage01` 样本，但二进制写回仍应在游戏副本中验证。发布包使用方法见 [编辑器使用指南](docs/EDITOR_USER_GUIDE.zh.md)，发布维护者参阅 [Windows 打包链路](docs/EDITOR_PACKAGING_CHAIN.zh.md)，已知限制见 [已知问题](docs/KNOWN_ISSUES.zh.md)。
 
 ## 环境要求
 

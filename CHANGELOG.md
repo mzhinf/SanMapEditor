@@ -9,6 +9,7 @@
 - 增加 `.m/.dor/.stg/stage.ini/History.txt` 的解析、编辑和回写链路。
 - 增加撤销重做、复制剪切、合成对象、小地图与头像图集支持。
 - `minimap_color` 默认按当前地图的 `z→y→x` 优先模型自动派生，同时保留 Raw 手工修正与全复制能力。
+- 新增随 Windows 发布 ZIP 交付的完整编辑器使用指南，并补齐发布链路文件清单。
 - 统一命令入口为 `python -m san_tools`，移除旧 `tools` 转发目录。
 - 统一本地资源目录为 `data/game` 与 `data/text`，移除本机绝对路径。
 - 补齐 HTML 与 KSY 包数据、CI、维护文档和仓库元数据。

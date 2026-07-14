@@ -6,7 +6,7 @@ import shutil
 import unittest
 from pathlib import Path
 
-from san_tools.map.build_editor_release import ensure_safe_work_dir
+from san_tools.map.build_editor_release import ensure_safe_work_dir, write_release_guides
 from san_tools.map.editor_desktop_launcher import check_editor_data, create_editor_server, editor_entry_path, find_editor_data_dir, load_release_info
 
 
@@ -49,6 +49,23 @@ class TestEditorDesktopLauncher(unittest.TestCase):
             self.assertGreater(server.server_address[1], 0)
         finally:
             server.server_close()
+
+    def test_release_package_contains_full_user_guide(self) -> None:
+        """发布目录必须同时包含短说明和完整用户指南。"""
+
+        root = TEST_TMP / "guide-root"
+        docs = root / "docs"
+        package = root / "package"
+        docs.mkdir(parents=True)
+        package.mkdir()
+        (docs / "EDITOR_USER_GUIDE.zh.md").write_text("# 测试指南\n\n先导出再关闭。\n", encoding="utf-8")
+
+        write_release_guides(root, package, "2026-07-14 12:00:00")
+
+        self.assertEqual((package / "编辑器使用指南.md").read_text(encoding="utf-8"), "# 测试指南\n\n先导出再关闭。\n")
+        short_guide = (package / "使用说明.txt").read_text(encoding="utf-8-sig")
+        self.assertIn("完整解压", short_guide)
+        self.assertIn("编辑器使用指南.md", short_guide)
 
     def test_release_work_dir_must_stay_inside_project(self) -> None:
         """发布脚本不得清理项目外部目录或项目根目录。"""
