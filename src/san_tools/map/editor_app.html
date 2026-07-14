@@ -3526,6 +3526,53 @@ function linkLocalStageIniRows() {
     site.stageIniValues = { ...row.stageIniValues };
   }
 }
+// 本地 History.txt 保留原始表头空格，同时使用规整表头作为字段键。
+function parseLocalHistoryBytes(rawBytes) {
+  const bytes = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes || []);
+  const decoder = new TextDecoder('big5');
+  const text = decoder.decode(bytes).replace(/^\ufeff/, '');
+  const lines = text.split(/\r?\n/);
+  if (!lines.length || !lines[0]) throw new Error('本地 History.txt 为空');
+  const rawHeaders = lines[0].split('\t');
+  const headers = rawHeaders.map((header, index) => header.trim() || `col_${index}`);
+  const idHeader = historyIdHeader(headers);
+  const rows = [];
+  for (const line of lines.slice(1)) {
+    if (!line.trim()) continue;
+    const cells = line.split('\t').map(value => value.trim());
+    if (!cells[0]) continue;
+    const row = {};
+    cells.forEach((value, index) => { row[headers[index] || `col_${index}`] = value; });
+    row.rowKey = String(row[idHeader] || rows.length + 1);
+    rows.push(row);
+  }
+  const big5CharMap = {};
+  for (let index = 0; index < bytes.length;) {
+    const first = bytes[index];
+    const width = first < 0x80 ? 1 : 2;
+    if (index + width > bytes.length) break;
+    const raw = bytes.slice(index, index + width);
+    const char = decoder.decode(raw);
+    if (char && char !== '\ufffd' && !big5CharMap[char]) big5CharMap[char] = [...raw];
+    index += width;
+  }
+  return { available: true, source: 'local History.txt', path: 'History.txt', headers, rawHeaders, rows, big5CharMap };
+}
+function buildLocalHistoryGeneralRows(historyModel) {
+  const idHeader = historyIdHeader(historyModel?.headers || []);
+  const nameHeader = historyNameHeader(historyModel?.headers || []);
+  const stageRows = new Map(stageIniGeneralRows().map(row => [Number(row.person_id || 0), row]));
+  const rows = [];
+  const seen = new Set();
+  for (const history of historyModel?.rows || []) {
+    const personId = Number.parseInt(history[idHeader] || history.rowKey || 0, 10) || 0;
+    const general = stageRows.get(personId);
+    if (!general || Number(general.command || 0) <= 0 || seen.has(personId)) continue;
+    seen.add(personId);
+    rows.push({ ...general, source: 'History.txt', name: String(history[nameHeader] || general.name || ''), entity_name: String(history[nameHeader] || general.entity_name || ''), person_id: personId });
+  }
+  return rows;
+}
 function patchValuesEqual(left, right) {
   if (left === right) return true;
   return JSON.stringify(left) === JSON.stringify(right);
@@ -3854,6 +3901,22 @@ async function loadLocalProjectFiles(fileList) {
       };
       linkLocalStageIniRows();
     }
+    const localHistory = state.localScenarioFiles.get('history');
+    if (localHistory?.bytes) {
+      const historyModel = parseLocalHistoryBytes(localHistory.bytes);
+      state.commonModel.historyTable = historyModel;
+      state.commonModel.historyGenerals = buildLocalHistoryGeneralRows(historyModel);
+      state.historyEdits.clear();
+      state.historyPatches.clear();
+      state.newHistoryRows = [];
+      state.deletedHistoryRowKeys.clear();
+      state.meta.commonModel = {
+        ...state.meta.commonModel,
+        historyTable: historyModel,
+        historyGenerals: state.commonModel.historyGenerals,
+        big5CharMap: { ...(state.meta.commonModel?.big5CharMap || {}), ...historyModel.big5CharMap },
+      };
+    }
     const localDor = state.localScenarioFiles.get('dor');
     if (localDor?.bytes && state.scenario?.available) {
       const siteByCoord = new Map(scenarioRows('site').map(site => [String(site.coord_x) + ',' + String(site.coord_y), site]));
@@ -3874,7 +3937,7 @@ async function loadLocalProjectFiles(fileList) {
       }
       state.gates = normalizeGateRows(gates);
     }
-    if (localStg?.bytes || localStageIni?.bytes || localDor?.bytes) {
+    if (localStg?.bytes || localStageIni?.bytes || localHistory?.bytes || localDor?.bytes) {
       refreshScenarioRelations();
       renderSitePicker();
       renderDomainManagers();

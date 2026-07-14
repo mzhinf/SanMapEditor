@@ -548,6 +548,31 @@ applyWorkbookRowPatch(sheetMap, site, 'site');
 if (sheets[0].rows[0][0] !== '9' || sheets[0].rows[0][1] !== 'C' || sheets[0].rows[0][2] !== '9') throw new Error('新增城池工作簿标题或字段错误');
 """
         self.run_node(harness + functions + checks)
+    def test_local_history_parser_restores_appended_general_record(self) -> None:
+        """验证本地 History 表可恢复人物 278 并与本地 ini 属性合并。"""
+
+        source_path = ROOT / "outputs" / "History.txt"
+        if not source_path.exists():
+            self.skipTest("缺少 outputs/History.txt")
+        script = script_source()
+        functions = function_range(script, "stgReadU32", "patchValuesEqual")
+        harness = """
+function historyIdHeader(headers) { return headers.find(header => ['編號', '编号', '人物編號', '人物编号'].includes(header)) || headers[0] || ''; }
+function historyNameHeader(headers) { return headers.find(header => ['武將名', '武将名', '姓名', '名稱', '名称'].includes(header)) || headers[1] || ''; }
+function stageIniGeneralRows() { return [{ person_id: 278, portrait_id: 12, command: 77, name: 'ini 名称', entity_name: 'ini 名称' }]; }
+"""
+        checks = f"""
+const fs = require('fs');
+const model = parseLocalHistoryBytes(new Uint8Array(fs.readFileSync({json.dumps(str(source_path))})));
+if (model.rawHeaders[1] !== ' 編號' || model.headers[1] !== '編號') throw new Error('History 原始或规整表头错误');
+const row = model.rows.find(item => item.rowKey === '278');
+if (!row || row['武將名'] !== '劉飛羽' || row['加入年'] !== '189') throw new Error('劉飛羽 History 记录未恢复');
+if (!model.big5CharMap['劉'] || !model.big5CharMap['羽']) throw new Error('History CP950 字符映射缺失');
+const candidates = buildLocalHistoryGeneralRows(model);
+if (candidates.length !== 1 || candidates[0].person_id !== 278 || candidates[0].name !== '劉飛羽' || candidates[0].command !== 77) throw new Error('History 与 ini 合并错误');
+"""
+        self.run_node(harness + functions + checks)
+
     def test_local_stage_ini_parser_restores_appended_general_rows(self) -> None:
         """验证本地母表解析可恢复新增武将字段、偏移和动态追加边界。"""
 
