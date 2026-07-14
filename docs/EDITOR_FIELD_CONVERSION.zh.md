@@ -27,7 +27,7 @@
 | `+0x0A` | `site_trigger` | `u1` | 据点势力范围，0..255 |
 | `+0x0B` | `site_area` | `u1` | 据点核心区域，0..255 |
 | `+0x0C` | `reserved1` | 固定 1 字节 0 | 只读 |
-| `+0x0D` | `minimap_color` | `u1` | SAN 调色板索引；只读派生字段。xyz 变化后按当前地图的 `xyz→xy→xz→x→全局众数` 自动写入，并通过 bundle 的 `minimapPalette` 映射 `SAN_RGB_PALETTE` 重建小地图 |
+| `+0x0D` | `minimap_color` | `u1` | SAN 调色板索引；默认按当前地图的 `xyz→yz→xz→z→xy→y→x→全局` 自动派生，也允许在 Raw 中输入 0..255 手工修正；显式值优先，并通过 `minimapPalette` 映射 `SAN_RGB_PALETTE` 重建小地图 |
 | `+0x0E` | `reserved2` | 固定 2 字节 0 | 只读 |
 
 ## `.dor`

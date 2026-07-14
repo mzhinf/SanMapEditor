@@ -16,7 +16,7 @@ class TestMinimapColorRelation(unittest.TestCase):
     """覆盖冲突、分级回退和跨关卡验证。"""
 
     def test_predictor_uses_majority_and_hierarchical_fallback(self) -> None:
-        """相同 xyz 冲突时取众数，未知组合按 xy、xz、x、全局回退。"""
+        """相同 xyz 冲突时取众数，未知组合按 z、y、x 优先级回退。"""
 
         rows = [
             (1, 2, 3, 10),
@@ -24,6 +24,8 @@ class TestMinimapColorRelation(unittest.TestCase):
             (1, 2, 3, 11),
             (1, 2, 4, 12),
             (1, 5, 8, 20),
+            (9, 9, 7, 30),
+            (8, 8, 7, 30),
         ]
         predictor = MinimapColorPredictor(rows)
 
@@ -32,6 +34,8 @@ class TestMinimapColorRelation(unittest.TestCase):
         self.assertAlmostEqual(exact.confidence, 2 / 3)
         self.assertEqual(predictor.predict_detail(1, 2, 99).level, "xy")
         self.assertEqual(predictor.predict_detail(1, 99, 8).level, "xz")
+        z_priority = predictor.predict_detail(1, 2, 7)
+        self.assertEqual((z_priority.level, z_priority.color), ("z", 30))
         self.assertEqual(predictor.predict_detail(1, 99, 99).level, "x")
         self.assertEqual(predictor.predict_detail(99, 99, 99).level, "global")
 

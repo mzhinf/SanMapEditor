@@ -80,7 +80,7 @@ FIELD_META = [
     {"name": "site_trigger", "alias": "", "label": "据点势力范围", "editable": True, "reserved": False},
     {"name": "site_area", "alias": "", "label": "据点核心区域", "editable": True, "reserved": False},
     {"name": "reserved1", "alias": "", "label": "保留字段 1", "editable": False, "reserved": True},
-    {"name": "minimap_color", "alias": "", "label": "小地图颜色（自动）", "editable": False, "reserved": False, "derived": True, "sidecarSource": True},
+    {"name": "minimap_color", "alias": "", "label": "小地图颜色（可修正）", "editable": True, "reserved": False, "derived": True, "sidecarSource": True},
     {"name": "reserved2", "alias": "", "label": "保留字段 2", "editable": False, "reserved": True},
 ]
 EDITABLE_RECORD_FIELDS = [entry["name"] for entry in FIELD_META if entry.get("editable")]

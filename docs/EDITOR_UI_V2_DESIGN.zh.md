@@ -68,7 +68,7 @@
 | 地形资源 | `.m` 的 `acwx` 候选资源，对应基础地形 tile。 |
 | 叠加资源 | `.m` 的 `acwy` 候选资源，对应过渡、道路、水体等叠加 tile。 |
 | 物件资源 | `.m` 的 `acwz` 候选资源，对应建筑、树木、城墙等物件 tile。 |
-| 数据层色板 | `terrain_tag`、`blocked`、`site_trigger`、`site_area` 的可视化色板；`minimap_color` 由 xyz 自动派生，不提供色板。 |
+| 数据层色板 | `terrain_tag`、`blocked`、`site_trigger`、`site_area` 的可视化色板；`minimap_color` 默认自动派生，在 Raw 中允许手工修正。 |
 | 合成对象 | 由多个 cell 的所有层字段组成的模板库。 |
 
 ### 3.3 中央地图画布
@@ -147,7 +147,7 @@
 | 阻挡标记 | `MMapCell.blocked` | 数据层字段，用于通行控制。 |
 | 据点势力范围 | `MMapCell.site_trigger` | 数据层字段，用于据点范围。 |
 | 据点核心区域 | `MMapCell.site_area` | 数据层字段，用于据点核心。 |
-| 小地图颜色 | `MMapCell.minimap_color` | 只读颜色索引；xyz 变化时由当前地图统计模型自动派生。 |
+| 小地图颜色 | `MMapCell.minimap_color` | 可编辑颜色索引；xyz 变化时自动派生，Raw 显式值优先。 |
 
 `reserved0/reserved1/reserved2` 不进入普通编辑界面，只在 Raw 中显示，并在写回时保持 KSY 规定的固定值。
 
@@ -187,7 +187,7 @@
 | 地表层 | `acwx` | 笔刷、填充、吸管、区域复制。 |
 | 叠加层 | `acwy` | 笔刷、清除、吸管、区域复制。 |
 | 物件层 | `acwz` | 笔刷、清除、合成对象、区域复制。 |
-| 数据层 | `terrain_tag/blocked/site_trigger/site_area` | 色板笔刷、填充、批量替换；`minimap_color` 不直接编辑。 |
+| 数据层 | `terrain_tag/blocked/site_trigger/site_area` | 色板笔刷、填充、批量替换；`minimap_color` 在 Raw 中数值编辑。 |
 
 每次修改都记录为 cell 级 patch：
 
@@ -211,7 +211,7 @@
 - 模板宽高。
 - 锚点位置。
 - 每个 cell 的 `acwx/acwy/acwz`。
-- 每个 cell 的 `terrain_tag/blocked/site_trigger/site_area`；`minimap_color` 不进入快照，粘贴后由 xyz 自动派生。
+- 每个 cell 的 `terrain_tag/blocked/site_trigger/site_area`；全复制额外保存 `minimap_color`，非底层复制排除该字段。
 - 是否覆盖空层的粘贴策略。
 
 合成对象只能来自当前地图选区，不从外部猜测结构。
@@ -220,7 +220,7 @@
 
 区域复制、区域剪切和合成对象共用稀疏快照结构，但复制与剪切使用临时剪贴板。操作范围直接来自画布多选，不提供“设起点”。
 
-- **全复制**：全部选中 Cell 进入快照并携带除 `minimap_color` 外的字段；剪切后只保留 `acwx`，颜色自动派生。
+- **全复制**：全部选中 Cell 进入快照并携带包括 `minimap_color` 在内的完整字段；粘贴时显式颜色优先，剪切后只保留 `acwx` 并自动派生颜色。
 - **非底层复制**：以 `acwy`、`acwz`、`terrain_tag`、`blocked`、`site_trigger`、`site_area` 是否存在为筛选条件，只复制除 `acwx`、`minimap_color` 外的字段；剪切后保留底层地表，颜色自动派生。
 
 左侧“数据叠加显示”和“合成对象 / 区域操作”标题栏提供收起/展开按钮。收起后只占一行，资源库获得更多可滚动空间。`Ctrl+C`、`Ctrl+X` 与 `Ctrl+V` 分别调用复制、剪切、粘贴命令；复制和剪切严格读取当前“全复制/非底层复制”模式，粘贴沿用快照在复制或剪切时保存的字段集合，并以当前选中 Cell 作为目标锚点。输入框、下拉框等可编辑控件保留系统原生快捷键。

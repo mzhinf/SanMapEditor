@@ -291,7 +291,7 @@ const DEFAULT_FIELD_META = [
   { name: 'site_trigger', alias: '', label: '据点势力范围', editable: true, reserved: false },
   { name: 'site_area', alias: '', label: '据点核心区域', editable: true, reserved: false },
   { name: 'reserved1', alias: '', label: '保留字段 1', editable: false, reserved: true },
-  { name: 'minimap_color', alias: '', label: '小地图颜色（自动）', editable: false, reserved: false, derived: true, sidecarSource: true },
+  { name: 'minimap_color', alias: '', label: '小地图颜色（可修正）', editable: true, reserved: false, derived: true, sidecarSource: true },
   { name: 'reserved2', alias: '', label: '保留字段 2', editable: false, reserved: true },
 ];
 const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
@@ -676,7 +676,7 @@ function normalizeMeta(meta) {
       name,
       alias: typeof raw.alias === 'string' ? raw.alias : base.alias,
       label: typeof raw.label === 'string' ? raw.label : base.label,
-      editable: derived ? false : (raw.editable ?? base.editable),
+      editable: derived ? true : (raw.editable ?? base.editable),
       reserved: raw.reserved ?? base.reserved,
       derived,
       sidecarSource: raw.sidecarSource ?? !!base.sidecarSource,
@@ -685,9 +685,9 @@ function normalizeMeta(meta) {
   const editableLayers = (Array.isArray(meta.editableLayers) && meta.editableLayers.length ? meta.editableLayers : RESOURCE_LAYER_OPTIONS).map(canonicalFieldName);
   const resourceLayers = (Array.isArray(meta.resourceLayers) && meta.resourceLayers.length ? meta.resourceLayers : editableLayers).map(canonicalFieldName);
   const pointLayers = (Array.isArray(meta.pointLayers) && meta.pointLayers.length ? meta.pointLayers : POINT_LAYER_OPTIONS).map(canonicalFieldName);
-  const editableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name))
-    .map(canonicalFieldName)
-    .filter(name => name !== 'minimap_color');
+  const rawEditableRecordFields = (Array.isArray(meta.editableRecordFields) && meta.editableRecordFields.length ? meta.editableRecordFields : fieldMeta.filter(entry => entry.editable && !entry.reserved).map(entry => entry.name))
+    .map(canonicalFieldName);
+  const editableRecordFields = [...new Set([...rawEditableRecordFields, ...(fields.includes('minimap_color') ? ['minimap_color'] : [])])];
   const pointPalette = Array.isArray(meta.pointPalette) ? meta.pointPalette.slice(0, 256) : [];
   const minimapPalette = Array.isArray(meta.minimapPalette) ? meta.minimapPalette.slice(0, 256) : pointPalette.slice();
   return { ...meta, fields, fieldMeta, editableLayers, resourceLayers, pointLayers, editableRecordFields, pointPalette, minimapPalette, sidecars: normalizeSidecars(meta.sidecars), siteLinks: normalizeSiteLinks(meta.siteLinks), scenarioModel: meta.scenarioModel || { available: false }, commonModel: meta.commonModel || { available: false } };
@@ -1432,11 +1432,9 @@ function captureRegionSnapshot(name = '区域复制', mode = state.regionCopyMod
   const bounds = selectedCellBounds();
   if (!bounds) return null;
   const normalizedMode = mode === 'non-base' ? 'non-base' : 'full';
-  const fields = state.meta.fields.filter(field => {
-    const normalizedField = canonicalFieldName(field);
-    if (normalizedField === 'minimap_color') return false;
-    return normalizedMode !== 'non-base' || normalizedField !== 'acwx';
-  });
+  const fields = normalizedMode === 'non-base'
+    ? state.meta.fields.filter(field => !['acwx', 'minimap_color'].includes(canonicalFieldName(field)))
+    : state.meta.fields.slice();
   const fieldIndexes = fields.map(fieldIndex);
   const capturedCells = normalizedMode === 'non-base'
     ? selectedCells.filter(cell => regionCellHasContent(recordAt(cell)))
@@ -1458,7 +1456,7 @@ function cutRegionSnapshot(name = '区域剪切') {
   const snapshotFields = new Set(snapshot.fields.map(canonicalFieldName));
   const clearFields = (state.meta.editableRecordFields || [])
     .map(canonicalFieldName)
-    .filter(field => field !== 'acwx' && snapshotFields.has(field));
+    .filter(field => !['acwx', 'minimap_color'].includes(field) && snapshotFields.has(field));
   const changes = [];
   for (const cell of cells) {
     for (const field of clearFields) {
@@ -3080,11 +3078,14 @@ function refreshAfterRecordEdit(cell = null, editedCells = null, changedFields =
   schedulePatchRefresh();
   scheduleDraw();
 }
-// 原始颜色存在一对多关系；按当前地图的高信息量字段组合逐级回退。
+// 原始颜色存在一对多关系；全部字段组合按 z、y、x 优先级逐级回退。
 const MINIMAP_PREDICTION_LEVELS = [
   { name: 'xyz', indexes: [0, 1, 2] },
-  { name: 'xy', indexes: [0, 1] },
+  { name: 'yz', indexes: [1, 2] },
   { name: 'xz', indexes: [0, 2] },
+  { name: 'z', indexes: [2] },
+  { name: 'xy', indexes: [0, 1] },
+  { name: 'y', indexes: [1] },
   { name: 'x', indexes: [0] },
 ];
 function minimapPredictionKey(values, indexes) {
@@ -3141,18 +3142,23 @@ function buildMinimapColorPredictor(records, fields) {
 function deriveMinimapColorChanges(changes) {
   const prepared = [];
   const xyzChangesByCell = new Map();
+  const manualMinimapCells = new Set();
   for (const change of changes || []) {
     const field = canonicalFieldName(change.field);
-    if (field === 'minimap_color') continue;
-    prepared.push({ ...change, field });
-    if (!['acwx', 'acwy', 'acwz'].includes(field)) continue;
     const key = `${change.x},${change.y}`;
+    prepared.push({ ...change, field });
+    if (field === 'minimap_color') {
+      manualMinimapCells.add(key);
+      continue;
+    }
+    if (!['acwx', 'acwy', 'acwz'].includes(field)) continue;
     if (!xyzChangesByCell.has(key)) xyzChangesByCell.set(key, { x: change.x, y: change.y, values: new Map() });
     xyzChangesByCell.get(key).values.set(field, change.after);
   }
   if (!state.minimapColorPredictor) return prepared;
   const sourceFields = ['acwx', 'acwy', 'acwz'];
-  for (const group of xyzChangesByCell.values()) {
+  for (const [key, group] of xyzChangesByCell.entries()) {
+    if (manualMinimapCells.has(key)) continue;
     if (group.x < 0 || group.y < 0 || group.x >= state.meta.width || group.y >= state.meta.height) continue;
     const record = recordAt({ col: group.x, row: group.y });
     const current = sourceFields.map(field => record[fieldIndex(field)]);

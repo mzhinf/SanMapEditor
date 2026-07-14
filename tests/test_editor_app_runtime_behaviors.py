@@ -66,6 +66,38 @@ if (state.meta.records[0][0] !== 9 || state.undoStack.length !== 1 || state.redo
 """
         self.run_node(harness + functions + checks)
 
+    def test_legacy_bundle_restores_editable_minimap_color(self) -> None:
+        """验证上一版只读元数据载入后会恢复颜色的 Raw 编辑入口。"""
+
+        source = script_source()
+        functions = function_range(source, "normalizeMeta", "getFieldMeta")
+        harness = """
+const EXPORT_FIELD_ORDER = ['acwx', 'acwy', 'acwz', 'minimap_color'];
+const RESOURCE_LAYER_OPTIONS = ['acwx', 'acwy', 'acwz'];
+const POINT_LAYER_OPTIONS = [];
+const defaults = [
+  { name: 'acwx', editable: true, reserved: false },
+  { name: 'acwy', editable: true, reserved: false },
+  { name: 'acwz', editable: true, reserved: false },
+  { name: 'minimap_color', editable: true, reserved: false, derived: true }
+];
+function canonicalFieldName(value) { return value; }
+function defaultFieldMetaByName() { return new Map(defaults.map(entry => [entry.name, entry])); }
+function normalizeSidecars(value) { return value || {}; }
+function normalizeSiteLinks(value) { return value || {}; }
+"""
+        checks = """
+const normalized = normalizeMeta({
+  fields: EXPORT_FIELD_ORDER,
+  fieldMeta: [{ name: 'minimap_color', editable: false, reserved: false }],
+  editableRecordFields: ['acwx', 'acwy', 'acwz'],
+  records: [[1, 2, 3, 10]]
+});
+const colorMeta = normalized.fieldMeta.find(entry => entry.name === 'minimap_color');
+if (!colorMeta.editable || !normalized.editableRecordFields.includes('minimap_color')) throw new Error('旧 bundle 未恢复颜色编辑入口');
+"""
+        self.run_node(harness + functions + checks)
+
     def test_xyz_change_derives_minimap_color_in_same_transaction(self) -> None:
         """验证 xyz 修改自动派生颜色，并与源字段共同撤销和重做。"""
 
@@ -75,9 +107,9 @@ if (state.meta.records[0][0] !== 9 || state.undoStack.length !== 1 || state.redo
         functions = source[start:end]
         harness = """
 const fields = ['acwx', 'acwy', 'acwz', 'minimap_color'];
-const records = [[1, 2, 3, 10], [1, 2, 4, 12], [1, 2, 4, 12]];
+const records = [[1, 2, 3, 10], [1, 2, 4, 12], [1, 2, 4, 12], [9, 9, 7, 30], [8, 8, 7, 30]];
 const state = {
-  meta: { width: 3, height: 1, fields, records: records.map(row => row.slice()), editableLayers: ['acwx', 'acwy', 'acwz'] },
+  meta: { width: 5, height: 1, fields, records: records.map(row => row.slice()), editableLayers: ['acwx', 'acwy', 'acwz'] },
   originalRecords: records.map(row => row.slice()), undoStack: [], redoStack: [], patches: new Map(), recentMapPatchKeys: [],
   minimapColorPredictor: null
 };
@@ -92,13 +124,17 @@ function refreshAfterRecordEdit() {}
 state.minimapColorPredictor = buildMinimapColorPredictor(state.originalRecords, fields);
 const detail = state.minimapColorPredictor.predictDetail(1, 99, 4);
 if (detail.level !== 'xz' || detail.color !== 12) throw new Error('xz 回退错误');
+const zPriority = state.minimapColorPredictor.predictDetail(1, 2, 7);
+if (zPriority.level !== 'z' || zPriority.color !== 30) throw new Error('z 优先级错误');
 if (!applyChangeSet([{ x: 0, y: 0, field: 'acwz', after: 4 }])) throw new Error('xyz 修改未生效');
 if (state.meta.records[0].join(',') !== '1,2,4,12' || state.undoStack[0].length !== 2) throw new Error('颜色未并入同一事务');
 undoLastEdit();
 if (state.meta.records[0].join(',') !== '1,2,3,10') throw new Error('组合撤销错误');
 redoLastEdit();
 if (state.meta.records[0].join(',') !== '1,2,4,12') throw new Error('组合重做错误');
-if (applyChangeSet([{ x: 0, y: 0, field: 'minimap_color', after: 99 }])) throw new Error('派生字段不应允许直接修改');
+if (!applyChangeSet([{ x: 0, y: 0, field: 'minimap_color', after: 99 }]) || state.meta.records[0][3] !== 99) throw new Error('手工颜色修正未生效');
+if (!applyChangeSet([{ x: 0, y: 0, field: 'acwz', after: 3 }, { x: 0, y: 0, field: 'minimap_color', after: 77 }])) throw new Error('组合手工修正未生效');
+if (state.meta.records[0].join(',') !== '1,2,3,77') throw new Error('手工颜色未覆盖自动推导');
 """
         self.run_node(harness + functions + checks)
 
@@ -316,7 +352,7 @@ if (findCellByCoordinates()) throw new Error('越界坐标未被拒绝');
         self.run_node(harness + functions + checks)
 
     def test_full_copy_captures_every_selected_cell_and_cut_clears_non_base_fields(self) -> None:
-        """验证全复制包含全部选中 Cell，但不携带自动派生的小地图颜色。"""
+        """验证全复制保留可手工修正的小地图颜色，剪切时不直接清零颜色。"""
 
         source = script_source()
         functions = function_range(source, "regionCellHasContent", "refreshCompositeList")
@@ -347,7 +383,7 @@ function applyChangeSet(changes) {
         checks = """
 const snapshot = cutRegionSnapshot();
 if (!snapshot || snapshot.copyMode !== 'full' || snapshot.cells.length !== 2) throw new Error('全复制未包含全部选中 Cell');
-if (snapshot.fields.includes('minimap_color') || snapshot.fields.length !== fields.length - 1) throw new Error('全复制携带了派生颜色');
+if (snapshot.fields.join(',') !== fields.join(',')) throw new Error('全复制未保留手工颜色');
 if (state.meta.records[0].join(',') !== '10,-1,-1,0,0,0,0,60') throw new Error('全复制剪切未清理到底层地表');
 if (state.meta.records[1].join(',') !== '11,-1,-1,0,0,0,0,61') throw new Error('纯底层 Cell 未参与全复制剪切');
 if (appliedBatches !== 1) throw new Error('区域剪切未作为单次撤销事务提交');

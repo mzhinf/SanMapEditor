@@ -42,12 +42,12 @@ class TestEditorAppV2Template(unittest.TestCase):
             self.assertIn(marker, html)
 
     def test_minimap_color_is_derived_bundle_field(self) -> None:
-        """验证新旧 bundle 都不会把小地图颜色暴露为普通编辑字段。"""
+        """验证 bundle 把小地图颜色标记为可修正的自动派生字段。"""
 
         color_meta = next(entry for entry in FIELD_META if entry["name"] == "minimap_color")
-        self.assertFalse(color_meta["editable"])
+        self.assertTrue(color_meta["editable"])
         self.assertTrue(color_meta["derived"])
-        self.assertNotIn("minimap_color", EDITABLE_RECORD_FIELDS)
+        self.assertIn("minimap_color", EDITABLE_RECORD_FIELDS)
 
     def test_editor_app_script_passes_node_syntax_check(self) -> None:
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
@@ -104,7 +104,7 @@ class TestEditorAppV2Template(unittest.TestCase):
         html = (ROOT / 'src' / 'san_tools' / 'map' / 'editor_app.html').read_text(encoding='utf-8')
         self.assertIn('terrain_tag', html)
         self.assertIn('minimap_color', html)
-        self.assertIn("label: '小地图颜色（自动）', editable: false", html)
+        self.assertIn("label: '小地图颜色（可修正）', editable: true", html)
         self.assertIn('buildMinimapColorPredictor', html)
         self.assertIn('scenarioModel', html)
         self.assertIn('stgLayout', html)

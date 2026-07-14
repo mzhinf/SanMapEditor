@@ -16,8 +16,11 @@ from san_tools.map.extract_kingdom import find_game_dir
 CellColorRow = tuple[int, int, int, int]
 KEY_LEVELS: tuple[tuple[str, tuple[int, ...]], ...] = (
     ("xyz", (0, 1, 2)),
-    ("xy", (0, 1)),
+    ("yz", (1, 2)),
     ("xz", (0, 2)),
+    ("z", (2,)),
+    ("xy", (0, 1)),
+    ("y", (1,)),
     ("x", (0,)),
 )
 ANALYSIS_LEVELS: tuple[tuple[str, tuple[int, ...]], ...] = (
@@ -76,7 +79,7 @@ def _majority(counts: Counter[int]) -> tuple[int, int]:
 
 
 class MinimapColorPredictor:
-    """使用当前样本的 xyz→xy→xz→x 分级众数预测小地图颜色。"""
+    """使用当前样本并按 z、y、x 字段优先级分级预测小地图颜色。"""
 
     def __init__(self, rows: Iterable[CellColorRow]) -> None:
         materialized = tuple(rows)
@@ -141,7 +144,7 @@ def _majority_excluding(global_counts: Counter[int], held_counts: Counter[int]) 
 
 
 def leave_one_stage_out(stage_rows: dict[str, Sequence[CellColorRow]]) -> dict[str, float | int]:
-    """按关卡留一验证 xyz→xy→xz→x→全局众数预测器。"""
+    """按关卡留一验证 z、y、x 优先的全组合众数预测器。"""
 
     all_rows = tuple(row for rows in stage_rows.values() for row in rows)
     global_tables = {name: _build_table(all_rows, indexes) for name, indexes in KEY_LEVELS}
