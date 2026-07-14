@@ -298,61 +298,61 @@ const EXPORT_FIELD_ORDER = DEFAULT_FIELD_META.map(entry => entry.name);
 const RESOURCE_LAYER_OPTIONS = ['acwx', 'acwy', 'acwz'];
 const POINT_LAYER_OPTIONS = ['terrain_tag', 'blocked', 'site_trigger', 'site_area'];
 const DATA_OVERLAY_OPTIONS = [
-  { key: 'terrain_tag', name: 'terrain_tag', label: '\u5730\u5f62\u6807\u8bb0', color: '#22c55e', mode: 'midpoint-square' },
-  { key: 'site_trigger', name: 'site_trigger', label: '\u636e\u70b9\u5f71\u54cd', color: '#0ea5e9', mode: 'fill' },
-  { key: 'site_area', name: 'site_area', label: '\u636e\u70b9\u6838\u5fc3', color: '#f59e0b', mode: 'center-ring' },
-  { key: 'blocked', name: 'blocked', label: '\u963b\u6321', color: '#ef4444', mode: 'large-outline' },
-  { key: 'edited', name: 'edited', label: '\u5df2\u7f16\u8f91\u7eff\u6846', color: '#22c55e', mode: 'edited-outline', derived: true },
+  { key: 'terrain_tag', name: 'terrain_tag', label: '地形标记', color: '#22c55e', mode: 'midpoint-square' },
+  { key: 'site_trigger', name: 'site_trigger', label: '据点影响', color: '#0ea5e9', mode: 'fill' },
+  { key: 'site_area', name: 'site_area', label: '据点核心', color: '#f59e0b', mode: 'center-ring' },
+  { key: 'blocked', name: 'blocked', label: '阻挡', color: '#ef4444', mode: 'large-outline' },
+  { key: 'edited', name: 'edited', label: '已编辑绿框', color: '#22c55e', mode: 'edited-outline', derived: true },
 ];
 const SCENARIO_FIELD_LABELS = {
   force: {
-    force_name: '\u52bf\u529b\u540d\u79f0',
-    force_lord_person_id: '\u541b\u4e3b\u6b66\u5c06ID',
-    force_slot_or_index_14: '\u52bf\u529b\u69fd\u4f4d',
-    force_index_1based: '\u52bf\u529b\u5e8f\u53f7',
-    site_count: '\u636e\u70b9\u6570',
+    force_name: '势力名称',
+    force_lord_person_id: '君主武将ID',
+    force_slot_or_index_14: '势力槽位',
+    force_index_1based: '势力序号',
+    site_count: '据点数',
   },
   site: {
-    site_name: '\u636e\u70b9\u540d\u79f0',
-    city_index: '\u57ce\u6c60\u7d22\u5f15',
-    house_attr: '\u623f\u5c4b\u5c5e\u6027',
-    castle_scale: '\u57ce\u6c60\u89c4\u6a21',
-    population: '\u4eba\u53e3',
-    gold: '\u91d1\u94b1',
-    food: '\u7cae\u8349',
-    standby_soldier: '\u5f85\u547d\u58eb\u5175',
-    develop: '\u5f00\u53d1',
-    commerce: '\u5546\u4e1a',
-    security: '\u6cbb\u5b89',
-    coord_x: '\u5750\u6807X',
-    coord_y: '\u5750\u6807Y',
-    governor: '\u592a\u5b88',
-    primary_entity_count: '\u9a7b\u5b88\u6570',
-    parentForceKey: '\u6240\u5c5e\u52bf\u529b',
+    site_name: '据点名称',
+    city_index: '城池索引',
+    house_attr: '房屋属性',
+    castle_scale: '城池规模',
+    population: '人口',
+    gold: '金钱',
+    food: '粮草',
+    standby_soldier: '待命士兵',
+    develop: '开发',
+    commerce: '商业',
+    security: '治安',
+    coord_x: '坐标X',
+    coord_y: '坐标Y',
+    governor: '太守',
+    primary_entity_count: '驻守数',
+    parentForceKey: '所属势力',
   },
   entity: {
-    entity_name: '\u6b66\u5c06\u540d\u79f0',
-    person_id: '\u4eba\u7269ID',
-    portrait_id: '\u5934\u50cfID',
-    static_owner_id: '\u9759\u6001\u6240\u5c5e',
-    static_location_id: '\u9759\u6001\u6240\u5728\u5730',
-    command: '\u7edf\u5fa1',
-    soldier_type_id: '\u5175\u79cd',
-    level: '\u7b49\u7ea7',
-    troop_count: '\u5e26\u5175\u6570',
-    martial_force: '\u6b66\u529b',
-    intellect: '\u667a\u529b',
-    loyalty: '\u5fe0\u8bda',
-    parentSiteKey: '\u6240\u5728\u636e\u70b9',
+    entity_name: '武将名称',
+    person_id: '人物ID',
+    portrait_id: '头像ID',
+    static_owner_id: '静态所属',
+    static_location_id: '静态所在地',
+    command: '统御',
+    soldier_type_id: '兵种',
+    level: '等级',
+    troop_count: '带兵数',
+    martial_force: '武力',
+    intellect: '智力',
+    loyalty: '忠诚',
+    parentSiteKey: '所在据点',
   },
   gate: {
-    doorX: '\u57ce\u95e8X',
-    doorY: '\u57ce\u95e8Y',
-    siteX: '\u636e\u70b9X',
-    siteY: '\u636e\u70b9Y',
-    dir: '\u65b9\u5411',
-    group: '\u7ec4\u53f7',
-    doorIndex: '\u95e8\u5e8f\u53f7(.dor\u7ec4\u5185)',
+    doorX: '城门X',
+    doorY: '城门Y',
+    siteX: '据点X',
+    siteY: '据点Y',
+    dir: '方向',
+    group: '组号',
+    doorIndex: '门序号(.dor组内)',
   },
 };
 const SCENARIO_FIELD_GROUPS = {
@@ -802,7 +802,7 @@ function renderActiveSiteEditor(siteView) {
   const stgGatePage = document.createElement('div');
   const orderNote = document.createElement('div');
   orderNote.className = 'record-note';
-  orderNote.textContent = '\u57ce\u95e8\u6309 .stg/.dor \u539f\u59cb gateIndex \u987a\u5e8f\u663e\u793a\uff1b\u95e8\u5e8f\u53f7 doorIndex \u662f .dor \u7ec4\u5185\u8bb0\u5f55\u5e8f\u53f7\u3002';
+  orderNote.textContent = '城门按 .stg/.dor 原始 gateIndex 顺序显示；门序号 doorIndex 是 .dor 组内记录序号。';
   stgGatePage.append(orderNote);
   for (const gate of siteView.gates || []) {
     const line = document.createElement('div');
@@ -817,7 +817,7 @@ function renderActiveSiteEditor(siteView) {
   const troopTotal = entities.reduce((sum, entity) => sum + Number(entity.troop_count || 0), 0);
   const entityTitle = document.createElement('div');
   entityTitle.className = 'record-name';
-  entityTitle.textContent = `\u6b66\u5c06 ${generalCount} / \u5175\u529b ${troopTotal}`;
+  entityTitle.textContent = `武将 ${generalCount} / 兵力 ${troopTotal}`;
   stgGeneralPage.append(entityTitle);
   const candidates = inactiveStageIniGeneralRows().filter(row => Number(row.command || 0) > 0);
   const addRow = document.createElement('div');
@@ -827,12 +827,12 @@ function renderActiveSiteEditor(siteView) {
   for (const row of candidates) {
     const option = document.createElement('option');
     option.value = row.stageIniGeneralKey;
-    option.textContent = `${row.name} / ID ${row.person_id} / \u7edf\u5fa1 ${row.command || 0}`;
+    option.textContent = `${row.name} / ID ${row.person_id} / 统御 ${row.command || 0}`;
     select.append(option);
   }
   const addGeneral = document.createElement('button');
   addGeneral.type = 'button';
-  addGeneral.textContent = '\u6dfb\u52a0\u5df2\u6709\u6b66\u5c06';
+  addGeneral.textContent = '添加已有武将';
   addGeneral.disabled = !candidates.length;
   addGeneral.addEventListener('click', () => addExistingGeneralToSite(site.siteKey, select.value));
   addRow.append(select, addGeneral);
@@ -843,18 +843,18 @@ function renderActiveSiteEditor(siteView) {
     const row = document.createElement('div');
     row.className = 'manager-row' + (entity.entityKey === state.activeEntityKey ? ' active' : '');
     const label = document.createElement('div');
-    label.textContent = `${entity.entity_name} / ${isGeneralEntity(entity) ? '\u6b66\u5c06' : '\u58eb\u5175'} / ${soldierName(entity.soldier_type_id)} / ${entity.troop_count || 0}`;
+    label.textContent = `${entity.entity_name} / ${isGeneralEntity(entity) ? '武将' : '士兵'} / ${soldierName(entity.soldier_type_id)} / ${entity.troop_count || 0}`;
     row.append(label);
     if (isGeneralEntity(entity)) {
       const edit = document.createElement('button');
       edit.type = 'button';
-      edit.textContent = '\u7f16\u8f91';
+      edit.textContent = '编辑';
       edit.addEventListener('click', () => { state.activeEntityKey = entity.entityKey; state.activeHistoryGeneralKey = ''; switchInspectorTab('entities'); renderDomainManagers(); });
       row.append(edit);
     }
     const delEntity = document.createElement('button');
     delEntity.type = 'button';
-    delEntity.textContent = '\u5220\u9664';
+    delEntity.textContent = '删除';
     delEntity.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
     row.append(delEntity);
     entityList.append(row);
@@ -862,24 +862,24 @@ function renderActiveSiteEditor(siteView) {
   if (!entities.length) {
     const empty = document.createElement('div');
     empty.className = 'placeholder';
-    empty.textContent = '\u5f53\u524d\u636e\u70b9\u6ca1\u6709\u6b66\u5c06\u6216\u58eb\u5175\u3002';
+    empty.textContent = '当前据点没有武将或士兵。';
     entityList.append(empty);
   }
   stgGeneralPage.append(entityList);
   const stgPage = createSourceTabs([
-    { key: 'site', label: '\u636e\u70b9\u4fe1\u606f', content: stgSitePage },
-    { key: 'gate', label: '\u57ce\u95e8\u4fe1\u606f', content: stgGatePage },
-    { key: 'general', label: '\u6b66\u5c06\u4fe1\u606f', content: stgGeneralPage },
+    { key: 'site', label: '据点信息', content: stgSitePage },
+    { key: 'gate', label: '城门信息', content: stgGatePage },
+    { key: 'general', label: '武将信息', content: stgGeneralPage },
   ], `site:${site.siteKey}:stg`);
 
   const dorPage = document.createElement('div');
   const gateTitle = document.createElement('div');
   gateTitle.className = 'record-name';
-  gateTitle.textContent = `\u57ce\u95e8 ${siteView.gates?.length || 0}`;
+  gateTitle.textContent = `城门 ${siteView.gates?.length || 0}`;
   dorPage.append(gateTitle);
   const addGate = document.createElement('button');
   addGate.type = 'button';
-  addGate.textContent = '\u65b0\u589e\u57ce\u95e8';
+  addGate.textContent = '新增城门';
   addGate.addEventListener('click', () => addSiteGate(siteView));
   dorPage.append(addGate);
   const gateList = document.createElement('div');
@@ -889,7 +889,7 @@ function renderActiveSiteEditor(siteView) {
     gateCard.className = 'manager-detail';
     const head = document.createElement('div');
     head.className = 'record-name';
-    head.textContent = `\u95e8 ${gate.gateIndex} / .dor group ${gate.group}`;
+    head.textContent = `门 ${gate.gateIndex} / .dor group ${gate.group}`;
     gateCard.append(head);
     appendGateInput(gateCard, gate, 'doorX', scenarioFieldLabel('gate', 'doorX'));
     appendGateInput(gateCard, gate, 'doorY', scenarioFieldLabel('gate', 'doorY'));
@@ -902,7 +902,7 @@ function renderActiveSiteEditor(siteView) {
     actions.className = 'manager-row';
     const locate = document.createElement('button');
     locate.type = 'button';
-    locate.textContent = '\u5b9a\u4f4d';
+    locate.textContent = '定位';
     locate.addEventListener('click', () => {
       state.selectedCells.clear();
       rememberSelectedCell({ col: gate.doorX, row: gate.doorY });
@@ -912,7 +912,7 @@ function renderActiveSiteEditor(siteView) {
     });
     const delGate = document.createElement('button');
     delGate.type = 'button';
-    delGate.textContent = '\u5220\u9664';
+    delGate.textContent = '删除';
     delGate.addEventListener('click', () => deleteSiteGate(gateKey(gate)));
     actions.append(locate, delGate);
     gateCard.append(actions);
@@ -921,7 +921,7 @@ function renderActiveSiteEditor(siteView) {
   if (!(siteView.gates || []).length) {
     const empty = document.createElement('div');
     empty.className = 'placeholder';
-    empty.textContent = '\u5f53\u524d\u636e\u70b9\u6ca1\u6709\u5339\u914d\u5230 .dor \u57ce\u95e8\u3002';
+    empty.textContent = '当前据点没有匹配到 .dor 城门。';
     gateList.append(empty);
   }
   dorPage.append(gateList);
@@ -933,7 +933,7 @@ function renderActiveSiteEditor(siteView) {
   ], `site:${site.siteKey}:source`));
   const del = document.createElement('button');
   del.type = 'button';
-  del.textContent = '\u5220\u9664\u636e\u70b9';
+  del.textContent = '删除据点';
   del.addEventListener('click', () => markScenarioDeleted('site', site.siteKey));
   wrap.append(del);
   els.siteNote.append(wrap);
@@ -988,7 +988,7 @@ function renderSitePicker() {
     for (const site of group.rows) {
       const option = document.createElement('option');
       option.value = site.siteKey;
-      option.textContent = `${site.cityName} (${site.mapX},${site.mapY}) / ${site.gateCount} \u95e8`;
+      option.textContent = `${site.cityName} (${site.mapX},${site.mapY}) / ${site.gateCount} 门`;
       if (site.siteKey === state.activeSiteKey) option.selected = true;
       optgroup.append(option);
     }
@@ -1651,7 +1651,7 @@ function appendGateInput(parent, gate, field, label, numeric = true, readonly = 
   input.type = numeric ? 'number' : 'text';
   input.value = gate[field] ?? '';
   input.disabled = readonly;
-  if (readonly) input.title = '\u5173\u7cfb\u6d3e\u751f\u5b57\u6bb5\uff0c\u4e0e\u5f53\u524d\u636e\u70b9\u5750\u6807\u540c\u6b65';
+  if (readonly) input.title = '关系派生字段，与当前据点坐标同步';
   else input.addEventListener('change', () => updateGateField(gateKey(gate), field, input.value, numeric));
   appendFieldControl(parent, label, input);
 }
@@ -1867,7 +1867,7 @@ function addExistingGeneralToSite(siteKey, rowKey) {
     entityKey: `entity:new:${Date.now()}:${state.scenario.entities.length}:general`,
     entityIndex: index,
     entityGroup: 'primary',
-    entity_name: general.name || `\u6b66\u5c06 ${general.person_id || index + 1}`,
+    entity_name: general.name || `武将 ${general.person_id || index + 1}`,
     person_id: Number(general.person_id || 0),
     portrait_id: Number(general.portrait_id || 0),
     static_owner_id: Number(general.static_owner_id || force?.force_lord_person_id || 0),
@@ -1941,9 +1941,9 @@ function scenarioFieldLabel(kind, field) {
 function scenarioSelectOptions(kind, field) {
   if (kind === 'site' && field === 'house_attr') {
     return [
-      { value: '0', label: '\u57ce\u6c60' },
-      { value: '1', label: '\u519b\u5be8' },
-      { value: '2', label: '\u5c71\u5be8' },
+      { value: '0', label: '城池' },
+      { value: '1', label: '军寨' },
+      { value: '2', label: '山寨' },
     ];
   }
   if (kind === 'site' && field === 'parentForceKey') {
@@ -2021,17 +2021,17 @@ function siteHouseAttrValue(site) {
 }
 function siteKindLabel(site) {
   const houseAttr = siteHouseAttrValue(site);
-  if (houseAttr === 0) return '\u57ce\u6c60';
-  if (houseAttr === 1) return '\u519b\u5be8';
-  if (houseAttr === 2) return '\u5c71\u5be8';
-  return houseAttr ? `\u672a\u77e5(${houseAttr})` : '\u672a\u5206\u7c7b';
+  if (houseAttr === 0) return '城池';
+  if (houseAttr === 1) return '军寨';
+  if (houseAttr === 2) return '山寨';
+  return houseAttr ? `未知(${houseAttr})` : '未分类';
 }
 function siteKindGroups(sites) {
   const groups = [
-    { value: 0, label: '\u57ce\u6c60', rows: [] },
-    { value: 1, label: '\u519b\u5be8', rows: [] },
-    { value: 2, label: '\u5c71\u5be8', rows: [] },
-    { value: -1, label: '\u672a\u5206\u7c7b', rows: [] },
+    { value: 0, label: '城池', rows: [] },
+    { value: 1, label: '军寨', rows: [] },
+    { value: 2, label: '山寨', rows: [] },
+    { value: -1, label: '未分类', rows: [] },
   ];
   const byValue = new Map(groups.map(group => [group.value, group]));
   for (const site of sites) {
@@ -2045,7 +2045,7 @@ function appendScenarioInput(parent, row, kind, field, numeric = false, label = 
   input.type = numeric ? 'number' : 'text';
   input.value = row[field] ?? '';
   input.disabled = readonly;
-  if (readonly) input.title = '\u5173\u7cfb\u6d3e\u751f\u5b57\u6bb5\uff0c\u7531\u5f53\u524d\u5173\u8054\u6570\u636e\u81ea\u52a8\u8ba1\u7b97';
+  if (readonly) input.title = '关系派生字段，由当前关联数据自动计算';
   else input.addEventListener('change', () => updateScenarioField(kind, row[`${kind}Key`], field, input.value, numeric));
   appendFieldControl(parent, label, input);
 }
@@ -2463,7 +2463,7 @@ function renderDomainManagers() {
     const receiveSite = document.createElement('select');
     const receiveEmpty = document.createElement('option');
     receiveEmpty.value = '';
-    receiveEmpty.textContent = '\u9009\u62e9\u5df2\u6709\u636e\u70b9';
+    receiveEmpty.textContent = '选择已有据点';
     receiveSite.append(receiveEmpty);
     for (const site of scenarioRows('site').filter(site => site.parentForceKey !== force.forceKey)) {
       const option = document.createElement('option');
@@ -2473,7 +2473,7 @@ function renderDomainManagers() {
     }
     const receiveButton = document.createElement('button');
     receiveButton.type = 'button';
-    receiveButton.textContent = '\u52a0\u5165\u5df2\u6709\u636e\u70b9';
+    receiveButton.textContent = '加入已有据点';
     receiveButton.disabled = !receiveSite.value;
     receiveSite.addEventListener('change', () => { receiveButton.disabled = !receiveSite.value; });
     receiveButton.addEventListener('click', () => assignExistingSiteToForce(receiveSite.value, force.forceKey));
@@ -2481,7 +2481,7 @@ function renderDomainManagers() {
     forceDetail.append(siteToolbar);
     const siteListTitle = document.createElement('div');
     siteListTitle.className = 'record-name';
-    siteListTitle.textContent = '\u5df2\u52a0\u5165\u636e\u70b9';
+    siteListTitle.textContent = '已加入据点';
     forceDetail.append(siteListTitle);
     const siteList = document.createElement('div');
     siteList.className = 'manager-sublist';
@@ -2493,11 +2493,11 @@ function renderDomainManagers() {
       label.textContent = `${site.site_name} / ${siteKindLabel(site)} (${site.coord_x},${site.coord_y})`;
       const locate = document.createElement('button');
       locate.type = 'button';
-      locate.textContent = '\u5b9a\u4f4d';
+      locate.textContent = '定位';
       locate.addEventListener('click', () => { setActiveSite(site.siteKey, { focus: true }); switchInspectorTab('sites'); });
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.textContent = '\u79fb\u51fa';
+      remove.textContent = '移出';
       remove.addEventListener('click', () => removeSiteFromForce(site.siteKey));
       siteRow.append(label, locate, remove);
       siteList.append(siteRow);
@@ -2505,7 +2505,7 @@ function renderDomainManagers() {
     if (!forceSites.length) {
       const empty = document.createElement('div');
       empty.className = 'placeholder';
-      empty.textContent = '\u5f53\u524d\u52bf\u529b\u6ca1\u6709\u52a0\u5165\u636e\u70b9\u3002';
+      empty.textContent = '当前势力没有加入据点。';
       siteList.append(empty);
     }
     forceDetail.append(siteList);
@@ -2535,12 +2535,12 @@ function renderDomainManagers() {
   const entityItems = document.createElement('div');
   entityItems.className = 'manager-items';
   for (const entity of entityRows) {
-    entityItems.append(buildScenarioListRow(`${entity.entity_name} / ${entity.parent_site_name || '-'} / ${entity.actual_force_name || '-'} / \u7edf\u5fa1 ${entity.command || 0}`, entity.entityKey === state.activeEntityKey, () => { state.activeEntityKey = entity.entityKey; state.activeHistoryGeneralKey = ''; renderDomainManagers(); }));
+    entityItems.append(buildScenarioListRow(`${entity.entity_name} / ${entity.parent_site_name || '-'} / ${entity.actual_force_name || '-'} / 统御 ${entity.command || 0}`, entity.entityKey === state.activeEntityKey, () => { state.activeEntityKey = entity.entityKey; state.activeHistoryGeneralKey = ''; renderDomainManagers(); }));
   }
   for (const row of inactiveRows) {
     const key = historyGeneralKey(row);
     const sourceLabel = row.stageIniOnly ? 'stage.ini' : 'History.txt';
-    entityItems.append(buildScenarioListRow(`${row.name} / ${sourceLabel} / \u7edf\u5fa1 ${row.command || 0}`, key === state.activeHistoryGeneralKey, () => { state.activeEntityKey = ''; state.activeHistoryGeneralKey = key; renderDomainManagers(); }, '\u7f16\u8f91'));
+    entityItems.append(buildScenarioListRow(`${row.name} / ${sourceLabel} / 统御 ${row.command || 0}`, key === state.activeHistoryGeneralKey, () => { state.activeEntityKey = ''; state.activeHistoryGeneralKey = key; renderDomainManagers(); }, '编辑'));
   }
   if (!entityRows.length && !inactiveRows.length) {
     const empty = document.createElement('div');
@@ -2564,7 +2564,7 @@ function renderDomainManagers() {
     title.textContent = entity.entity_name;
     const note = document.createElement('div');
     note.className = 'record-note';
-    note.textContent = `person_id=${entity.person_id} portrait_id=${entity.portrait_id} \u5175\u79cd=${soldierName(entity.soldier_type_id)} \u5175\u529b=${entity.troop_count || 0}`;
+    note.textContent = `person_id=${entity.person_id} portrait_id=${entity.portrait_id} 兵种=${soldierName(entity.soldier_type_id)} 兵力=${entity.troop_count || 0}`;
     fields.append(title, note);
     card.append(portrait, fields);
     entityDetail.append(card);
@@ -2574,7 +2574,7 @@ function renderDomainManagers() {
     else {
       const empty = document.createElement('div');
       empty.className = 'placeholder';
-      empty.textContent = '\u672a\u5339\u914d\u5230 stage.ini \u6b66\u5c06\u6bcd\u8868\u884c\u3002';
+      empty.textContent = '未匹配到 stage.ini 武将母表行。';
       iniPage.append(empty);
     }
     const stgPage = document.createElement('div');
@@ -2588,7 +2588,7 @@ function renderDomainManagers() {
     ], `entity:${entity.entityKey}:source`));
     const del = document.createElement('button');
     del.type = 'button';
-    del.textContent = '\u5220\u9664\u6b66\u5c06';
+    del.textContent = '删除武将';
     del.addEventListener('click', () => markScenarioDeleted('entity', entity.entityKey));
     entityDetail.append(del);
   } else if (historyGeneral) {
@@ -2603,7 +2603,7 @@ function renderDomainManagers() {
     title.textContent = historyGeneral.name;
     const note = document.createElement('div');
     note.className = 'record-note';
-    note.textContent = historyGeneral.stageIniOnly ? `stage.ini person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0}` : `History.txt \u672a\u52a0\u5165\u5267\u672c person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} \u7edf\u5fa1=${historyGeneral.command || 0}`;
+    note.textContent = historyGeneral.stageIniOnly ? `stage.ini person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} 统御=${historyGeneral.command || 0}` : `History.txt 未加入剧本 person_id=${historyGeneral.person_id} portrait_id=${historyGeneral.portrait_id} 统御=${historyGeneral.command || 0}`;
     fields.append(title, note);
     card.append(portrait, fields);
     entityDetail.append(card);
@@ -2612,7 +2612,7 @@ function renderDomainManagers() {
     const stgPage = document.createElement('div');
     const stgEmpty = document.createElement('div');
     stgEmpty.className = 'placeholder';
-    stgEmpty.textContent = '\u672a\u52a0\u5165\u5267\u672c\uff0c\u6682\u65e0 .stg \u5f52\u5c5e\u4e0e\u636e\u70b9\u5b57\u6bb5\u3002';
+    stgEmpty.textContent = '未加入剧本，暂无 .stg 归属与据点字段。';
     stgPage.append(stgEmpty);
     const historyPage = document.createElement('div');
     appendHistoryFields(historyPage, historyGeneral.person_id);
@@ -2640,8 +2640,8 @@ function validationIssues() {
   if (!state.meta.siteLinks?.available) issues.push({ level: 'warn', text: state.meta.siteLinks?.reason || '未加载 .dor/.stg 关联信息，据点和城门只能按 .m 数据层编辑。' });
   if (!state.meta.scenarioFiles?.dor?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .dor 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
   if (!state.meta.scenarioFiles?.stg?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .stg 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
-  if (!state.meta.scenarioFiles?.stageIni?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage.ini\uff0c\u57ce\u6c60\u4e0e\u6b66\u5c06\u5168\u5c40\u6bcd\u8868\u53ea\u80fd\u5bfc\u51fa patch\u3002' });
-  if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: '\u0062\u0075\u006e\u0064\u006c\u0065 \u672a\u643a\u5e26 stage_ini.xlsx\uff0c\u4fdd\u5b58\u65f6\u4e0d\u4f1a\u751f\u6210\u5de5\u4f5c\u7c3f\u3002' });
+  if (!state.meta.scenarioFiles?.stageIni?.path) issues.push({ level: 'warn', text: 'bundle 未携带 stage.ini，城池与武将全局母表只能导出 patch。' });
+  if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: 'bundle 未携带 stage_ini.xlsx，保存时不会生成工作簿。' });
   const stageIniModel = stageIniPatchModel();
   const hasNewMasterRows = scenarioRows('site').some(site => site.isNew && siteHouseAttrValue(site) === 0) || state.newStageIniGenerals.length > 0;
   if (hasNewMasterRows && stageIniModel?.appendLayout?.format !== 'stage-ini-block-stream-v1') issues.push({ level: 'error', text: '当前 bundle 缺少 stage.ini 块流新增布局，请重新生成 stage01 bundle。' });
@@ -2866,7 +2866,7 @@ function refreshPatches() {
   const stageIniLines = recentMapValues(state.stageIniGeneralPatches, 6).map(change => `stage.ini general ${change.field || '-'} ${change.key}`);
   const historyLines = recentMapValues(state.historyPatches, 6).map(change => `History.txt ${change.field || '-'} ${change.key}`);
   els.patchList.textContent = [...mapLines, ...scenarioLines, ...gateLines, ...stageIniLines, ...historyLines].join('\n');
-  els.status.textContent = totalChanges ? `\u5df2\u4fee\u6539\uff08${totalChanges}\uff09` : (state.baseImageNote || '\u5c31\u7eea');
+  els.status.textContent = totalChanges ? `已修改（${totalChanges}）` : (state.baseImageNote || '就绪');
   els.undoEdit.disabled = !state.undoStack.length;
   els.redoEdit.disabled = !state.redoStack.length;
   els.resetCell.disabled = !hasSelectedLayerPatch();
@@ -3406,10 +3406,10 @@ function parseStageM(buffer, name = 'local.m') {
   }
   const stageName = name.replace(/\.m$/i, '');
   const sameStage = state.meta?.stage === stageName;
-  const inheritedSidecars = sameStage ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '\u4ec5\u52a0\u8f7d .m \u65f6\u65e0\u6cd5\u81ea\u52a8\u8bfb\u53d6 sidecar \u53c2\u8003\u6587\u4ef6' };
+  const inheritedSidecars = sameStage ? state.meta.sidecars : { available: false, gridSize: 160, activeRows: 128, tailRows: 32, tails: {}, reason: '仅加载 .m 时无法自动读取 sidecar 参考文件' };
   const inheritedSiteLinks = sameStage
     ? state.meta.siteLinks
-    : { available: false, cities: [], gates: [], reason: '\u4ec5\u52a0\u8f7d\u5355\u4e2a .m \u6587\u4ef6\u65f6\uff0c\u6d4f\u89c8\u5668\u65e0\u6cd5\u76f4\u63a5\u8bfb\u53d6\u540c\u76ee\u5f55 .dor / .stg\uff1b\u8bf7\u4f18\u5148\u4f7f\u7528\u5df2\u5bfc\u51fa\u7684\u5173\u5361\u9875\u9762\u3002' };
+    : { available: false, cities: [], gates: [], reason: '仅加载单个 .m 文件时，浏览器无法直接读取同目录 .dor / .stg；请优先使用已导出的关卡页面。' };
   const inheritedScenarioFiles = sameStage ? state.meta.scenarioFiles : {};
   // 仅加载 .m 时没有 bundle 图片 / 资源统计，按 ksy 字段名保留 terrain_tag/blocked/site_trigger/site_area 的统一语义
   return normalizeMeta({
@@ -3429,8 +3429,8 @@ function parseStageM(buffer, name = 'local.m') {
     sidecars: inheritedSidecars,
     siteLinks: inheritedSiteLinks,
     scenarioFiles: inheritedScenarioFiles,
-    scenarioModel: sameStage ? state.meta.scenarioModel : { available: false, reason: '\u4ec5\u52a0\u8f7d .m \u65f6\u4e0d\u4f1a\u91cd\u65b0\u8bfb\u53d6 .stg\u3002', forces: [], sites: [], entities: [] },
-    commonModel: sameStage ? state.meta.commonModel : { available: false, reason: '\u4ec5\u52a0\u8f7d .m \u65f6\u4e0d\u4f1a\u91cd\u65b0\u8bfb\u53d6 stage.ini / heads.dat\u3002', generals: [], skills: [], cities: [], soldiers: [] },
+    scenarioModel: sameStage ? state.meta.scenarioModel : { available: false, reason: '仅加载 .m 时不会重新读取 .stg。', forces: [], sites: [], entities: [] },
+    commonModel: sameStage ? state.meta.commonModel : { available: false, reason: '仅加载 .m 时不会重新读取 stage.ini / heads.dat。', generals: [], skills: [], cities: [], soldiers: [] },
     resources: state.meta.resources,
     records,
     render: { source: 'local-m-file', output_size: [canvasSizeForMeta({ width, height, origin: [64, 64] }).width, canvasSizeForMeta({ width, height, origin: [64, 64] }).height] },
@@ -3467,7 +3467,7 @@ function stgDecodeBig5(bytes, offset, size, charMap) {
     const raw = bytes.slice(offset + index, offset + index + width);
     const char = decoder.decode(raw);
     text += char;
-    if (char && char !== '\ufffd' && !charMap[char]) charMap[char] = [...raw];
+    if (char && char !== '�' && !charMap[char]) charMap[char] = [...raw];
     index += width;
   }
   return text;
@@ -3647,7 +3647,7 @@ function linkLocalStageIniRows() {
 function parseLocalHistoryBytes(rawBytes) {
   const bytes = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes || []);
   const decoder = new TextDecoder('big5');
-  const text = decoder.decode(bytes).replace(/^\ufeff/, '');
+  const text = decoder.decode(bytes).replace(/^﻿/, '');
   const lines = text.split(/\r?\n/);
   if (!lines.length || !lines[0]) throw new Error('本地 History.txt 为空');
   const rawHeaders = lines[0].split('\t');
@@ -3670,7 +3670,7 @@ function parseLocalHistoryBytes(rawBytes) {
     if (index + width > bytes.length) break;
     const raw = bytes.slice(index, index + width);
     const char = decoder.decode(raw);
-    if (char && char !== '\ufffd' && !big5CharMap[char]) big5CharMap[char] = [...raw];
+    if (char && char !== '�' && !big5CharMap[char]) big5CharMap[char] = [...raw];
     index += width;
   }
   return { available: true, source: 'local History.txt', path: 'History.txt', headers, rawHeaders, rows, big5CharMap };
@@ -4078,10 +4078,10 @@ async function loadLocalMFile(file) {
     state.image = null;
     state.minimap = null;
     state.baseImageMode = 'rebuild';
-    state.baseImageNote = meta.scenarioFiles?.stg?.path ? '\u5df2\u52a0\u8f7d\u672c\u5730 .m\uff0c\u5e76\u6cbf\u7528\u540c\u540d .dor/.stg/stage.ini \u5f15\u7528' : '\u5df2\u52a0\u8f7d\u672c\u5730 .m\uff0c\u5f53\u524d\u89c6\u56fe\u6539\u7528\u8d44\u6e90\u91cd\u5efa';
+    state.baseImageNote = meta.scenarioFiles?.stg?.path ? '已加载本地 .m，并沿用同名 .dor/.stg/stage.ini 引用' : '已加载本地 .m，当前视图改用资源重建';
     resetEditState(meta);
     els.stagePicker.value = '';
-    els.status.textContent = meta.scenarioFiles?.stg?.path ? `\u5df2\u52a0\u8f7d ${file.name}\uff0c\u5e76\u4fdd\u7559\u540c\u540d .dor/.stg/stage.ini` : `\u5df2\u52a0\u8f7d ${file.name}`;
+    els.status.textContent = meta.scenarioFiles?.stg?.path ? `已加载 ${file.name}，并保留同名 .dor/.stg/stage.ini` : `已加载 ${file.name}`;
   } catch (err) {
     els.status.textContent = String(err.message || err);
   }
@@ -4193,7 +4193,7 @@ function encodeBig5Text(text) {
     if (char === '\r') { bytes.push(13); continue; }
     if (char === '\t') { bytes.push(9); continue; }
     const encoded = table[char];
-    if (!encoded) throw new Error(`\u7f3a\u5c11 Big5 \u7f16\u7801\u6620\u5c04\uff1a${char}`);
+    if (!encoded) throw new Error(`缺少 Big5 编码映射：${char}`);
     bytes.push(...encoded);
   }
   return new Uint8Array(bytes);
@@ -4736,9 +4736,9 @@ function writeInt32LE(bytes, offset, value) {
 }
 function parseDorBytes(bytes) {
   const magic = new TextDecoder('ascii').decode(bytes.slice(0, 12));
-  if (magic !== 'Door    Data') throw new Error('\u65e0\u6548 .dor \u6587\u4ef6\u5934');
+  if (magic !== 'Door    Data') throw new Error('无效 .dor 文件头');
   const recordSize = readInt32LE(bytes, 12);
-  if (recordSize !== 0x3c) throw new Error(`.dor \u8bb0\u5f55\u957f\u5ea6\u5f02\u5e38: ${recordSize}`);
+  if (recordSize !== 0x3c) throw new Error(`.dor 记录长度异常: ${recordSize}`);
   const groups = [];
   let offset = 16;
   let groupIndex = 0;
