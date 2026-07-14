@@ -38,6 +38,29 @@ class TestEditorRuntimeBehaviors(unittest.TestCase):
             self.skipTest("缺少 node")
         subprocess.run(["node", "-e", body], cwd=ROOT, check=True, capture_output=True, text=True)
 
+    def test_web_title_reads_release_metadata(self) -> None:
+        """验证网页从发布元数据读取标题，缺失时才退回关卡名。"""
+
+        source = script_source()
+        functions = function_range(source, "appTitle", "fieldIndex")
+        harness = """
+const state = { releaseInfo: { app_title: '三国霸业地图编辑器 2.0' }, meta: { stage: 'stage01' } };
+async function fetch(path, options) {
+  if (path !== '../release-info.json' || options.cache !== 'no-store') throw new Error('发布元数据路径错误');
+  return { ok: true, json: async () => ({ app_title: '测试标题' }) };
+}
+"""
+        checks = """
+(async () => {
+  if (appTitle() !== '三国霸业地图编辑器 2.0') throw new Error('未使用发布标题');
+  const info = await loadReleaseInfo();
+  if (info.app_title !== '测试标题') throw new Error('未读取 release-info.json');
+  state.releaseInfo = {};
+  if (appTitle() !== 'stage01') throw new Error('缺少标题时未回退关卡名');
+})().catch(error => { console.error(error); process.exit(1); });
+"""
+        self.run_node(harness + functions + checks)
+
     def test_map_change_can_be_undone_and_redone(self) -> None:
         """验证新修改、撤销、重做形成闭合状态链。"""
 

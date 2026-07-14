@@ -10,6 +10,7 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
+from san_tools.map.editor_desktop_launcher import APP_TITLE
 from san_tools.map.export_editor_bundle import export_editor_bundle
 
 
@@ -68,7 +69,14 @@ def build_release(root: Path, stage: str, work_dir: Path, output_dir: Path) -> d
     build_date = date.today().isoformat()
     build_time = datetime.now().isoformat(sep=" ", timespec="seconds")
     export_result = export_editor_bundle(root, stage, bundle_dir, "stagger", "xyz", "SAN_RGB_PALETTE")
-    release_info = {"creator": RELEASE_CREATOR, "build_date": build_date, "build_time": build_time, "stage": stage}
+    # 标题由桌面启动器定义，发布元数据供启动器和网页使用同一名称。
+    release_info = {
+        "app_title": APP_TITLE,
+        "creator": RELEASE_CREATOR,
+        "build_date": build_date,
+        "build_time": build_time,
+        "stage": stage,
+    }
     (bundle_dir / "release-info.json").write_text(json.dumps(release_info, ensure_ascii=False, indent=2), encoding="utf-8")
     launcher = root / "src" / "san_tools" / "map" / "editor_desktop_launcher.py"
     command = [

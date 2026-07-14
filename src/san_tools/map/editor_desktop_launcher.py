@@ -61,11 +61,12 @@ def load_release_info(data_dir: Path) -> dict[str, str]:
 
     info_path = data_dir / "release-info.json"
     if not info_path.is_file():
-        return {"creator": APP_CREATOR, "build_date": "开发版", "build_time": "开发版"}
+        return {"app_title": APP_TITLE, "creator": APP_CREATOR, "build_date": "开发版", "build_time": "开发版"}
     import json
 
     payload = json.loads(info_path.read_text(encoding="utf-8"))
     return {
+        "app_title": str(payload.get("app_title") or APP_TITLE),
         "creator": str(payload.get("creator") or APP_CREATOR),
         "build_date": str(payload.get("build_date") or "未知"),
         "build_time": str(payload.get("build_time") or "未知"),
@@ -104,9 +105,10 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
     server_thread = threading.Thread(target=server.serve_forever, name="editor-http", daemon=True)
     server_thread.start()
     release_info = load_release_info(data_dir)
+    app_title = release_info["app_title"]
 
     root = tk.Tk()
-    root.title(APP_TITLE)
+    root.title(app_title)
     root.resizable(False, False)
     root.geometry("420x194")
     root.columnconfigure(0, weight=1)
@@ -128,7 +130,7 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
     ttk.Button(controls, text="停止并退出", command=close_launcher).grid(row=0, column=1, padx=6)
     root.protocol("WM_DELETE_WINDOW", close_launcher)
     if open_browser and not webbrowser.open(url):
-        messagebox.showinfo(APP_TITLE, f"请在浏览器中打开：\n{url}")
+        messagebox.showinfo(app_title, f"请在浏览器中打开：\n{url}")
     root.mainloop()
     return 0
 

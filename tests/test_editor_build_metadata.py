@@ -7,6 +7,7 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from san_tools.map.editor_desktop_launcher import APP_TITLE
 from san_tools.map.export_editor_bundle import EDITOR_BUILD_DATE_TOKEN, write_editor_template
 
 
@@ -35,6 +36,17 @@ class TestEditorBuildMetadata(unittest.TestCase):
         rendered = output.read_text(encoding="utf-8")
         self.assertEqual(rendered, "创建者：mzhinf 打包日期：2026-07-13")
         self.assertNotIn(EDITOR_BUILD_DATE_TOKEN, rendered)
+
+    def test_release_title_has_one_source_and_web_template_reads_metadata(self) -> None:
+        """发布元数据、桌面启动器和网页标题必须使用同一个应用名称。"""
+
+        release = (ROOT / "src" / "san_tools" / "map" / "build_editor_release.py").read_text(encoding="utf-8")
+        html = (ROOT / "src" / "san_tools" / "map" / "editor_app.html").read_text(encoding="utf-8")
+        self.assertEqual(APP_TITLE, "三国霸业地图编辑器 2.0")
+        self.assertIn('"app_title": APP_TITLE', release)
+        self.assertIn("fetch('../release-info.json'", html)
+        self.assertIn('els.title.textContent = title;', html)
+        self.assertIn('document.title = title;', html)
 
     def test_pyproject_declares_editor_and_ksy_package_data(self) -> None:
         """正式安装包必须包含编辑器模板和三种格式定义。"""

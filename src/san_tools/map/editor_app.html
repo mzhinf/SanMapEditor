@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>San 地图编辑器</title>
+<title>三国霸业地图编辑器 2.0</title>
 <style>
 :root {
   color-scheme: light;
@@ -153,7 +153,7 @@ canvas { display: block; width: 100%; height: 100%; }
 <div id="app" class="editor-v2">
   <header class="topbar">
     <div class="app-identity">
-      <div class="title" id="stageTitle">地图编辑器 2.0</div>
+      <div class="title" id="stageTitle">三国霸业地图编辑器 2.0</div>
       <div class="build-meta">创建者：mzhinf · 打包日期：__SAN_EDITOR_BUILD_DATE__</div>
     </div>
     <div class="toolbar-group">
@@ -425,6 +425,7 @@ const state = {
   entityListScrollTop: 0,
   sourceTabState: new Map(),
   regionCopyMode: 'full',
+  releaseInfo: {},
   dataOverlayVisible: Object.fromEntries(DATA_OVERLAY_OPTIONS.map(item => [item.key, true])),
 };
 const els = {
@@ -444,6 +445,21 @@ const els = {
   coordX: document.getElementById('coordX'), coordY: document.getElementById('coordY'), findCoord: document.getElementById('findCoord'), resetRecord: document.getElementById('resetRecord'),
 };
 function canonicalFieldName(name) { return LEGACY_FIELD_ALIASES[name] || name; }
+function appTitle() {
+  const title = state.releaseInfo?.app_title;
+  return typeof title === 'string' && title.trim() ? title.trim() : (state.meta?.stage || '地图编辑器 2.0');
+}
+async function loadReleaseInfo() {
+  // 直接打开开发页时没有发布元数据，继续使用关卡名作为可用回退。
+  try {
+    const response = await fetch('../release-info.json', { cache: 'no-store' });
+    if (!response.ok) return {};
+    const payload = await response.json();
+    return payload && typeof payload === 'object' ? payload : {};
+  } catch (_) {
+    return {};
+  }
+}
 function fieldIndex(name) { return state.meta.fields.indexOf(canonicalFieldName(name)); }
 function recordIndex(cell) { return cell.row * state.meta.width + cell.col; }
 function recordAt(cell) { return state.meta.records[recordIndex(cell)]; }
@@ -3345,7 +3361,9 @@ function resetEditState(meta) {
   state.activeCompositeId = null;
   state.compositeObjects = [];
   state.transform = { x: 24, y: 24, scale: 0.8 };
-  els.title.textContent = state.meta.stage;
+  const title = appTitle();
+  els.title.textContent = title;
+  document.title = title;
   for (const layer of PAINT_LAYER_OPTIONS) state.selectedResource[layer] = null;
   for (const layer of state.meta.resourceLayers || state.meta.editableLayers) state.selectedResource[layer] = state.resources.layers[layer]?.entries[0]?.index ?? null;
   for (const layer of state.meta.pointLayers || POINT_LAYER_OPTIONS) state.selectedResource[layer] = 0;
@@ -5046,7 +5064,12 @@ async function loadBaseImage(meta) {
   }
 }
 async function boot() {
-  state.meta = normalizeMeta(await fetch('stage.json').then(resp => resp.json()));
+  const [meta, releaseInfo] = await Promise.all([
+    fetch('stage.json').then(resp => resp.json()),
+    loadReleaseInfo(),
+  ]);
+  state.meta = normalizeMeta(meta);
+  state.releaseInfo = releaseInfo;
   state.originalRecords = state.meta.records.map(record => record.slice());
   const resourcePromise = fetch(state.meta.resources).then(resp => resp.json());
   const imagePromise = loadBaseImage(state.meta);
