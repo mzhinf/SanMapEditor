@@ -942,7 +942,7 @@ function renderActiveSiteEditor(siteView) {
 function refreshSiteInfo() {
   if (!state.siteIndex) {
     setPairs(els.siteInfo, [['据点模型', '未加载']]);
-    els.siteNote.textContent = state.scenario?.reason || state.meta?.siteLinks?.reason || '当前 bundle 未携带 .stg 据点模型。';
+    els.siteNote.textContent = state.scenario?.reason || state.meta?.siteLinks?.reason || '当前会话尚未加载 .stg 据点模型。';
     return;
   }
   const site = activeSite();
@@ -2450,8 +2450,8 @@ function buildScenarioListRow(labelText, active, onPick, actionText = '选择') 
 function renderDomainManagers() {
   const scenario = state.scenario;
   if (!scenario?.available) {
-    renderManagerList(els.forceList, [], scenario?.reason || '当前 bundle 未携带可编辑 .stg 场景模型。');
-    renderManagerList(els.entityList, [], '当前 bundle 未携带可编辑 .stg Entity 模型。');
+    renderManagerList(els.forceList, [], scenario?.reason || '当前会话尚未加载可编辑 .stg 场景模型。');
+    renderManagerList(els.entityList, [], '当前会话尚未加载可编辑 .stg Entity 模型。');
     return;
   }
   refreshScenarioRelations();
@@ -2667,15 +2667,15 @@ function validationIssues() {
   const issues = [];
   if (!state.meta) return issues;
   if (state.meta.records.length !== state.meta.width * state.meta.height) issues.push({ level: 'error', text: `.m cell 数不一致：${state.meta.records.length} / ${state.meta.width * state.meta.height}` });
-  if (!state.meta.sidecars?.available) issues.push({ level: 'warn', text: state.meta.sidecars?.reason || '缺少 .s/.x 参考尾区，导出时将使用 0 填充尾区。' });
+  if (!state.meta.sidecars?.available) issues.push({ level: 'error', text: state.meta.sidecars?.reason || '当前会话缺少有效 .s/.x 尾区，无法执行完整导出。' });
   if (!state.meta.siteLinks?.available) issues.push({ level: 'warn', text: state.meta.siteLinks?.reason || '未加载 .dor/.stg 关联信息，据点和城门只能按 .m 数据层编辑。' });
-  if (!state.meta.scenarioFiles?.dor?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .dor 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
-  if (!state.meta.scenarioFiles?.stg?.path) issues.push({ level: 'warn', text: 'bundle 未携带 .stg 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
-  if (!state.meta.scenarioFiles?.stageIni?.path) issues.push({ level: 'warn', text: 'bundle 未携带 stage.ini，城池与武将全局母表只能导出 patch。' });
-  if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: 'bundle 未携带 stage_ini.xlsx，保存时不会生成工作簿。' });
+  if (!state.meta.scenarioFiles?.dor?.path) issues.push({ level: 'warn', text: '当前会话缺少 .dor 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
+  if (!state.meta.scenarioFiles?.stg?.path) issues.push({ level: 'warn', text: '当前会话缺少 .stg 参考文件，浏览器导出时只能生成 .m/.s/.x。' });
+  if (!state.meta.scenarioFiles?.stageIni?.path) issues.push({ level: 'warn', text: '当前会话缺少 stage.ini，城池与武将全局母表只能导出 Patch。' });
+  if (!canBuildStageIniWorkbook() && !state.meta.scenarioFiles?.stageIniWorkbook?.path) issues.push({ level: 'warn', text: '当前会话缺少 stage_ini.xlsx，保存时不会生成工作簿。' });
   const stageIniModel = stageIniPatchModel();
   const hasNewMasterRows = scenarioRows('site').some(site => site.isNew && siteHouseAttrValue(site) === 0) || state.newStageIniGenerals.length > 0;
-  if (hasNewMasterRows && stageIniModel?.appendLayout?.format !== 'stage-ini-block-stream-v1') issues.push({ level: 'error', text: '当前 bundle 缺少 stage.ini 块流新增布局，请重新生成 stage01 bundle。' });
+  if (hasNewMasterRows && stageIniModel?.appendLayout?.format !== 'stage-ini-block-stream-v1') issues.push({ level: 'error', text: '当前会话缺少 stage.ini 块流新增布局，请重新导入完整资源项目。' });
   const unsupportedScenario = unsupportedScenarioChanges();
   if (unsupportedScenario.length) issues.push({ level: 'warn', text: '.stg 对象新增、删除或归属移动暂未写回二进制：' + unsupportedScenario.length + ' 项会保留在 patch。' });
   for (const patch of state.patches.values()) {
@@ -2845,7 +2845,7 @@ function renderRecordEditor() {
   }
 }
 function refreshSide() {
-  const sidecarText = state.meta.sidecars.available ? '保留原始尾区' : '尾区改为 0 填充';
+  const sidecarText = state.meta.sidecars.available ? '保留用户原始尾区' : '缺少合法尾区，导出已禁用';
   const sidecarReason = state.meta.sidecars.available ? `${state.meta.sidecars.gridSize}x${state.meta.sidecars.gridSize}` : (state.meta.sidecars.reason || '缺少参考 sidecar');
   setPairs(els.stageInfo, [
     ['关卡', state.meta.stage],
@@ -3442,7 +3442,7 @@ function parseStageM(buffer, name = 'local.m') {
     ? state.meta.siteLinks
     : { available: false, cities: [], gates: [], reason: '仅加载单个 .m 文件时，浏览器无法直接读取同目录 .dor / .stg；请优先使用已导出的关卡页面。' };
   const inheritedScenarioFiles = sameStage ? state.meta.scenarioFiles : {};
-  // 仅加载 .m 时没有 bundle 图片 / 资源统计，按 ksy 字段名保留 terrain_tag/blocked/site_trigger/site_area 的统一语义
+  // 仅加载 .m 时没有当前会话图片或资源统计，按 KSY 字段名保留各地图字段的统一语义。
   return normalizeMeta({
     format: 'san-editor-stage-v1', stage: stageName, width, height, layout: 'stagger', origin: [64, 64],
     tile: { width: 40, height: 20, row_step: 10, odd_row_x: 20 },
@@ -3610,9 +3610,9 @@ function parseLocalStgBytes(rawBytes) {
     big5CharMap, stgLayout: { prefixSpan: [0, forcesStart], tailSpan: [offset, bytes.length], forceCountOffset, root2ForceCountOffset: root2.payload + 0x14 }, forces, sites, entities,
   };
 }
-// 本地母表沿用 bundle 的字段表头，但块计数、行偏移和追加边界全部取自导入字节。
+// 本地母表沿用当前会话内置字段表头，但块计数、行偏移和追加边界全部取自导入字节。
 function parseLocalStageIniBytes(rawBytes, baseModel) {
-  if (!baseModel?.available) throw new Error('当前 bundle 缺少 stage.ini 字段表头，无法解析本地母表');
+  if (!baseModel?.available) throw new Error('当前会话缺少 stage.ini 内置字段定义，无法解析本地母表');
   const bytes = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes || []);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const sheets = (baseModel.workbookSheets || []).map(sheet => ({ name: sheet.name, headers: [...sheet.headers], rows: [] }));
@@ -3663,7 +3663,7 @@ function parseLocalStageIniBytes(rawBytes, baseModel) {
     general: { ...generalLayout, countOffset: 0, count: mainCount, insertOffset: mainBlocksEnd },
     castle: { ...castleLayout, countOffset: cityCountOffset, count: cityCount, insertOffset: offset },
   };
-  return { ...baseModel, available: true, source: 'local stage.ini + bundle headers', fileSize: bytes.length, fieldLocations, appendLayout, workbookSheets: sheets, big5CharMap };
+  return { ...baseModel, available: true, source: '本地 stage.ini + 当前会话内置字段', fileSize: bytes.length, fieldLocations, appendLayout, workbookSheets: sheets, big5CharMap };
 }
 function linkLocalStageIniRows() {
   const byCityIndex = new Map(stageIniSiteRows().map(row => [Number(row.city_index || 0), row]));
@@ -4022,6 +4022,10 @@ async function loadLocalProjectFiles(fileList) {
   const patchFiles = files.filter(file => /\.json$/i.test(file.name));
   if (!mapFile && !patchFiles.length) throw new Error('请选择 stageXX.m 或 Patch JSON 文件。');
   if (mapFile) {
+    const replacementPrompt = '导入新的 .m 项目将替换当前浏览器会话中的地图与管理数据。\n确认继续吗？';
+    if (state.meta && !window.confirm(replacementPrompt)) {
+      throw new Error('已取消替换当前项目。');
+    }
     const stageName = mapFile.name.replace(/\.m$/i, '');
     state.localScenarioFiles.clear();
     for (const file of files) {
@@ -4609,7 +4613,7 @@ function buildEditedStageIniBytes(originalBytes) {
   const newGenerals = entities.filter(row => !model.fieldLocations?.general?.[String(row.stageIniRowKey)]);
   const newCities = sites.filter(row => !model.fieldLocations?.castle?.[String(row.stageIniRowKey)]);
   if (!newGenerals.length && !newCities.length) return patched;
-  if (append?.format !== 'stage-ini-block-stream-v1') throw new Error('当前 bundle 缺少 stage.ini 块流新增布局');
+  if (append?.format !== 'stage-ini-block-stream-v1') throw new Error('当前会话缺少 stage.ini 块流新增布局');
 
   let rebuilt = patched;
   const generalRows = newGenerals.map(row => stageIniLogicalRowBytes(row, 'entity'));
@@ -4845,11 +4849,13 @@ function buildSidecarBytes(suffix) {
   const activeBytes = buildActiveSidecarBytes();
   const tailLength = gridSize * Math.max(0, gridSize - activeRows);
   const tailEntry = state.meta.sidecars.tails?.[suffix];
-  const tailBytes = tailEntry?.tailBase64 ? base64ToBytes(tailEntry.tailBase64) : new Uint8Array(tailLength);
+  if (!tailEntry?.tailBase64) throw new Error('当前会话缺少 .' + suffix + ' 用户原始尾区，已阻止导出');
+  const tailBytes = base64ToBytes(tailEntry.tailBase64);
+  if (tailBytes.length !== tailLength) throw new Error('.' + suffix + ' 尾区长度无效：' + tailBytes.length + ' / ' + tailLength);
   const merged = new Uint8Array(activeBytes.length + tailBytes.length);
   merged.set(activeBytes);
   merged.set(tailBytes, activeBytes.length);
-  return { bytes: merged, usedFallbackTail: !tailEntry?.tailBase64 };
+  return merged;
 }
 async function readScenarioReference(key, suffix) {
   const local = state.localScenarioFiles.get(key);
@@ -4885,11 +4891,9 @@ async function buildExportArtifacts() {
   if (blocking.length) throw new Error('导出已阻止：' + blocking.map(issue => issue.text).join('；'));
   const stageName = state.meta.stage;
   const files = [{ name: `${stageName}.m`, bytes: buildStageBytes() }];
-  const sidecarFlags = [];
   for (const suffix of ['s', 'x']) {
     const built = buildSidecarBytes(suffix);
-    files.push({ name: `${stageName}.${suffix}`, bytes: built.bytes });
-    sidecarFlags.push(built.usedFallbackTail);
+    files.push({ name: `${stageName}.${suffix}`, bytes: built });
   }
   const dorFile = await readScenarioReference('dor', 'dor');
   if (dorFile) files.push({ ...dorFile, bytes: buildEditedDorBytes(dorFile.bytes) });
@@ -4909,7 +4913,7 @@ async function buildExportArtifacts() {
   if (dorPatch) files.push(dorPatch);
   const historyPatch = buildHistoryPatchArtifact();
   if (historyPatch) files.push(historyPatch);
-  return { files, usedFallbackTail: sidecarFlags.some(Boolean) };
+  return { files };
 }
 function triggerDownload(name, bytes, type = 'application/octet-stream') {
   const blob = new Blob([bytes], { type });
@@ -4924,9 +4928,7 @@ async function exportEditedArtifacts() {
     const artifacts = await buildExportArtifacts();
     const archive = zipStore(artifacts.files.map(file => ({ name: file.name, data: file.bytes })));
     triggerDownload(state.meta.stage + '-export.zip', archive, 'application/zip');
-    els.status.textContent = artifacts.usedFallbackTail
-      ? '已导出 ZIP；缺失 sidecar 尾区时已用 0 填充。'
-      : '已导出 ZIP：' + state.meta.stage + '-export.zip';
+    els.status.textContent = '已导出 ZIP：' + state.meta.stage + '-export.zip';
   } catch (err) {
     els.status.textContent = String(err.message || err);
   }

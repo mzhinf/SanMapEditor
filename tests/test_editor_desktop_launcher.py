@@ -3,11 +3,27 @@
 from __future__ import annotations
 
 import shutil
+import threading
 import unittest
+import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from san_tools.map.build_editor_release import ensure_safe_work_dir, write_release_guides
-from san_tools.map.editor_desktop_launcher import APP_TITLE, check_editor_data, create_editor_server, editor_entry_path, find_editor_data_dir, load_release_info
+from san_tools.map.editor_desktop_launcher import (
+    APP_TITLE,
+    LAUNCHER_FAILED,
+    LAUNCHER_LOADED,
+    LauncherRuntimeController,
+    ReplaceCurrentSessionError,
+    check_editor_data,
+    create_editor_server,
+    editor_entry_path,
+    find_editor_data_dir,
+    load_release_info,
+)
+from san_tools.map.editor_runtime_session import RuntimeInputError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,6 +104,72 @@ class TestEditorDesktopLauncher(unittest.TestCase):
         with self.assertRaises(ValueError):
             ensure_safe_work_dir(root, root.parent / "outside")
 
+
+    def test_server_switches_runtime_content_on_same_loopback_port(self) -> None:
+        """会话成功后应在同一端口把后续请求切换到临时目录。"""
+
+        first = TEST_TMP / "switch-first"
+        second = TEST_TMP / "switch-second"
+        first.mkdir()
+        second.mkdir()
+        (first / "index.html").write_text("空项目", encoding="utf-8")
+        (second / "index.html").write_text("已加载", encoding="utf-8")
+        server = create_editor_server(first)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        url = f"http://127.0.0.1:{server.server_address[1]}/index.html"
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                self.assertEqual(response.read().decode("utf-8"), "空项目")
+            server.switch_data_dir(second)
+            with urllib.request.urlopen(url, timeout=2) as response:
+                self.assertEqual(response.read().decode("utf-8"), "已加载")
+            self.assertEqual(server.current_data_dir(), second.resolve())
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_runtime_controller_tracks_success_confirmation_and_failed_reimport(self) -> None:
+        """控制器必须覆盖空项目、成功、替换确认和失败保留旧会话。"""
+
+        manager = Mock()
+        manager.current = None
+        manager.cleanup_stale.return_value = []
+        report = SimpleNamespace(files=[object()] * 9, warnings=["可选文件未提供"])
+        session = SimpleNamespace(
+            stage="stage01",
+            report=report,
+            data_dir=TEST_TMP / "runtime-data",
+            entry_path="/stage01/editor.html",
+        )
+
+        def create_session(*_args, **_kwargs):
+            manager.current = session
+            return session
+
+        manager.create_from_stage.side_effect = create_session
+        controller = LauncherRuntimeController(
+            {"app_title": "测试编辑器"},
+            manager=manager,
+        )
+        self.assertEqual(controller.cleanup_stale(), [])
+        loaded = controller.import_stage(TEST_TMP / "stage01.m")
+        self.assertIs(loaded, session)
+        self.assertEqual(controller.state, LAUNCHER_LOADED)
+        self.assertIn("9 个输入文件", controller.message)
+
+        with self.assertRaises(ReplaceCurrentSessionError):
+            controller.import_stage(TEST_TMP / "stage02.m")
+        self.assertEqual(manager.create_from_stage.call_count, 1)
+
+        manager.create_from_stage.side_effect = RuntimeInputError("缺少文件：stage02.x")
+        with self.assertRaisesRegex(RuntimeInputError, "stage02.x"):
+            controller.import_stage(TEST_TMP / "stage02.m", replace_confirmed=True)
+        self.assertEqual(controller.state, LAUNCHER_FAILED)
+        self.assertIs(controller.current, session)
+        controller.close()
+        manager.close.assert_called_once_with()
 
 if __name__ == "__main__":
     unittest.main()
