@@ -40,47 +40,52 @@ python -m pip install -e ".[dev]"
 python -m san_tools list
 ```
 
-## 准备数据
+## 准备运行时数据
 
-游戏素材不进入 Git。请从合法游戏副本中把所需文件放入以下目录：
+正式发布 ZIP 不包含任何游戏地图、头像、文本、调色板文件或派生图片。最终用户应从自己合法取得的游戏副本中选择资源，不需要把文件复制到仓库目录。
 
-```text
-data/
-├── game/    # stage.ini、stageXX.*、heads.dat、kingdom.cel/.atr、原始文本
-└── text/    # 转换为 UTF-8 的 castle/general/History/soldier 等文本表
-```
+单个关卡的完整导入清单如下；除 `kingdom.atr` 外均为必需文件，且应位于同一目录：
 
-`stage01` 的最小清单和路径覆盖方法见 [本地数据说明](data/README.zh.md)。也可以设置：
+| 文件 | 用途 |
+| --- | --- |
+| `stageXX.m` | 地图尺寸与 Cell 数据；可直接在启动器中选择。 |
+| `stageXX.dor`、`stageXX.stg` | 城门、势力、据点、武将和士兵。 |
+| `stageXX.s`、`stageXX.x` | 小地图有效区与必须保留的用户原始尾区。 |
+| `stage.ini`、`History.txt` | 城池、武将母表和历史记录。 |
+| `kingdom.cel`、`heads.dat` | 地图资源和头像；图集只在系统临时会话中生成。 |
+| `kingdom.atr` | 可选的资源属性研究数据。 |
 
-```powershell
-$env:SAN_GAME_DATA_DIR = "D:\Games\SGBY"
-$env:SAN_GAME_TEXT_DIR = "D:\Games\SGBY\utf8-text"
-```
+`stageXX` 必须使用相同场景编号。目录中有多个 `.m` 时应直接选择目标 `.m`，启动器不会静默选取。
 
-把原始文本转换到标准目录：
-
-```powershell
-python -m san_tools run convert-game-texts -- --out data/text
-```
+源码开发和格式研究仍可使用忽略目录 `data/game`、`data/text` 或 `SAN_GAME_DATA_DIR`、`SAN_GAME_TEXT_DIR`；这些开发路径不是正式发布程序的运行时回退。
 
 ## 启动编辑器
 
-先导出 `stage01` 编辑器资源：
+使用正式发布包：
+
+1. 完整解压 ZIP，保持 `SanMapEditor.exe` 与 `editor-data` 同级。
+2. 双击 EXE。浏览器先显示“尚未导入地图项目”，桌面启动器显示资源选择按钮。
+3. 选择 `stageXX.m`，或选择只含一个 `stageXX.m` 的完整资源目录。
+4. 启动器校验全部同组文件，在 `%TEMP%/SanMapEditor` 生成当前会话并打开编辑页。
+5. 重新选择资源会要求确认；新导入失败时旧会话保持可用。
+6. 关闭启动器会停止本机 HTTP 服务并删除当前临时会话。编辑结果必须先导出。
+
+发布程序只监听 `127.0.0.1` 的随机端口，不会把编辑器暴露到局域网。
+
+源码开发时仍可显式生成样本 Bundle：
 
 ```powershell
 python -m san_tools run export-editor-bundle . --stage stage01 --out derived/editor
 ```
 
-随后打开 `derived/editor/index.html`。该目录是生成物，不提交到 Git。
-
-构建 Windows 发布包：
+构建无资源 Windows 发布包：
 
 ```powershell
 python -m pip install -e ".[release]"
-python -m san_tools run build-editor-release . --stage stage01
+python -m san_tools run build-editor-release .
 ```
 
-输出位于 `dist/`。发布包可能含游戏素材，目前仅供本机使用，不应直接上传 GitHub Release。
+构建不读取 `data/game` 或 `data/text`。`dist/` 中生成 ZIP、外部 SHA-256 清单和构建结果 JSON；ZIP 只允许 EXE、空入口、发布元数据、短说明和完整使用指南五个文件。公开发布前仍需完成资源审计、合法游戏副本人工兼容性验证，并对源码内 `SAN_RGB_PALETTE` 的发布边界作法律确认。
 
 ## 命令入口
 

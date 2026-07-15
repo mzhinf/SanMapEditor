@@ -120,7 +120,7 @@ def write_release_guides(root: Path, package_dir: Path, build_time: str) -> None
         "1. 请先把整个 ZIP 完整解压。\n"
         "2. 保持 SanMapEditor.exe 与 editor-data 文件夹在同一目录。\n"
         "3. 双击 SanMapEditor.exe，并保持启动器窗口运行。\n"
-        "4. 在启动器中选择 stageXX.m 或包含完整文件的游戏目录。\n"
+        "4. 在启动器中选择 stageXX.m，或选择只含一个目标地图的完整资源目录。\n"
         "5. 资源校验完成后再打开编辑器；运行时数据只写入系统临时目录。\n"
         "6. 浏览器未自动打开时点击“打开编辑器”，详细操作请阅读《编辑器使用指南.md》。\n"
         "7. 请仅使用您有权使用的本机游戏文件，发布包本身不包含游戏素材。\n",
@@ -196,7 +196,7 @@ def build_release(root: Path, work_dir: Path, output_dir: Path) -> dict[str, obj
         "build_time": build_time,
         "resource_policy": "user-import-only",
         "runtime_session": "system-temp",
-        "palette_policy": "SAN_RGB_PALETTE pending copyright confirmation",
+        "palette_policy": "保留 SAN_RGB_PALETTE，公开发布前确认权利边界",
     }
     file_manifest = prepare_release_package(
         root,

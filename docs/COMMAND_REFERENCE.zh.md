@@ -64,7 +64,7 @@ san-tools run render-map . --stage stage01
 | `extract-kingdom` | `python -m san_tools run extract-kingdom .` | `--palette`、`--sheet-limit`；输出到 `derived/kingdom` | 只读导出 |
 | `stitch-kingdom` | `python -m san_tools run stitch-kingdom .` | `--acwz-align center|bottom|top`；输出到 `derived/kingdom` | 只读导出 |
 | `export-m-layers` | `python -m san_tools run export-m-layers .` | `--palette`；输出到 `derived/m_layers` | 只读导出 |
-| `build-editor-release` | `python -m san_tools run build-editor-release . --stage stage01` | 工作目录 `derived/editor-release`，发布目录 `dist` | 发布构建 |
+| `build-editor-release` | `python -m san_tools run build-editor-release .` | 无资源五文件发布；`--work-dir`、`--output-dir`，默认输出 `dist` | 发布构建 |
 | `launch-editor` | `python -m san_tools run launch-editor --data-dir derived/editor --stage stage01` | `--no-browser` 禁止自动打开浏览器，`--check` 只检查数据 | 本地启动 |
 
 ### Patch 写回建议
@@ -91,10 +91,12 @@ python -m san_tools run apply-editor-patch path/to/stage01_patch.json . `
 
 ```powershell
 python -m pip install -e ".[release]"
-python -m san_tools run build-editor-release . --stage stage01
+python -m san_tools run build-editor-release .
 ```
 
-构建命令会重建指定工作目录，因此 `--work-dir` 必须位于项目目录内；发布目录默认是 `dist/`。
+构建命令会重建指定工作目录，因此 `--work-dir` 必须位于项目目录内；发布目录默认是 `dist/`。`--output-dir` 可修改归档目录，命令不接受 `--stage`。
+
+正式构建不读取 `data/game` 或 `data/text`，ZIP 只含 EXE、空 `editor-data`、短说明和完整指南，并额外生成路径、大小与 SHA-256 Manifest。发布维护流程见 [Windows 无资源打包链路](EDITOR_PACKAGING_CHAIN.zh.md)。
 
 ## 4. 格式与关联分析命令
 
