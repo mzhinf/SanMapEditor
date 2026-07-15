@@ -8,6 +8,7 @@ import struct
 import uuid
 from collections import Counter
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -363,6 +364,36 @@ def build_big5_char_map(strings: list[str]) -> dict[str, list[int]]:
     return char_map
 
 
+@lru_cache(maxsize=1)
+def _cp950_char_pairs() -> tuple[tuple[str, tuple[int, ...]], ...]:
+    """枚举 Python CP950 编解码器支持的全部可打印单字符映射。"""
+
+    mappings: dict[str, tuple[int, ...]] = {
+        chr(value): (value,) for value in range(0x20, 0x7F)
+    }
+    candidates = [bytes((value,)) for value in range(0x80, 0x100)]
+    candidates.extend(
+        bytes((lead, trail))
+        for lead in range(0x81, 0xFF)
+        for trail in (*range(0x40, 0x7F), *range(0xA1, 0xFF))
+    )
+    for raw in candidates:
+        try:
+            char = raw.decode("cp950")
+            canonical = char.encode("cp950")
+        except UnicodeError:
+            continue
+        if len(char) == 1 and char.isprintable():
+            mappings[char] = tuple(canonical)
+    return tuple(sorted(mappings.items(), key=lambda item: ord(item[0])))
+
+
+def build_cp950_char_map() -> dict[str, list[int]]:
+    """返回完整 CP950 字符映射的可序列化副本。"""
+
+    return {char: list(raw) for char, raw in _cp950_char_pairs()}
+
+
 def build_editor_scenario_model(game_dir: Path, stage_name: str) -> dict[str, object]:
     """从 .stg 对象流导出势力、据点和武将的嵌套归属模型。"""
 
@@ -558,11 +589,16 @@ def build_history_table_model(game_dir: Path) -> dict[str, object]:
     }
 
 
-def build_editor_common_model(root: Path) -> dict[str, object]:
+def build_editor_common_model(root: Path, *, explicit_game_dir: Path | None = None) -> dict[str, object]:
     """导出 stage.ini 中可作为全局武将、技能、城池和兵种索引的轻量母表。"""
 
     try:
-        payload = stage_ini_codec.build_payload(find_game_dir(root))
+        resolved_root = root.resolve()
+        game_dir = (
+            explicit_game_dir.resolve() if explicit_game_dir is not None
+            else resolved_root if (resolved_root / "stage.ini").is_file() else find_game_dir(root)
+        )
+        payload = stage_ini_codec.build_payload(game_dir)
     except (FileNotFoundError, ValueError) as exc:
         return {"available": False, "source": "stage.ini", "reason": str(exc), "generals": [], "skills": [], "cities": [], "soldiers": []}
 
@@ -573,7 +609,6 @@ def build_editor_common_model(root: Path) -> dict[str, object]:
         row for row in tail_records
         if row.get("name") and (150 <= int(row.get("record_index", -1)) <= 173 or "技" in str(row.get("name")) or row.get("name") in skill_names)
     ]
-    game_dir = find_game_dir(root)
     general_master = tables.get("general_master", [])
     history_generals = build_history_general_rows(game_dir, general_master)
     history_table = build_history_table_model(game_dir)
@@ -707,6 +742,77 @@ STAGE_INI_FIELD_MAP = {
 }
 
 
+STAGE_INI_GENERAL_HEADERS = (
+    "人物編號",
+    "頭像編號",
+    "所屬君主",
+    "所在地",
+    "統御力",
+    "兵種號",
+    "等級",
+    "帶兵數",
+    "武力",
+    "智力",
+    "忠誠值",
+    "經驗值",
+    "火花技1",
+    "火炎技2",
+    "火龍技3",
+    "落石技1",
+    "崩石技2",
+    "隕石技3",
+    "落雷技1",
+    "狂雷技2",
+    "爆雷技3",
+    "一氣斬1",
+    "月氣斬2",
+    "爆發斬3",
+    "槍1",
+    "槍2",
+    "槍3",
+    "穿心箭技1",
+    "亂矢箭2",
+    "萬箭技3",
+    "說服技",
+    "鼓舞技",
+    "大喝技",
+    "迷惑技",
+    "必殺技",
+    "行動狀態",
+    "被關=1",
+    "讀取=1",
+    "屬性",
+    "參照自己",
+    "武將警戒",
+    "武將追捕",
+    "武將撤退",
+    "行動方針",
+    "伏兵 =?",
+    "叛變國id",
+    "最大帶兵數",
+    "最大武力",
+    "最大智力",
+)
+STAGE_INI_CASTLE_HEADERS = (
+    "都市索引",
+    "房子屬性",
+    "城規模",
+    "人口",
+    "金",
+    "糧",
+    "待命士兵",
+    "開發值",
+    "商業值",
+    "治安值",
+    "開發上限",
+    "商業上限",
+    "治安上限",
+    "座標X",
+    "座標Y",
+    "太守",
+    "武將",
+)
+
 def _stage_ini_title_suffix(title_slot: bytes, title: str) -> list[int]:
     """提取标题后的类型标记；零填充按新标题长度重新生成。"""
 
@@ -720,6 +826,149 @@ def _stage_ini_title_suffix(title_slot: bytes, title: str) -> list[int]:
     suffix_end = min(len(tail), nonzero[-1] + 2)
     return list(tail[:suffix_end])
 
+
+def _decode_stage_ini_title(title_slot: bytes) -> str:
+    """读取标题槽第一个 NUL 前的 CP950 名称。"""
+
+    raw = title_slot.split(b"\x00", 1)[0]
+    if not raw:
+        raise ValueError("stage.ini 标题槽为空")
+    return raw.decode("cp950")
+
+
+def _read_stage_ini_values(
+    blob: bytes,
+    offset: int,
+    headers: tuple[str, ...],
+) -> tuple[list[int], dict[str, dict[str, int]]]:
+    """读取连续 DWORD 字段，并同时生成浏览器回写位置。"""
+
+    values: list[int] = []
+    locations: dict[str, dict[str, int]] = {}
+    for index, header in enumerate(headers):
+        byte_offset = offset + index * 4
+        if byte_offset + 4 > len(blob):
+            raise ValueError(f"stage.ini 字段越界：{header} @ {byte_offset}")
+        values.append(int.from_bytes(blob[byte_offset:byte_offset + 4], "little"))
+        locations[header] = {"byteOffset": byte_offset, "size": 4}
+    return values, locations
+
+
+def build_runtime_stage_ini_patch_model(game_dir: Path) -> dict[str, object]:
+    """仅依据用户 stage.ini 与内置格式定义生成完整浏览器回写模型。"""
+
+    game_dir = game_dir.expanduser().resolve()
+    stage_ini = game_dir / "stage.ini"
+    if not stage_ini.is_file():
+        return {"available": False, "source": "user stage.ini", "reason": f"缺少 {stage_ini}"}
+    payload = stage_ini_codec.build_payload(game_dir)
+    layout = payload["block_layout"]
+    blob = stage_ini.read_bytes()
+    main_blocks = list(layout["main_blocks"])
+    city_records = list(layout["city_records"])
+    if not main_blocks or not city_records:
+        return {"available": False, "source": "user stage.ini", "reason": "stage.ini 缺少主块或城池块"}
+
+    general_rows: list[list[object]] = []
+    castle_rows: list[list[object]] = []
+    field_locations: dict[str, dict[str, dict[str, dict[str, int]]]] = {
+        "general": {},
+        "castle": {},
+    }
+    for index, block in enumerate(main_blocks):
+        if int(block["size"]) != 224:
+            raise ValueError(f"stage.ini 主块 {index + 1} 长度不是 224")
+        title_offset = int(block["payload_offset"])
+        title_slot = blob[title_offset:title_offset + 20]
+        title = _decode_stage_ini_title(title_slot)
+        values, locations = _read_stage_ini_values(
+            blob,
+            title_offset + 20,
+            STAGE_INI_GENERAL_HEADERS,
+        )
+        row_id = index + 1
+        general_rows.append([row_id, title, *values])
+        field_locations["general"][str(row_id)] = locations
+
+    for index, record in enumerate(city_records):
+        primary = record["primary"]
+        secondary = record["secondary"]
+        if int(primary["size"]) != 92 or int(secondary["size"]) != 0:
+            raise ValueError(f"stage.ini 城池块 {index + 1} 不是 92+0 布局")
+        title_offset = int(primary["payload_offset"]) + 4
+        title_slot = blob[title_offset:title_offset + 20]
+        title = _decode_stage_ini_title(title_slot)
+        values, locations = _read_stage_ini_values(
+            blob,
+            title_offset + 20,
+            STAGE_INI_CASTLE_HEADERS,
+        )
+        row_id = index + 1
+        castle_rows.append([row_id, title, *values])
+        field_locations["castle"][str(row_id)] = locations
+
+    first_main = main_blocks[0]
+    first_general_title_offset = int(first_main["payload_offset"])
+    first_general_slot = blob[first_general_title_offset:first_general_title_offset + 20]
+    first_city = city_records[0]["primary"]
+    first_city_leading_offset = int(first_city["payload_offset"])
+    first_city_title_offset = first_city_leading_offset + 4
+    first_city_slot = blob[first_city_title_offset:first_city_title_offset + 20]
+    general_append = {
+        "sheet": "general",
+        "section": "main",
+        "countOffset": int(layout["main_count_offset"]),
+        "count": int(layout["main_count"]),
+        "insertOffset": int(layout["main_blocks_end"]),
+        "rowBytes": 4 + 20 + len(STAGE_INI_GENERAL_HEADERS) * 4 + 2 * 4,
+        "recordPrefixValues": [224],
+        "titleBytes": 20,
+        "titleSuffix": _stage_ini_title_suffix(
+            first_general_slot,
+            _decode_stage_ini_title(first_general_slot),
+        ),
+        "numericCount": len(STAGE_INI_GENERAL_HEADERS),
+        "numericHeaders": list(STAGE_INI_GENERAL_HEADERS),
+        "recordSuffixHeaders": list(STAGE_INI_GENERAL_HEADERS[-2:]),
+        "recordSuffixValues": [],
+    }
+    castle_append = {
+        "sheet": "castle",
+        "section": "city",
+        "countOffset": int(layout["city_count_offset"]),
+        "count": int(layout["city_count"]),
+        "insertOffset": int(layout["city_records_end"]),
+        "rowBytes": 8 + 20 + len(STAGE_INI_CASTLE_HEADERS) * 4 + 4,
+        "recordPrefixValues": [
+            92,
+            int.from_bytes(blob[first_city_leading_offset:first_city_title_offset], "little"),
+        ],
+        "titleBytes": 20,
+        "titleSuffix": _stage_ini_title_suffix(
+            first_city_slot,
+            _decode_stage_ini_title(first_city_slot),
+        ),
+        "numericCount": len(STAGE_INI_CASTLE_HEADERS),
+        "numericHeaders": list(STAGE_INI_CASTLE_HEADERS),
+        "recordSuffixHeaders": [],
+        "recordSuffixValues": [0],
+    }
+    return {
+        "available": True,
+        "source": "user stage.ini + built-in format definitions",
+        "fileSize": len(blob),
+        "fieldMap": STAGE_INI_FIELD_MAP,
+        "fieldLocations": field_locations,
+        "appendLayout": {
+            "format": "stage-ini-block-stream-v1",
+            "general": general_append,
+            "castle": castle_append,
+        },
+        "workbookSheets": [
+            {"name": "general", "headers": ["row_id", "title", *STAGE_INI_GENERAL_HEADERS], "rows": general_rows},
+            {"name": "castle", "headers": ["row_id", "title", *STAGE_INI_CASTLE_HEADERS], "rows": castle_rows},
+        ],
+    }
 
 def _stage_ini_append_layout(
     bundle: dict[str, object],
@@ -989,10 +1238,21 @@ def resolve_editor_template(root: Path) -> Path:
 
 
 
-def build_dor_stg_site_links(root: Path, stage: str, reason: str = "") -> dict[str, object]:
+def build_dor_stg_site_links(
+    root: Path,
+    stage: str,
+    reason: str = "",
+    *,
+    explicit_game_dir: Path | None = None,
+) -> dict[str, object]:
     """在辅助文本缺失时，仅依据 .dor 城门和 .stg 据点坐标建立归属。"""
 
-    game_dir = find_game_dir(root)
+    resolved_root = root.resolve()
+    direct_inputs = (resolved_root / f"{stage}.dor", resolved_root / f"{stage}.stg")
+    game_dir = (
+        explicit_game_dir.resolve() if explicit_game_dir is not None
+        else resolved_root if all(path.is_file() for path in direct_inputs) else find_game_dir(root)
+    )
     dor_path = game_dir / f"{stage}.dor"
     stg_path = game_dir / f"{stage}.stg"
     if not dor_path.exists() or not stg_path.exists():
@@ -1139,14 +1399,11 @@ def export_editor_bundle_from_game_dir(
     )
     scenario_files = copy_scenario_reference_files(game_dir, stage_dir, stage)
     scenario_model = build_editor_scenario_model(game_dir, stage)
-    common_model = build_editor_common_model(game_dir)
+    common_model = build_editor_common_model(game_dir, explicit_game_dir=game_dir)
     common_model["heads"] = export_heads_atlas(game_dir, stage_dir, SAN_RGB_PALETTE)
     if runtime:
-        common_model["stageIniPatchModel"] = {
-            "available": False,
-            "source": "user stage.ini",
-            "reason": "运行时会话不读取仓库 data/text；无文本母表模型将在后续独立解析阶段生成。",
-        }
+        common_model["big5CharMap"] = build_cp950_char_map()
+        common_model["stageIniPatchModel"] = build_runtime_stage_ini_patch_model(game_dir)
     else:
         common_model["stageIniPatchModel"] = build_stage_ini_patch_model(game_dir, game_dir)
 

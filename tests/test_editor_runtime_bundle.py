@@ -45,6 +45,9 @@ class TestEditorRuntimeBundle(unittest.TestCase):
             with warnings.catch_warnings(), patch(
                 "san_tools.map.export_editor_bundle.find_text_data_dir",
                 side_effect=AssertionError("运行时不得查找 data/text"),
+            ), patch(
+                "san_tools.map.export_editor_bundle.find_game_dir",
+                side_effect=AssertionError("运行时不得查找仓库游戏目录"),
             ):
                 warnings.simplefilter("ignore", Image.DecompressionBombWarning)
                 session = manager.create_from_stage(
@@ -73,7 +76,8 @@ class TestEditorRuntimeBundle(unittest.TestCase):
             stage_payload = json.loads((stage_dir / "stage.json").read_text(encoding="utf-8"))
             self.assertEqual(stage_payload["stage"], "stage01")
             self.assertTrue(stage_payload["commonModel"]["heads"]["available"])
-            self.assertFalse(stage_payload["commonModel"]["stageIniPatchModel"]["available"])
+            self.assertTrue(stage_payload["commonModel"]["stageIniPatchModel"]["available"])
+            self.assertGreater(len(stage_payload["commonModel"]["big5CharMap"]), 13000)
             self.assertTrue(stage_payload["sidecars"]["available"])
             metadata = json.loads((session.root / "session-info.json").read_text(encoding="utf-8"))
             self.assertTrue(metadata["export"]["runtime"])
