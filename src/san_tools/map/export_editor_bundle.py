@@ -1102,12 +1102,23 @@ def write_editor_index(out_dir: Path, stages: list[dict]) -> None:
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 
 
-def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, layers: str, palette_source: str) -> dict:
-    game_dir = find_game_dir(root)
-    stage_path = game_dir / f"{stage}.m"
+def export_editor_bundle_from_game_dir(
+    game_dir: Path,
+    stage_path: Path,
+    out_dir: Path,
+    layout: str,
+    layers: str,
+    palette_source: str,
+    *,
+    runtime: bool = False,
+) -> dict[str, object]:
+    """从显式游戏目录和地图路径生成开发或临时运行时 Bundle。"""
+
+    game_dir = game_dir.expanduser().resolve()
+    stage_path = stage_path.expanduser().resolve()
     if not stage_path.exists():
         raise FileNotFoundError(stage_path)
-
+    stage = stage_path.stem.lower()
     width, height, records = read_stage_records(stage_path)
     source_w, source_h, ox, oy = canvas_size(width, height, layout)
     stage_dir = out_dir / stage
@@ -1119,12 +1130,25 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     render_meta = render_stage(stage_path, blocks, palette, map_path, layout, layers, None)
     render_meta["source_output_size"] = [source_w, source_h]
     sidecar_meta = build_sidecar_export_meta(game_dir, stage, GRID_SIZE, ACTIVE_ROWS)
-    site_links = build_editor_site_links(root, stage)
+    if runtime and not sidecar_meta.get("available"):
+        raise FileNotFoundError(str(sidecar_meta.get("reason") or "缺少完整 .s/.x Sidecar"))
+    site_links = (
+        build_dor_stg_site_links(game_dir, stage, "运行时会话仅使用用户显式导入的 .dor/.stg")
+        if runtime
+        else build_editor_site_links(game_dir, stage)
+    )
     scenario_files = copy_scenario_reference_files(game_dir, stage_dir, stage)
     scenario_model = build_editor_scenario_model(game_dir, stage)
-    common_model = build_editor_common_model(root)
+    common_model = build_editor_common_model(game_dir)
     common_model["heads"] = export_heads_atlas(game_dir, stage_dir, SAN_RGB_PALETTE)
-    common_model["stageIniPatchModel"] = build_stage_ini_patch_model(root, game_dir)
+    if runtime:
+        common_model["stageIniPatchModel"] = {
+            "available": False,
+            "source": "user stage.ini",
+            "reason": "运行时会话不读取仓库 data/text；无文本母表模型将在后续独立解析阶段生成。",
+        }
+    else:
+        common_model["stageIniPatchModel"] = build_stage_ini_patch_model(game_dir, game_dir)
 
     export_resource_catalog(blocks, palette, stage_dir, records)
     export_minimap(map_path, stage_dir / "minimap.png")
@@ -1148,7 +1172,7 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
         scenario_model,
         common_model,
     )
-    template = resolve_editor_template(root)
+    template = resolve_editor_template(game_dir)
     write_editor_template(template, stage_dir / "editor.html")
 
     index_path = out_dir / "index.json"
@@ -1161,7 +1185,56 @@ def export_editor_bundle(root: Path, stage: str, out_dir: Path, layout: str, lay
     index_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
     write_editor_index(out_dir, existing["stages"])
 
-    return {"stage": stage, "width": width, "height": height, "out": str(stage_dir), "records": len(records)}
+    return {
+        "stage": stage,
+        "width": width,
+        "height": height,
+        "out": str(stage_dir),
+        "records": len(records),
+        "runtime": runtime,
+        "source_dir": str(game_dir),
+        "stage_path": str(stage_path),
+    }
+
+
+def export_runtime_editor_bundle(report: object, out_dir: Path) -> dict[str, object]:
+    """只使用运行时校验报告中的显式来源生成临时会话 Bundle。"""
+
+    files = {str(item.role): Path(item.path).resolve() for item in report.files}
+    stage_path = files.get("map")
+    if stage_path is None:
+        raise ValueError("运行时校验报告缺少 map 输入")
+    return export_editor_bundle_from_game_dir(
+        Path(report.source_dir),
+        stage_path,
+        out_dir,
+        "stagger",
+        "xyz",
+        "SAN_RGB_PALETTE",
+        runtime=True,
+    )
+
+
+def export_editor_bundle(
+    root: Path,
+    stage: str,
+    out_dir: Path,
+    layout: str,
+    layers: str,
+    palette_source: str,
+) -> dict[str, object]:
+    """保留开发样本 Bundle 入口，允许使用项目数据定位规则。"""
+
+    game_dir = find_game_dir(root)
+    return export_editor_bundle_from_game_dir(
+        game_dir,
+        game_dir / f"{stage}.m",
+        out_dir,
+        layout,
+        layers,
+        palette_source,
+        runtime=False,
+    )
 
 
 def main() -> int:

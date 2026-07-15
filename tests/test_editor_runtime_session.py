@@ -224,13 +224,15 @@ class TestRuntimeSessionLifecycle(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeInputError, "路径越界"):
             manager.cleanup_session_dir(TEST_TMP / "outside")
 
-    def test_missing_exporter_does_not_create_session(self) -> None:
-        """资源生成器尚未接入时不得留下空会话目录。"""
+    def test_default_exporter_failure_does_not_leave_partial_session(self) -> None:
+        """真实导出器遇到无效占位资源时必须清理半成品目录。"""
 
         manager = RuntimeSessionManager(None, self.session_base)
-        with self.assertRaisesRegex(RuntimeInputError, "尚未配置"):
+        with self.assertRaises((ValueError, OSError)):
             manager.create_from_stage(self.stage_path)
-        self.assertFalse(self.session_base.exists())
+        self.assertTrue(self.session_base.is_dir())
+        session_dirs = [path for path in self.session_base.iterdir() if path.is_dir()]
+        self.assertEqual(session_dirs, [])
 
 
 if __name__ == "__main__":

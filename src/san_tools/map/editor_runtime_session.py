@@ -259,6 +259,13 @@ def validate_runtime_inputs(stage_path: Path, source_dir: Path | None = None) ->
 
 RuntimeExporter = Callable[[RuntimeInputReport, Path], dict[str, object]]
 
+def default_runtime_exporter(report: RuntimeInputReport, out_dir: Path) -> dict[str, object]:
+    """延迟导入真实导出器，避免会话模块与 Bundle 模块循环依赖。"""
+
+    from san_tools.map.export_editor_bundle import export_runtime_editor_bundle
+
+    return export_runtime_editor_bundle(report, out_dir)
+
 
 def input_fingerprint(report: RuntimeInputReport) -> tuple[tuple[object, ...], ...]:
     """按来源路径和内容哈希生成可复用会话的稳定指纹。"""
@@ -295,7 +302,7 @@ class RuntimeSessionManager:
         session_base: Path | None = None,
         stale_seconds: int = DEFAULT_STALE_SECONDS,
     ) -> None:
-        self.exporter = exporter
+        self.exporter = exporter or default_runtime_exporter
         self.session_base = (session_base or Path(tempfile.gettempdir()) / SESSION_ROOT_NAME).resolve()
         self.stale_seconds = stale_seconds
         self.current: RuntimeSession | None = None
@@ -380,8 +387,6 @@ class RuntimeSessionManager:
 
         report = validate_runtime_inputs(stage_path, source_dir)
         report.require_valid()
-        if self.exporter is None:
-            raise RuntimeInputError("运行时资源生成器尚未配置", report)
         if (
             self.current is not None
             and self.current.root.is_dir()
