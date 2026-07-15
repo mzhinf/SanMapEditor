@@ -1,6 +1,6 @@
 # 文档索引与维护表
 
-更新日期：2026-07-14
+更新日期：2026-07-16
 
 本文档是项目文档的统一目录，说明每份文档负责什么、当前状态以及何时需要更新。可复用的临时脚本放在已忽略的 `.planning/`；当前长期任务、结论和验证进展分别维护在根目录的计划文件中。
 
@@ -21,6 +21,7 @@
 | `docs/COMMAND_REFERENCE.zh.md` | 统一命令入口、全部命令参数、示例、产物与风险 | 当前有效 | 注册命令、参数、默认路径或输出行为变化时 |
 | `docs/EDITOR_USER_GUIDE.zh.md` | 随发布 ZIP 交付给编辑人员的启动、布局、逐步操作、快捷键、导出和排错指南 | 当前有效 | 用户界面、操作方式、快捷键或导出流程变化时 |
 | `docs/EDITOR_PACKAGING_CHAIN.zh.md` | Windows 发布链路涉及的源码、输入、中间文件、最终产物和测试 | 当前有效 | 构建入口、依赖、bundle 文件或发布目录变化时 |
+| `docs/EDITOR_RESOURCE_FREE_RELEASE_PLAN.zh.md` | 不携带游戏资源的编辑器发布目标、架构、改动清单、测试与验收标准 | 待实施计划 | 无资源发布边界、运行时导入架构或实施状态变化时 |
 | `docs/EDITOR_UI_V2_DESIGN.zh.md` | 编辑器布局、工作流、管理界面和运行时架构 | 当前有效 | UI 结构、主要工作流或功能边界变化时 |
 | `docs/EDITOR_DATA_MANAGEMENT.zh.md` | 源字段、关系字段、派生字段及跨文件同步规则 | 当前有效 | CRUD、关联关系、Patch 或导入导出行为变化时 |
 | `docs/EDITOR_FIELD_CONVERSION.zh.md` | `.m/.dor/.stg/stage.ini/History.txt` 字段级转换与写回 | 当前有效 | 字段偏移、类型、转换或写回规则变化时 |
