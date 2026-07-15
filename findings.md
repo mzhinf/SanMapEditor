@@ -1,5 +1,26 @@
 # Stage.ini 写入错误与修复结论
 
+## 2026-07-16 无资源发布任务初始结论
+
+- 当前分支为 `codex/resource-free-editor-release`，分支起点提交 `231a255` 只加入实施计划，尚未实现无资源发布链路。
+- 当前发布方案明确允许默认采用系统临时会话目录；调色板策略在未确认时保持现状，不能自行移除或替换颜色数据源。
+- 工作区唯一既有未提交项是未跟踪的 `data/game-cjsh/`，属于用户本地数据，必须与代码和发布产物隔离。
+- 根目录 `task_plan.md`、`findings.md`、`progress.md` 是既有持久规划文件，本任务在其中追加独立章节，不删除历史维护记录。
+- `build_editor_release.py` 当前仍无条件调用 `export_editor_bundle`，以 `stage01` 为默认关卡，并把完整 Bundle 复制到 `editor-data`。
+- `editor_desktop_launcher.py` 当前要求 `index.html` 与 `index.json` 同时存在，默认尝试打开 `stage01/editor.html`，没有资源选择或会话生命周期。
+- `export_editor_bundle.py` 当前仍导入 `find_text_data_dir`，并直接从游戏目录读取 `heads.dat`、`kingdom.cel` 等文件生成派生资源。
+- 当前测试只覆盖旧发布数据目录、启动器服务器和关卡 Bundle 元数据，尚无无资源白名单、禁用扫描、运行时会话或干净构建测试。
+- 运行时可复用现有 Bundle 生成能力，但必须新增显式源目录入口；仅把用户目录当作 `root` 仍不足以隔离数据，因为文本目录查找会继续回退到仓库 `data/text`。
+- 当前 `copy_scenario_reference_files` 会把用户的 `.dor/.stg/heads.dat/History.txt/stage.ini` 复制进 Bundle；该行为只能保留在临时会话，不能出现在发布包。
+- 当前 Sidecar 元数据在缺少 `.s/.x` 时明确允许尾区零填充，与实施计划的完整导出要求冲突，运行时导入必须把两者列为完整导出所需输入。
+- 当前网页初始化固定请求同目录的 `stage.json` 和资源目录，并额外请求上级 `index.json`；无资源根页面必须使用独立静态入口，已加载会话才进入该模板。
+- PyInstaller 当前从启动器递归收集模块；新增运行时会话模块由启动器显式导入即可被收集，package data 仍只需 HTML 与 KSY。
+- `build_editor_common_model` 的有效数据只来自显式游戏目录中的 `stage.ini`、`History.txt` 与可选 `general.txt`，可改为显式目录调用而无需文本母表。
+- 完整据点联动分析会经过多个文本数据管线；运行时应直接使用已有的 `.dor/.stg` 解析回退函数，避免间接触发仓库文本目录。
+- `build_stage_ini_patch_model` 是剩余的 `data/text` 强依赖；运行时可明确标记预生成模型不可用，并由网页现有的本地 `stage.ini` 块流解析器恢复字段与追加布局。
+- 网页已具备多文件本地项目导入能力，可作为已加载会话中的重新导入入口；需要补充替换确认和缺失参考文件提示。
+
+
 ## 样本
 
 - 游戏有效文件：`data/game/stage.ini`，75,280 字节，SHA-256 `29584DE26770323A09849D180331D936E9C112F55936D76B08F4F6F6A63663B8`。
