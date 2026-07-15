@@ -65,7 +65,7 @@ san-tools run render-map . --stage stage01
 | `stitch-kingdom` | `python -m san_tools run stitch-kingdom .` | `--acwz-align center|bottom|top`；输出到 `derived/kingdom` | 只读导出 |
 | `export-m-layers` | `python -m san_tools run export-m-layers .` | `--palette`；输出到 `derived/m_layers` | 只读导出 |
 | `build-editor-release` | `python -m san_tools run build-editor-release .` | 无资源五文件发布；`--work-dir`、`--output-dir`，默认输出 `dist` | 发布构建 |
-| `launch-editor` | `python -m san_tools run launch-editor --data-dir derived/editor --stage stage01` | `--no-browser` 禁止自动打开浏览器，`--check` 只检查数据 | 本地启动 |
+| `launch-editor` | `python -m san_tools run launch-editor --data-dir derived/editor --stage stage01` | `--no-browser` 禁止自动打开浏览器，`--check` 检查发布数据、运行时模板与本机服务 | 本地启动 |
 
 ### Patch 写回建议
 

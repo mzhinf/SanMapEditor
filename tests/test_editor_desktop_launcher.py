@@ -8,7 +8,7 @@ import unittest
 import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from san_tools.map.build_editor_release import ensure_safe_work_dir, write_release_guides
 from san_tools.map.editor_desktop_launcher import (
@@ -66,6 +66,19 @@ class TestEditorDesktopLauncher(unittest.TestCase):
         self.assertEqual(find_editor_data_dir(root), root.resolve())
         self.assertEqual(editor_entry_path(root), "/index.html")
         self.assertEqual(check_editor_data(root, "stage01"), 0)
+
+    def test_release_check_rejects_missing_runtime_editor_template(self) -> None:
+        """发布检查必须覆盖选择地图后才会读取的冻结 HTML 模板。"""
+
+        root = TEST_TMP / "missing-template-data"
+        root.mkdir()
+        (root / "index.html").write_text("尚未导入", encoding="utf-8")
+        with patch(
+            "san_tools.map.export_editor_bundle.resolve_editor_template",
+            side_effect=FileNotFoundError("找不到编辑器模板"),
+        ):
+            self.assertEqual(check_editor_data(root, "stage01"), 4)
+
 
     def test_server_only_listens_on_loopback(self) -> None:
         """桌面服务必须使用本机随机端口，不能暴露到局域网。"""

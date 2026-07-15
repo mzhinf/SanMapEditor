@@ -25,6 +25,8 @@ from san_tools.map.editor_release_audit import (
 EXE_NAME = "SanMapEditor"
 RELEASE_CREATOR = "mzhinf"
 USER_GUIDE_SOURCE = Path("docs") / "EDITOR_USER_GUIDE.zh.md"
+EDITOR_TEMPLATE_SOURCE = Path("src") / "san_tools" / "map" / "editor_app.html"
+EDITOR_TEMPLATE_TARGET = "san_tools/map"
 EMPTY_INDEX_HTML = """<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -148,6 +150,17 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def editor_template_data_spec(root: Path) -> str:
+    """生成 PyInstaller 模板映射，并在构建前拒绝缺失的代码资产。"""
+
+    template = (root / EDITOR_TEMPLATE_SOURCE).resolve()
+    if not template.is_file():
+        raise FileNotFoundError(f"缺少编辑器运行时模板：{template}")
+    # 冻结模块的 __file__ 位于 _MEIPASS/san_tools/map，模板必须映射到同一目录。
+    return f"{template}:{EDITOR_TEMPLATE_TARGET}"
+
+
+
 def build_release(root: Path, work_dir: Path, output_dir: Path) -> dict[str, object]:
     """在不读取任何游戏数据的情况下构建、审计并压缩发布包。"""
 
@@ -183,6 +196,8 @@ def build_release(root: Path, work_dir: Path, output_dir: Path) -> dict[str, obj
         str(pyinstaller_work),
         "--specpath",
         str(work_dir),
+        "--add-data",
+        editor_template_data_spec(root),
         str(launcher),
     ]
     subprocess.run(command, cwd=root, check=True)

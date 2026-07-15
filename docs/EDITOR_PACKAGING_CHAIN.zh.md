@@ -33,7 +33,7 @@ python -m san_tools run build-editor-release .
 
 | 文件 | 职责 |
 | --- | --- |
-| `build_editor_release.py` | PyInstaller、空入口、五文件组包、Manifest 和审计总控。 |
+| `build_editor_release.py` | PyInstaller、运行时 HTML 模板收集、空入口、五文件组包、Manifest 和审计总控。 |
 | `editor_desktop_launcher.py` | 四态资源选择、本机 HTTP 服务和固定端口内容切换。 |
 | `editor_runtime_session.py` | 输入校验、事务会话、复用、关闭清理和过期回收。 |
 | `export_editor_bundle.py` | 运行时地图、图集、小地图、头像、场景模型与写回模型生成。 |
@@ -42,7 +42,7 @@ python -m san_tools run build-editor-release .
 | `m.ksy`、`dor.ksy`、`stg.ksy` | 二进制字段顺序和类型规范。 |
 | `EDITOR_USER_GUIDE.zh.md` | 复制为发布目录中的 `编辑器使用指南.md`。 |
 
-PyInstaller 在工作目录生成 `SanMapEditor.spec`、Analysis/EXE/PKG/PYZ TOC、警告和交叉引用；这些是可再生中间文件，不进入最终 ZIP。
+PyInstaller 通过显式 `--add-data` 把 `editor_app.html` 映射到冻结模块同目录 `san_tools/map`；Analysis/EXE/PKG TOC 必须记录该模板。工作目录中的 `SanMapEditor.spec`、TOC、警告和交叉引用是可再生中间文件，不进入最终 ZIP。
 
 ## 三、最终发布目录
 
@@ -111,6 +111,8 @@ python -m san_tools run build-editor-release .
 ```
 
 关键测试包括 `test_editor_release_audit.py`、`test_editor_resource_free_build.py`、`test_editor_runtime_session.py`、`test_editor_runtime_bundle.py`、`test_editor_runtime_text_independence.py`、`test_editor_resource_free_ui.py` 和 `test_editor_documentation.py`。
+`--check` 同时验证 EXE 同级空入口和冻结程序内的 `editor_app.html`，用于提前捕获“启动成功、选择地图后才发现模板缺失”的构建错误。
+
 
 ## 九、发布门禁
 

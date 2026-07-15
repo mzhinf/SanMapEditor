@@ -8,9 +8,12 @@ import unittest
 from pathlib import Path
 
 from san_tools.map.build_editor_release import (
+    EDITOR_TEMPLATE_SOURCE,
+    EDITOR_TEMPLATE_TARGET,
     EXE_NAME,
     audit_pyinstaller_collection,
     prepare_release_package,
+    editor_template_data_spec,
     sha256_file,
 )
 from san_tools.map.editor_release_audit import RELEASE_ALLOWED_FILES, ReleaseAuditError
@@ -72,6 +75,20 @@ class TestEditorResourceFreeBuild(unittest.TestCase):
         self.assertNotIn('add_argument("--stage"', source)
         self.assertIn("audit_release_tree", source)
         self.assertIn("audit_release_zip", source)
+
+    def test_pyinstaller_explicitly_embeds_runtime_editor_template(self) -> None:
+        """冻结程序必须在模块同目录携带选择地图后使用的 HTML 模板。"""
+
+        template = ROOT / EDITOR_TEMPLATE_SOURCE
+        self.assertEqual(
+            editor_template_data_spec(ROOT),
+            f"{template.resolve()}:{EDITOR_TEMPLATE_TARGET}",
+        )
+        source = (ROOT / "src" / "san_tools" / "map" / "build_editor_release.py").read_text(encoding="utf-8")
+        self.assertIn('"--add-data"', source)
+        self.assertIn("editor_template_data_spec(root)", source)
+        with self.assertRaisesRegex(FileNotFoundError, "运行时模板"):
+            editor_template_data_spec(self.clean_root)
 
     def test_pyinstaller_toc_accepts_code_and_rejects_game_data(self) -> None:
         """PyInstaller 清单可包含代码模块，但不能引用构建机游戏数据。"""

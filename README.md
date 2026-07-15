@@ -6,7 +6,7 @@
 
 ## 当前能力
 
-- 导入 `stageXX.m`，自动加载同名 `.dor/.stg/.s/.x`、`stage.ini`、`History.txt` 与 `heads.dat`。
+- 导入 `stageXX.m`，只从同一目录加载同名 `.dor/.stg/.s/.x`、`stage.ini`、`History.txt`、`kingdom.cel`、`heads.dat` 与可选的 `kingdom.atr`。
 - 编辑底层、叠加、物件与数据标记，支持图层显示、撤销、重做、区域复制、剪切和合成对象。
 - 管理势力、城池、军寨、山寨、城门、武将与士兵关联。
 - 使用 `SAN_RGB_PALETTE` 渲染地图、小地图与武将头像；小地图颜色随 xyz 自动派生，并允许 Raw 手工修正。
@@ -56,6 +56,7 @@ python -m san_tools list
 | `kingdom.atr` | 可选的资源属性研究数据。 |
 
 `stageXX` 必须使用相同场景编号。目录中有多个 `.m` 时应直接选择目标 `.m`，启动器不会静默选取。
+选择单个 `.m` 时只匹配上表文件，不会加载同目录中的其他关卡，不会遍历子目录，也不会回退读取仓库或环境变量中的默认游戏目录。
 
 源码开发和格式研究仍可使用忽略目录 `data/game`、`data/text` 或 `SAN_GAME_DATA_DIR`、`SAN_GAME_TEXT_DIR`；这些开发路径不是正式发布程序的运行时回退。
 

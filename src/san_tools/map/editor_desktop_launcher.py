@@ -214,11 +214,19 @@ def create_editor_server(data_dir: Path) -> EditorHTTPServer:
 
 
 def check_editor_data(data_dir: Path, stage: str) -> int:
-    """无界面检查入口文件和本机服务器是否能够创建。"""
+    """无界面检查发布入口、运行时模板和本机服务器。"""
 
     entry = editor_entry_path(data_dir, stage)
     if entry == "/index.html" and not (data_dir / "index.html").is_file():
         return 3
+    # 模板仅在用户选择地图后使用，必须纳入发布检查以捕获冻结资产遗漏。
+    from san_tools.map.export_editor_bundle import resolve_editor_template
+
+    try:
+        resolve_editor_template(data_dir)
+    except FileNotFoundError:
+        return 4
+
     server = create_editor_server(data_dir)
     server.server_close()
     return 0
