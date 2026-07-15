@@ -42,7 +42,7 @@ def find_editor_data_dir(explicit: Path | None = None) -> Path:
 
     for candidate in candidates:
         resolved = candidate.expanduser().resolve()
-        if (resolved / "index.html").is_file() and (resolved / "index.json").is_file():
+        if (resolved / "index.html").is_file() and (resolved / "release-info.json").is_file():
             return resolved
     searched = "\n".join(str(path) for path in candidates)
     raise FileNotFoundError(f"找不到编辑器数据目录，已检查：\n{searched}")

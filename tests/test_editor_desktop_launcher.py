@@ -31,14 +31,25 @@ class TestEditorDesktopLauncher(unittest.TestCase):
         root.mkdir()
         (root / "index.html").write_text("index", encoding="utf-8")
         (root / "index.json").write_text("{}", encoding="utf-8")
+        (root / "release-info.json").write_text('{"app_title": "三国霸业地图编辑器 2.0", "creator": "mzhinf", "build_date": "2026-07-13", "build_time": "2026-07-13 17:30:00"}', encoding="utf-8")
         stage_dir = root / "stage01"
         stage_dir.mkdir()
         (stage_dir / "editor.html").write_text("editor", encoding="utf-8")
         self.assertEqual(find_editor_data_dir(root), root.resolve())
         self.assertEqual(editor_entry_path(root, "stage01"), "/stage01/editor.html")
         self.assertEqual(check_editor_data(root, "stage01"), 0)
-        (root / 'release-info.json').write_text('{"app_title": "三国霸业地图编辑器 2.0", "creator": "mzhinf", "build_date": "2026-07-13", "build_time": "2026-07-13 17:30:00"}', encoding='utf-8')
         self.assertEqual(load_release_info(root), {'app_title': APP_TITLE, 'creator': 'mzhinf', 'build_date': '2026-07-13', 'build_time': '2026-07-13 17:30:00'})
+
+    def test_resource_free_data_does_not_require_index_json(self) -> None:
+        """无资源发布目录只有空入口和版本信息也必须可启动。"""
+
+        root = TEST_TMP / "resource-free-data"
+        root.mkdir()
+        (root / "index.html").write_text("尚未导入", encoding="utf-8")
+        (root / "release-info.json").write_text('{"app_title": "测试编辑器"}', encoding="utf-8")
+        self.assertEqual(find_editor_data_dir(root), root.resolve())
+        self.assertEqual(editor_entry_path(root), "/index.html")
+        self.assertEqual(check_editor_data(root, "stage01"), 0)
 
     def test_server_only_listens_on_loopback(self) -> None:
         """桌面服务必须使用本机随机端口，不能暴露到局域网。"""
