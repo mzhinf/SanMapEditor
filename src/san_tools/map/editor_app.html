@@ -5097,7 +5097,7 @@ canvas.addEventListener('pointerdown', ev => {
   const world = clientToWorld(ev);
   const cell = worldToCell(world.x, world.y);
   if (!cell) return;
-  if (els.tool.value === 'select' && ev.shiftKey) {
+  if (els.tool.value === 'inspect' && ev.shiftKey) {
     ev.preventDefault();
     startIsoSelectionDrag(ev, cell);
     return;

@@ -45,13 +45,18 @@ class TestEditorAppV2Template(unittest.TestCase):
         """验证模板接入等距拖动、集合操作、取消和预览边界。"""
 
         html = (ROOT / "src" / "san_tools" / "map" / "editor_app.html").read_text(encoding="utf-8")
+        tool_block = re.search(r'<select id="tool"[\s\S]*?</select>', html)
+        self.assertIsNotNone(tool_block)
+        select_option = re.search(r'<option value="([^"]+)">选择</option>', tool_block.group(0))
+        self.assertIsNotNone(select_option)
+        select_tool_value = select_option.group(1)
+        self.assertIn(f"els.tool.value === '{select_tool_value}' && ev.shiftKey", html)
         for marker in (
             "function cellToIsoGrid",
             "function isoGridToCell",
             "function startIsoSelectionDrag",
             "function updateIsoSelectionDrag",
             "function drawIsoSelectionDragOutline",
-            "els.tool.value === 'select' && ev.shiftKey",
             "if (ev.altKey) return 'subtract'",
             "if (ev.ctrlKey || ev.metaKey) return 'add'",
             "stopIsoSelectionDrag(null, true)",
