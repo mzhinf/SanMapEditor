@@ -6,7 +6,7 @@
 
 ## 当前能力
 
-- 导入 `stageXX.m`，只从同一目录加载同名 `.dor/.stg/.s/.x`、`stage.ini`、`History.txt`、`kingdom.cel`、`heads.dat` 与可选的 `kingdom.atr`。
+- 导入 `stageNN.m`，只从同一目录加载同名 `.dor/.stg/.s/.x`、`stage.ini`、`History.txt`、`kingdom.cel`、`heads.dat` 与可选的 `kingdom.atr`。
 - 生成并直接载入 `.sanmap-pack` 独立内容包，按内容哈希复用缓存，不重复解析或渲染原始素材。
 - 编辑底层、叠加、物件与数据标记，支持图层显示、撤销、重做、2.5D 等距菱形框选、区域复制、剪切和合成对象。
 - 管理势力、城池、军寨、山寨、城门、武将与士兵关联。
@@ -49,14 +49,14 @@ python -m san_tools list
 
 | 文件 | 用途 |
 | --- | --- |
-| `stageXX.m` | 地图尺寸与 Cell 数据；可直接在启动器中选择。 |
-| `stageXX.dor`、`stageXX.stg` | 城门、势力、据点、武将和士兵。 |
-| `stageXX.s`、`stageXX.x` | 小地图有效区与必须保留的用户原始尾区。 |
+| `stageNN.m` | 地图尺寸与 Cell 数据；可直接在启动器中选择。 |
+| `stageNN.dor`、`stageNN.stg` | 城门、势力、据点、武将和士兵。 |
+| `stageNN.s`、`stageNN.x` | 小地图有效区与必须保留的用户原始尾区。 |
 | `stage.ini`、`History.txt` | 城池、武将母表和历史记录。 |
 | `kingdom.cel`、`heads.dat` | 地图资源和头像；图集只在系统临时会话中生成。 |
 | `kingdom.atr` | 可选的资源属性研究数据。 |
 
-`stageXX` 必须使用相同场景编号。目录中有多个 `.m` 时应直接选择目标 `.m`，启动器不会静默选取。
+`stageNN` 必须使用相同场景编号。目录中有多个 `.m` 时应直接选择目标 `.m`，启动器不会静默选取。
 选择单个 `.m` 时只匹配上表文件，不会加载同目录中的其他关卡，不会遍历子目录，也不会回退读取仓库或环境变量中的默认游戏目录。
 
 源码开发和格式研究仍可使用忽略目录 `data/game`、`data/text` 或 `SAN_GAME_DATA_DIR`、`SAN_GAME_TEXT_DIR`；这些开发路径不是正式发布程序的运行时回退。
@@ -67,7 +67,7 @@ python -m san_tools list
 
 1. 完整解压 ZIP，保持 `SanMapEditor.exe` 与 `editor-data` 同级。
 2. 双击 EXE。浏览器先显示“尚未导入地图项目”，桌面启动器显示资源选择按钮。
-3. 选择 `stageXX.m`、完整资源目录或已经预生成的 `.sanmap-pack` 内容包。
+3. 选择 `stageNN.m`、完整资源目录或已经预生成的 `.sanmap-pack` 内容包。
 4. 启动器完成校验后生成原始文件临时会话，或直接载入内容包缓存并打开编辑页。
 5. 重新选择资源会要求确认；新导入失败时旧会话保持可用。
 6. 原始文件导入使用 `%TEMP%` 临时会话；内容包使用 `%LOCALAPPDATA%/SanMapEditor/content-cache` 持久缓存。

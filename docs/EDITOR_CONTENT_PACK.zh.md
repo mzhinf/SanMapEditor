@@ -27,7 +27,7 @@ stage01.sanmap-pack
 
 ## 二、生成内容包
 
-准备与 `stageXX.m` 同目录的完整输入文件，然后执行：
+准备与 `stageNN.m` 同目录的完整输入文件，然后执行：
 
 ```powershell
 python -m san_tools run build-editor-content-pack path\to\stage01.m `

@@ -204,7 +204,7 @@ def validate_runtime_inputs(stage_path: Path, source_dir: Path | None = None) ->
     source_dir = (source_dir or stage_path.parent).expanduser().resolve()
     match = STAGE_FILE_PATTERN.fullmatch(stage_path.name)
     if match is None:
-        raise RuntimeInputError(f"地图文件名必须符合 stageXX.m：{stage_path.name}")
+        raise RuntimeInputError(f"地图文件名必须符合 stageNN.m：{stage_path.name}")
     stage = match.group(1).lower()
     report = RuntimeInputReport(stage=stage, stage_path=stage_path, source_dir=source_dir)
     if not source_dir.is_dir():
@@ -373,7 +373,7 @@ class RuntimeSessionManager:
         source_dir: Path,
         release_info: dict[str, object] | None = None,
     ) -> RuntimeSession:
-        """从只含一个 stageXX.m 的用户目录创建会话。"""
+        """从只含一个 stageNN.m 的用户目录创建会话。"""
 
         source_dir = source_dir.expanduser().resolve()
         if not source_dir.is_dir():
@@ -383,7 +383,7 @@ class RuntimeSessionManager:
             if path.is_file() and STAGE_FILE_PATTERN.fullmatch(path.name)
         )
         if not stages:
-            raise RuntimeInputError(f"资源目录中没有 stageXX.m：{source_dir}")
+            raise RuntimeInputError(f"资源目录中没有 stageNN.m：{source_dir}")
         if len(stages) > 1:
             raise RuntimeInputError("资源目录包含多个地图，请改为直接选择一个 .m 文件：" + "、".join(path.name for path in stages))
         return self.create_from_stage(stages[0], source_dir, release_info)

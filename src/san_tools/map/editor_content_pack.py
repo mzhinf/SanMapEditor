@@ -510,7 +510,7 @@ def main() -> int:
     """解析独立内容包构建参数。"""
 
     parser = argparse.ArgumentParser(description="从用户合法游戏文件生成地图编辑器独立内容包")
-    parser.add_argument("stage", type=Path, help="目标 stageXX.m 文件")
+    parser.add_argument("stage", type=Path, help="目标 stageNN.m 文件")
     parser.add_argument("--output-dir", type=Path, default=Path("dist/content-packs"), help="内容包输出目录")
     args = parser.parse_args()
     print(json.dumps(build_content_pack(args.stage, args.output_dir), ensure_ascii=False, indent=2))

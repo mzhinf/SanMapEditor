@@ -82,7 +82,7 @@
 
 ### 网页内项目续编
 
-网页顶部“导入”允许选择 `stageXX.m` 及同名 `.dor/.stg`、`stage.ini`、`History.txt`、`heads.dat`、工作簿和 JSON。载入 `.m` 前必须确认替换当前浏览器状态。它只适合同一桌面资源会话；更换资源集、头像或 `.s/.x` 尾区必须回到启动器。
+网页顶部“导入”允许选择 `stageNN.m` 及同名 `.dor/.stg`、`stage.ini`、`History.txt`、`heads.dat`、工作簿和 JSON。载入 `.m` 前必须确认替换当前浏览器状态。它只适合同一桌面资源会话；更换资源集、头像或 `.s/.x` 尾区必须回到启动器。
 
 场景、城门和 History JSON 与对应二进制同时提供时只恢复 UI，不重复新增对象；单独导入 JSON 才按跨版本 Patch 处理。浏览器按 KSY 对象流和真实 `stage.ini` 块流恢复字段位置。
 
@@ -96,7 +96,7 @@
 
 用户 `.s/.x` 顶部有效区从当前 `.m` 派生，底部尾区必须来自本次桌面会话输入。尾区编码在临时 `stage.json.sidecars` 中；缺失、无效或长度不匹配时导出阻断，禁止零填充。
 
-`.dor/.stg/stage.ini/History.txt/heads.dat` 可复制到当前临时会话作为参考，但永不进入正式发布目录。用户导出的 `stageXX-export.zip` 可包含游戏文件、工作簿和 Patch，与五文件正式程序包是不同数据边界。
+`.dor/.stg/stage.ini/History.txt/heads.dat` 可复制到当前临时会话作为参考，但永不进入正式发布目录。用户导出的 `stageNN-export.zip` 可包含游戏文件、工作簿和 Patch，与五文件正式程序包是不同数据边界。
 
 ## Patch 跨版本迁移
 
@@ -104,8 +104,8 @@
 
 编辑器导出的 `san-editor-patch-v1` 可以通过顶部“导入”重新加载。推荐迁移顺序：
 
-1. 在新版本编辑器中加载目标版本的 `stageXX.m`，并同时选择 `stageXX.dor`、`stageXX.stg`、`stage.ini`、`History.txt` 等配套文件。
-2. 再选择旧版本导出的 `stageXX_patch.json`；也可以把 `.m`、配套文件和 Patch JSON 一次选中。
+1. 在新版本编辑器中加载目标版本的 `stageNN.m`，并同时选择 `stageNN.dor`、`stageNN.stg`、`stage.ini`、`History.txt` 等配套文件。
+2. 再选择旧版本导出的 `stageNN_patch.json`；也可以把 `.m`、配套文件和 Patch JSON 一次选中。
 3. 检查底部修改数量和校验页，再导出新的数据文件。
 
 组合 Patch 保存地图 Cell、场景、城门、`History.txt` 和 `stage.ini` 武将修改。编辑器也兼容导入独立的 `san-editor-scenario-patch-v1`、`san-editor-dor-patch-v1`、`san-editor-history-patch-v1`。

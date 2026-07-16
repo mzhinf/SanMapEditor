@@ -26,15 +26,15 @@ data/
     └── 其他文本表
 ```
 
-`stage01.*` 是当前编辑器集成测试的标准样本。其他 `stageXX.*` 可按研究需要自行补充。
+`stage01.*` 是当前编辑器集成测试的标准样本。其他 `stageNN.*` 可按研究需要自行补充。
 
 ## 正式发布程序边界
 
 `data/game`、`data/text` 和下述环境变量只服务源码开发、格式分析与条件集成测试。正式 `SanMapEditor.exe` 不搜索这些目录，也不把它们作为回退。
 
-最终用户应在启动器中显式选择 `stageXX.m` 或只含一个目标地图的目录。运行时同目录必须包含：
+最终用户应在启动器中显式选择 `stageNN.m` 或只含一个目标地图的目录。运行时同目录必须包含：
 
-- `stageXX.m/.dor/.stg/.s/.x`
+- `stageNN.m/.dor/.stg/.s/.x`
 - `stage.ini`、`History.txt`
 - `kingdom.cel`、`heads.dat`
 

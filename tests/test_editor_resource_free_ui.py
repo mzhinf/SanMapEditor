@@ -24,7 +24,7 @@ class TestResourceFreeEditorUi(unittest.TestCase):
             "LAUNCHER_IMPORTING",
             "LAUNCHER_FAILED",
             "LAUNCHER_LOADED",
-            "选择 stageXX.m",
+            "选择 stageNN.m",
             "选择资源目录",
             "cleanup_stale",
             "switch_data_dir",

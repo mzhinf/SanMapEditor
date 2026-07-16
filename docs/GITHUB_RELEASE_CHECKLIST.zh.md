@@ -27,7 +27,7 @@ editor-data/release-info.json
 编辑器使用指南.md
 ```
 
-- [ ] ZIP 不含 `stageXX/`、`index.json`、游戏扩展名、`map.png`、`minimap.png`、`heads.png` 或图集。
+- [ ] ZIP 不含 `stageNN/`、`index.json`、游戏扩展名、`map.png`、`minimap.png`、`heads.png` 或图集。
 - [ ] 目录与 ZIP 的路径、字节数、SHA-256 一致。
 - [ ] Analysis、EXE、PKG、PYZ TOC 通过禁用资源扫描。
 - [ ] 外部 Manifest 记录 ZIP 大小、SHA-256 和 TOC。
@@ -36,7 +36,7 @@ editor-data/release-info.json
 ## 运行时验收
 
 - [ ] 空项目、导入中、失败、已加载四态正确。
-- [ ] 完整 `stageXX` 输入可在系统临时目录生成地图、资源、小地图和头像。
+- [ ] 完整 `stageNN` 输入可在系统临时目录生成地图、资源、小地图和头像。
 - [ ] 缺失、重复、编号错配或损坏文件显示明确错误。
 - [ ] 重新选择要求确认；失败保留旧会话。
 - [ ] 关闭清理当前会话，过期带标记会话可回收。

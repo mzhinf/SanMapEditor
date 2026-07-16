@@ -44,7 +44,7 @@ EMPTY_INDEX_HTML = """<!doctype html>
 <body>
   <main>
     <h1>尚未导入地图项目</h1>
-    <p>请回到桌面启动器，选择 <code>stageXX.m</code>、完整游戏文件目录或独立内容包。</p>
+    <p>请回到桌面启动器，选择 <code>stageNN.m</code>、完整游戏文件目录或独立内容包。</p>
     <p class="notice">发布包不包含任何游戏地图、头像或资源贴图。请仅导入您有权使用的本机文件。</p>
     <p>资源校验和会话准备完成后，启动器会打开实际编辑页面。</p>
   </main>
@@ -122,7 +122,7 @@ def write_release_guides(root: Path, package_dir: Path, build_time: str) -> None
         "1. 请先把整个 ZIP 完整解压。\n"
         "2. 保持 SanMapEditor.exe 与 editor-data 文件夹在同一目录。\n"
         "3. 双击 SanMapEditor.exe，并保持启动器窗口运行。\n"
-        "4. 在启动器中选择 stageXX.m、完整资源目录或 .sanmap-pack 独立内容包。\n"
+        "4. 在启动器中选择 stageNN.m、完整资源目录或 .sanmap-pack 独立内容包。\n"
         "5. 原始文件会话写入系统临时目录；内容包缓存写入用户本地数据目录。\n"
         "6. 浏览器未自动打开时点击“打开编辑器”，详细操作请阅读《编辑器使用指南.md》。\n"
         "7. 请仅使用您有权使用的本机游戏文件，发布包本身不包含游戏素材。\n",

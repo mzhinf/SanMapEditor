@@ -65,7 +65,7 @@ SanMapEditor/
 └── 编辑器使用指南.md
 ```
 
-`index.html` 是不发起资源请求的空项目页，`release-info.json` 声明 `user-import-only` 与 `system-temp`。不得包含 `index.json`、`stageXX/`、`stage.json`、图片图集或任何游戏扩展名。
+`index.html` 是不发起资源请求的空项目页，`release-info.json` 声明 `user-import-only` 与 `system-temp`。不得包含 `index.json`、`stageNN/`、`stage.json`、图片图集或任何游戏扩展名。
 
 构建还在 ZIP 外生成 `SanMapEditor-日期-manifest.json` 和 `SanMapEditor-release.json`，记录每个白名单文件、归档大小、SHA-256 和 TOC 路径。
 
@@ -75,17 +75,17 @@ SanMapEditor/
 
 | 输入 | 用途 |
 | --- | --- |
-| `stageXX.m` | 地图头、尺寸和 Cell。 |
-| `stageXX.dor/.stg` | 城门、势力、据点、武将和士兵。 |
-| `stageXX.s/.x` | 小地图有效区与用户原始尾区。 |
+| `stageNN.m` | 地图头、尺寸和 Cell。 |
+| `stageNN.dor/.stg` | 城门、势力、据点、武将和士兵。 |
+| `stageNN.s/.x` | 小地图有效区与用户原始尾区。 |
 | `stage.ini`、`History.txt` | 城池、武将和历史母表。 |
 | `kingdom.cel`、`heads.dat` | 地图资源和头像像素。 |
 
-校验器记录路径、作用、大小和 SHA-256，拒绝缺失、大小写重复、场景编号错配、非法 `.m` 头和异常尺寸。选择目录时只能存在一个 `stageXX.m`。
+校验器记录路径、作用、大小和 SHA-256，拒绝缺失、大小写重复、场景编号错配、非法 `.m` 头和异常尺寸。选择目录时只能存在一个 `stageNN.m`。
 
 ## 五、临时会话 Bundle
 
-`RuntimeSessionManager` 在 `%TEMP%/SanMapEditor/stageXX-UUID` 创建带专用标记的会话。`session-info.json` 记录输入报告和导出结果，`editor-data/stageXX` 中生成 `stage.json`、`resources.json`、`map.png`、`minimap.png`、`heads.png`、资源图集、参考文件和 `stage_ini.xlsx`。
+`RuntimeSessionManager` 在 `%TEMP%/SanMapEditor/stageNN-UUID` 创建带专用标记的会话。`session-info.json` 记录输入报告和导出结果，`editor-data/stageNN` 中生成 `stage.json`、`resources.json`、`map.png`、`minimap.png`、`heads.png`、资源图集、参考文件和 `stage_ini.xlsx`。
 
 新 Bundle 完整生成后才替换旧会话；失败删除半成品并保留旧会话。相同路径、大小和哈希复用当前会话。正常关闭清理当前会话；启动时只回收超过有效期且带标记的直接子目录。
 
@@ -121,7 +121,7 @@ python -m san_tools run compose-editor-distribution `
 - 原始 `.s/.x` 不进入发布包；其合法尾区写入 `stage.json.sidecars`。
 - 浏览器导出缺少或发现异常尾区时直接阻断，禁止零填充。
 - 网页内重新导入 `.m` 需要替换确认，仅用于同一桌面资源会话续编。
-- 用户下载的 `stageXX-export.zip` 可含游戏文件、工作簿和 Patch，它不是正式程序发布包。
+- 用户下载的 `stageNN-export.zip` 可含游戏文件、工作簿和 Patch，它不是正式程序发布包。
 
 ## 八、资源审计
 

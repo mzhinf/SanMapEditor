@@ -80,7 +80,7 @@ class LauncherRuntimeController:
         self.message = str(exc)
 
     def import_stage(self, stage_path: Path, replace_confirmed: bool = False) -> RuntimeSession:
-        """从用户明确选择的 stageXX.m 创建或替换会话。"""
+        """从用户明确选择的 stageNN.m 创建或替换会话。"""
 
         self._begin_import(replace_confirmed)
         try:
@@ -401,10 +401,10 @@ def run_launcher(
         worker.start()
 
     def choose_stage_file() -> None:
-        """选择一个 stageXX.m，并默认使用其所在目录配套文件。"""
+        """选择一个 stageNN.m，并默认使用其所在目录配套文件。"""
 
         selected = filedialog.askopenfilename(
-            title="选择 stageXX.m",
+            title="选择 stageNN.m",
             filetypes=(("三国霸业地图", "stage*.m"), ("地图文件", "*.m")),
         )
         if selected:
@@ -423,7 +423,7 @@ def run_launcher(
             begin_import("content-pack", Path(selected))
 
     def choose_resource_directory() -> None:
-        """选择只含一个 stageXX.m 的完整资源目录。"""
+        """选择只含一个 stageNN.m 的完整资源目录。"""
 
         selected = filedialog.askdirectory(title="选择完整游戏资源目录")
         if selected:
@@ -480,7 +480,7 @@ def run_launcher(
 
     choose_file_button = ttk.Button(
         import_controls,
-        text="选择 stageXX.m",
+        text="选择 stageNN.m",
         command=choose_stage_file,
     )
     choose_file_button.grid(row=0, column=0, padx=6)
