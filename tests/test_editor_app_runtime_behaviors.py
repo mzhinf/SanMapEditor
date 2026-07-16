@@ -404,11 +404,148 @@ if (findCellByCoordinates()) throw new Error('越界坐标未被拒绝');
 """
         self.run_node(harness + functions + checks)
 
+    def test_isometric_selection_roundtrips_and_supports_set_operations(self) -> None:
+        """验证等距坐标可逆，并按菱形网格执行替换、添加和扣除。"""
+
+        source = script_source()
+        functions = (
+            function_range(source, "cellToIsoGrid", "rememberSelectedCell")
+            + function_range(source, "applyIsoSelection", "selectCell")
+        )
+        harness = """
+const state = {
+  meta: { width: 10, height: 10 },
+  selected: null,
+  selectionAnchor: null,
+  selectedCells: new Map()
+};
+function cellKey(cell) { return `${cell.col},${cell.row}`; }
+function selectedCellList() { return [...state.selectedCells.values()]; }
+"""
+        checks = """
+for (let row = 0; row < 10; row++) {
+  for (let col = 0; col < 10; col++) {
+    const restored = isoGridToCell(cellToIsoGrid({ col, row }));
+    if (restored.col !== col || restored.row !== row) throw new Error(`等距坐标不可逆：${col},${row}`);
+  }
+}
+const anchor = { col: 3, row: 2 };
+const end = { col: 3, row: 4 };
+const cells = isoCellsBetween(anchor, end);
+const keys = cells.map(cellKey).sort().join(';');
+if (keys !== '2,3;3,2;3,3;3,4') throw new Error(`菱形选区错误：${keys}`);
+const bounds = isoSelectionBounds(cells);
+if (bounds.width !== 2 || bounds.height !== 2 || bounds.count !== 4) throw new Error('等距范围尺寸错误');
+applyIsoSelection(anchor, end, 'replace');
+if (state.selectedCells.size !== 4 || cellKey(state.selectionAnchor) !== '3,2') throw new Error('替换选区错误');
+applyIsoSelection({ col: 0, row: 0 }, { col: 0, row: 0 }, 'add');
+if (state.selectedCells.size !== 5) throw new Error('添加选区错误');
+applyIsoSelection(anchor, { col: 2, row: 3 }, 'subtract');
+if (state.selectedCells.size !== 3 || !state.selectedCells.has('0,0')) throw new Error('扣除选区错误');
+"""
+        self.run_node(harness + functions + checks)
+
+    def test_isometric_drag_cancel_restores_previous_selection(self) -> None:
+        """验证拖动模式优先级和 Esc 取消使用的事务回滚。"""
+
+        source = script_source()
+        functions = (
+            function_range(source, "cellToIsoGrid", "rememberSelectedCell")
+            + function_range(source, "applyIsoSelection", "selectCell")
+            + function_range(source, "isoSelectionMode", "resizeCanvas")
+        )
+        harness = """
+const base = { col: 1, row: 1 };
+const state = {
+  meta: { width: 8, height: 8 },
+  selected: base,
+  selectionAnchor: base,
+  selectedCells: new Map([['1,1', base]]),
+  selectionDrag: null
+};
+let released = 0;
+const canvas = {
+  setPointerCapture() {},
+  hasPointerCapture() { return true; },
+  releasePointerCapture() { released += 1; }
+};
+const els = { selectionInfo: null };
+function cellKey(cell) { return `${cell.col},${cell.row}`; }
+function selectedCellList() { return [...state.selectedCells.values()]; }
+function updateHud() {}
+function scheduleDraw() {}
+function refreshSide() {}
+function refreshPatches() {}
+function refreshCompositeList() {}
+function syncActiveSiteFromCell() {}
+function clientToWorld() { return { x: 0, y: 0 }; }
+function worldToCell() { return base; }
+function describeRegion() { return ''; }
+"""
+        checks = """
+if (isoSelectionMode({ altKey: true, ctrlKey: true }) !== 'subtract') throw new Error('扣除模式优先级错误');
+if (isoSelectionMode({ altKey: false, ctrlKey: true }) !== 'add') throw new Error('添加模式错误');
+if (isoSelectionMode({ altKey: false, ctrlKey: false }) !== 'replace') throw new Error('替换模式错误');
+startIsoSelectionDrag({ pointerId: 7, altKey: true, ctrlKey: false }, base);
+if (state.selectedCells.size !== 0 || state.selectionDrag.mode !== 'subtract') throw new Error('扣除预览未生效');
+if (!stopIsoSelectionDrag(null, true)) throw new Error('取消拖动失败');
+if (state.selectedCells.size !== 1 || !state.selectedCells.has('1,1')) throw new Error('未恢复拖动前选区');
+if (state.selected !== base || state.selectionAnchor !== base || released !== 1) throw new Error('未恢复锚点或释放指针');
+"""
+        self.run_node(harness + functions + checks)
+
+    def test_isometric_snapshot_keeps_shape_across_row_parity(self) -> None:
+        """验证等距快照从偶数行粘贴到奇数行时保持 du/dv 轮廓。"""
+
+        source = script_source()
+        functions = (
+            function_range(source, "cellToIsoGrid", "rememberSelectedCell")
+            + function_range(source, "regionCellHasContent", "refreshCompositeList")
+        )
+        harness = """
+const fields = ['value'];
+const records = Array.from({ length: 100 }, (_, index) => [index]);
+const sourceCells = [{ col: 3, row: 2 }, { col: 2, row: 3 }, { col: 3, row: 3 }, { col: 3, row: 4 }];
+const state = {
+  regionCopyMode: 'full',
+  meta: { width: 10, height: 10, fields, editableRecordFields: fields, records },
+  selected: { col: 3, row: 4 },
+  selectionAnchor: { col: 3, row: 2 },
+  selectedCells: new Map(sourceCells.map(cell => [`${cell.col},${cell.row}`, cell]))
+};
+let applied = [];
+function canonicalFieldName(value) { return value; }
+function fieldIndex() { return 0; }
+function cellKey(cell) { return `${cell.col},${cell.row}`; }
+function selectedCellList() { return [...state.selectedCells.values()]; }
+function recordAt(cell) { return records[cell.row * 10 + cell.col]; }
+function applyChangeSet(changes) { applied = changes; return changes.length > 0; }
+function refreshCompositeList() {}
+function scheduleDraw() {}
+"""
+        checks = """
+const snapshot = captureRegionSnapshot();
+if (snapshot.mode !== 'iso-cells-v2' || snapshot.cells.length !== 4) throw new Error('未生成等距快照');
+const target = { col: 6, row: 3 };
+state.selected = target;
+state.selectionAnchor = target;
+if (!pasteRegionSnapshot(snapshot)) throw new Error('等距快照未粘贴');
+const actual = [...state.selectedCells.keys()].sort().join(';');
+if (actual !== '6,3;6,4;6,5;7,4') throw new Error(`跨奇偶行形状错误：${actual}`);
+if (applied.length !== 4 || cellKey(state.selectionAnchor) !== '6,3') throw new Error('粘贴锚点或变更数量错误');
+const targetPoint = cellToIsoGrid(target);
+for (const cell of snapshot.cells) {
+  const restored = isoGridToCell({ u: targetPoint.u + cell.du, v: targetPoint.v + cell.dv });
+  if (!state.selectedCells.has(cellKey(restored))) throw new Error('du/dv 相对位置未保持');
+}
+"""
+        self.run_node(harness + functions + checks)
+
     def test_full_copy_captures_every_selected_cell_and_cut_clears_non_base_fields(self) -> None:
         """验证全复制保留可手工修正的小地图颜色，剪切时不直接清零颜色。"""
 
         source = script_source()
-        functions = function_range(source, "regionCellHasContent", "refreshCompositeList")
+        functions = function_range(source, "cellToIsoGrid", "rememberSelectedCell") + function_range(source, "regionCellHasContent", "refreshCompositeList")
         harness = """
 const fields = ['acwx', 'acwy', 'acwz', 'terrain_tag', 'blocked', 'site_trigger', 'site_area', 'minimap_color'];
 const state = {
@@ -424,6 +561,7 @@ let appliedBatches = 0;
 function canonicalFieldName(value) { return value; }
 function fieldIndex(field) { return fields.indexOf(field); }
 function selectedCellList() { return [...state.selectedCells.values()]; }
+function cellKey(cell) { return `${cell.col},${cell.row}`; }
 function selectedCellBounds() { return { left: 0, right: 1, top: 0, bottom: 0, width: 2, height: 1, count: 2 }; }
 function currentRegionBounds() { return selectedCellBounds(); }
 function recordAt(cell) { return state.meta.records[cell.row * state.meta.width + cell.col]; }
@@ -447,7 +585,7 @@ if (appliedBatches !== 1) throw new Error('区域剪切未作为单次撤销事�
         """验证非底层复制按六个内容字段筛选，并排除 acwx 与 minimap_color。"""
 
         source = script_source()
-        functions = function_range(source, "regionCellHasContent", "refreshCompositeList")
+        functions = function_range(source, "cellToIsoGrid", "rememberSelectedCell") + function_range(source, "regionCellHasContent", "refreshCompositeList")
         harness = """
 const fields = ['acwx', 'acwy', 'acwz', 'terrain_tag', 'blocked', 'site_trigger', 'site_area', 'minimap_color'];
 const state = {
@@ -462,6 +600,7 @@ const state = {
 function canonicalFieldName(value) { return value; }
 function fieldIndex(field) { return fields.indexOf(field); }
 function selectedCellList() { return [...state.selectedCells.values()]; }
+function cellKey(cell) { return `${cell.col},${cell.row}`; }
 function selectedCellBounds() { return { left: 0, right: 2, top: 0, bottom: 0, width: 3, height: 1, count: 3 }; }
 function currentRegionBounds() { return selectedCellBounds(); }
 function recordAt(cell) { return state.meta.records[cell.row * state.meta.width + cell.col]; }

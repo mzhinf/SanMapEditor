@@ -41,6 +41,25 @@ class TestEditorAppV2Template(unittest.TestCase):
         ):
             self.assertIn(marker, html)
 
+    def test_editor_uses_shift_drag_isometric_selection_controls(self) -> None:
+        """验证模板接入等距拖动、集合操作、取消和预览边界。"""
+
+        html = (ROOT / "src" / "san_tools" / "map" / "editor_app.html").read_text(encoding="utf-8")
+        for marker in (
+            "function cellToIsoGrid",
+            "function isoGridToCell",
+            "function startIsoSelectionDrag",
+            "function updateIsoSelectionDrag",
+            "function drawIsoSelectionDragOutline",
+            "els.tool.value === 'select' && ev.shiftKey",
+            "if (ev.altKey) return 'subtract'",
+            "if (ev.ctrlKey || ev.metaKey) return 'add'",
+            "stopIsoSelectionDrag(null, true)",
+            "mode: 'iso-cells-v2'",
+        ):
+            self.assertIn(marker, html)
+        self.assertNotIn("addRectToSelection", html)
+
     def test_minimap_color_is_derived_bundle_field(self) -> None:
         """验证 bundle 把小地图颜色标记为可修正的自动派生字段。"""
 

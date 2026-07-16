@@ -385,7 +385,9 @@ const state = {
   minimap: null,
   selected: null,
   selectedCells: new Map(),
+  selectionAnchor: null,
   selectedResource: Object.fromEntries(PAINT_LAYER_OPTIONS.map(layer => [layer, null])),
+  selectionDrag: null,
   transform: { x: 24, y: 24, scale: 0.8 },
   dragging: false,
   dragStart: null,
@@ -465,26 +467,65 @@ function recordIndex(cell) { return cell.row * state.meta.width + cell.col; }
 function recordAt(cell) { return state.meta.records[recordIndex(cell)]; }
 function cellKey(cell) { return `${cell.col},${cell.row}`; }
 function selectedCellList() { return [...state.selectedCells.values()]; }
+function cellToIsoGrid(cell) {
+  return { u: cell.col + Math.ceil(cell.row / 2), v: Math.floor(cell.row / 2) - cell.col };
+}
+function isoGridToCell(point) {
+  return { col: Math.floor((point.u - point.v) / 2), row: point.u + point.v };
+}
+function cellWithinMap(cell) {
+  return !!state.meta && cell.col >= 0 && cell.row >= 0 && cell.col < state.meta.width && cell.row < state.meta.height;
+}
+function isoCellsBetween(anchor, cell) {
+  const start = cellToIsoGrid(anchor);
+  const end = cellToIsoGrid(cell);
+  const cells = [];
+  for (let u = Math.min(start.u, end.u); u <= Math.max(start.u, end.u); u++) {
+    for (let v = Math.min(start.v, end.v); v <= Math.max(start.v, end.v); v++) {
+      const candidate = isoGridToCell({ u, v });
+      if (cellWithinMap(candidate)) cells.push(candidate);
+    }
+  }
+  return cells;
+}
+function isoSelectionBounds(cells = selectedCellList()) {
+  if (!cells.length) return null;
+  const points = cells.map(cellToIsoGrid);
+  const minU = Math.min(...points.map(point => point.u));
+  const maxU = Math.max(...points.map(point => point.u));
+  const minV = Math.min(...points.map(point => point.v));
+  const maxV = Math.max(...points.map(point => point.v));
+  return { minU, maxU, minV, maxV, width: maxU - minU + 1, height: maxV - minV + 1, count: cells.length };
+}
+function selectionReferenceCell(cells = state.selectedCells) {
+  if (state.selectionAnchor && cells.has(cellKey(state.selectionAnchor))) return state.selectionAnchor;
+  if (state.selected && cells.has(cellKey(state.selected))) return state.selected;
+  return cells.values().next().value || null;
+}
 function rememberSelectedCell(cell) {
   state.selected = cell;
+  state.selectionAnchor = cell;
   state.selectedCells.set(cellKey(cell), { col: cell.col, row: cell.row });
 }
-function addRectToSelection(anchor, cell) {
-  const left = Math.min(anchor.col, cell.col);
-  const right = Math.max(anchor.col, cell.col);
-  const top = Math.min(anchor.row, cell.row);
-  const bottom = Math.max(anchor.row, cell.row);
-  for (let row = top; row <= bottom; row++) for (let col = left; col <= right; col++) rememberSelectedCell({ col, row });
+function applyIsoSelection(anchor, cell, mode = 'replace', baseCells = state.selectedCells) {
+  const next = mode === 'replace' ? new Map() : new Map(baseCells);
+  for (const candidate of isoCellsBetween(anchor, cell)) {
+    const key = cellKey(candidate);
+    if (mode === 'subtract') next.delete(key);
+    else next.set(key, candidate);
+  }
+  state.selectedCells = next;
+  state.selected = cell;
+  state.selectionAnchor = anchor;
+  return next;
 }
 function selectCell(cell, ev = {}) {
   const key = cellKey(cell);
-  if (ev.shiftKey && state.selected) {
-    addRectToSelection(state.selected, cell);
-    state.selected = cell;
-  } else if (ev.ctrlKey || ev.metaKey) {
+  if (ev.ctrlKey || ev.metaKey) {
     if (state.selectedCells.has(key)) state.selectedCells.delete(key);
-    else rememberSelectedCell(cell);
+    else state.selectedCells.set(key, { col: cell.col, row: cell.row });
     state.selected = cell;
+    state.selectionAnchor = cell;
   } else {
     state.selectedCells.clear();
     rememberSelectedCell(cell);
@@ -1149,6 +1190,62 @@ function stopDrag(ev = null) {
   state.dragging = false;
   state.dragStart = null;
 }
+function isoSelectionMode(ev) {
+  if (ev.altKey) return 'subtract';
+  if (ev.ctrlKey || ev.metaKey) return 'add';
+  return 'replace';
+}
+function startIsoSelectionDrag(ev, cell) {
+  canvas.setPointerCapture(ev.pointerId);
+  state.selectionDrag = {
+    pointerId: ev.pointerId,
+    anchor: { col: cell.col, row: cell.row },
+    end: { col: cell.col, row: cell.row },
+    mode: isoSelectionMode(ev),
+    baseCells: new Map(state.selectedCells),
+    baseSelected: state.selected,
+    baseAnchor: state.selectionAnchor,
+  };
+  applyIsoSelection(cell, cell, state.selectionDrag.mode, state.selectionDrag.baseCells);
+  updateHud();
+  scheduleDraw();
+}
+function updateIsoSelectionDrag(ev) {
+  const drag = state.selectionDrag;
+  if (!drag || ev.pointerId !== drag.pointerId) return false;
+  const world = clientToWorld(ev);
+  const cell = worldToCell(world.x, world.y);
+  if (!cell || cellKey(cell) === cellKey(drag.end)) return true;
+  drag.end = cell;
+  applyIsoSelection(drag.anchor, cell, drag.mode, drag.baseCells);
+  updateHud();
+  if (els.selectionInfo) els.selectionInfo.textContent = describeRegion();
+  scheduleDraw();
+  return true;
+}
+function stopIsoSelectionDrag(ev, cancel = false) {
+  const drag = state.selectionDrag;
+  if (!drag || (ev && ev.pointerId !== drag.pointerId)) return false;
+  state.selectionDrag = null;
+  if (typeof canvas.hasPointerCapture === 'function' && canvas.hasPointerCapture(drag.pointerId)) {
+    canvas.releasePointerCapture(drag.pointerId);
+  }
+  if (cancel) {
+    state.selectedCells = drag.baseCells;
+    state.selected = drag.baseSelected;
+    state.selectionAnchor = drag.baseAnchor;
+  } else {
+    state.selected = drag.end;
+    state.selectionAnchor = drag.anchor;
+    syncActiveSiteFromCell(drag.end);
+  }
+  refreshSide();
+  refreshPatches();
+  refreshCompositeList();
+  updateHud();
+  scheduleDraw();
+  return true;
+}
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.max(1, Math.floor(rect.width * dpr)); canvas.height = Math.max(1, Math.floor(rect.height * dpr)); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1180,6 +1277,39 @@ function schedulePatchRefresh() {
   });
 }
 function diamondPath(col, row) { const p = cellToWorld(col, row); ctx.beginPath(); ctx.moveTo(p.x + 20, p.y); ctx.lineTo(p.x + 40, p.y + 10); ctx.lineTo(p.x + 20, p.y + 20); ctx.lineTo(p.x, p.y + 10); ctx.closePath(); }
+function isoGridCenter(point) {
+  const cell = isoGridToCell(point);
+  const world = cellToWorld(cell.col, cell.row);
+  return { x: world.x + 20, y: world.y + 10 };
+}
+function isoSelectionOutlinePath(anchor, cell) {
+  const start = cellToIsoGrid(anchor);
+  const end = cellToIsoGrid(cell);
+  const minU = Math.min(start.u, end.u);
+  const maxU = Math.max(start.u, end.u);
+  const minV = Math.min(start.v, end.v);
+  const maxV = Math.max(start.v, end.v);
+  const top = isoGridCenter({ u: minU, v: minV });
+  const right = isoGridCenter({ u: maxU, v: minV });
+  const bottom = isoGridCenter({ u: maxU, v: maxV });
+  const left = isoGridCenter({ u: minU, v: maxV });
+  ctx.beginPath();
+  ctx.moveTo(top.x, top.y - 10);
+  ctx.lineTo(right.x + 20, right.y);
+  ctx.lineTo(bottom.x, bottom.y + 10);
+  ctx.lineTo(left.x - 20, left.y);
+  ctx.closePath();
+}
+function drawIsoSelectionDragOutline() {
+  const drag = state.selectionDrag;
+  if (!drag) return;
+  isoSelectionOutlinePath(drag.anchor, drag.end);
+  ctx.strokeStyle = '#0f766e';
+  ctx.lineWidth = 3 / state.transform.scale;
+  ctx.setLineDash([8 / state.transform.scale, 4 / state.transform.scale]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
 function hexToRgba(hex, alpha) {
   const clean = String(hex || '#0f766e').replace('#', '');
   const value = Number.parseInt(clean.length === 3 ? clean.split('').map(ch => ch + ch).join('') : clean, 16);
@@ -1363,6 +1493,14 @@ function draw() {
   drawEditedCellOverlay();
   drawActiveSiteOverlay();
   ctx.lineWidth = 1 / state.transform.scale;
+  drawIsoSelectionDragOutline();
+  if (state.selectionAnchor) {
+    const anchor = cellToWorld(state.selectionAnchor.col, state.selectionAnchor.row);
+    ctx.beginPath();
+    ctx.arc(anchor.x + 20, anchor.y + 10, 4 / state.transform.scale, 0, Math.PI * 2);
+    ctx.fillStyle = '#0f766e';
+    ctx.fill();
+  }
   for (const cell of selectedCellList()) { diamondPath(cell.col, cell.row); ctx.fillStyle = 'rgba(245,158,11,0.07)'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.4 / state.transform.scale; ctx.fill(); ctx.stroke(); }
   if (state.selected) { diamondPath(state.selected.col, state.selected.row); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2.4 / state.transform.scale; ctx.stroke(); }
   ctx.restore();
@@ -1427,11 +1565,16 @@ function updateHud() {
   els.hudSite.textContent = site ? `据点：${site.cityName}` : `据点：${siteOverlayStatus()}`;
 }
 function currentRegionBounds() {
-  return selectedCellBounds();
+  return isoSelectionBounds();
 }
 function describeRegion() {
-  const selection = selectedCellBounds();
-  if (selection) return `选区：${selection.count} 格，范围 ${selection.left},${selection.top} 到 ${selection.right},${selection.bottom}`;
+  const selection = isoSelectionBounds();
+  if (selection) {
+    const clipped = selection.count < selection.width * selection.height ? '，含不连续或边界裁剪' : '';
+    const modes = { replace: '替换', add: '添加', subtract: '扣除' };
+    const operation = state.selectionDrag ? `；正在${modes[state.selectionDrag.mode]}` : '';
+    return `等距选区：${selection.width} × ${selection.height}，共 ${selection.count} 格${clipped}${operation}`;
+  }
   return '未选择区域。';
 }
 function regionCellHasContent(record) {
@@ -1445,7 +1588,7 @@ function regionCellHasContent(record) {
 }
 function captureRegionSnapshot(name = '区域复制', mode = state.regionCopyMode || 'full') {
   const selectedCells = selectedCellList();
-  const bounds = selectedCellBounds();
+  const bounds = isoSelectionBounds(selectedCells);
   if (!bounds) return null;
   const normalizedMode = mode === 'non-base' ? 'non-base' : 'full';
   const fields = normalizedMode === 'non-base'
@@ -1456,19 +1599,25 @@ function captureRegionSnapshot(name = '区域复制', mode = state.regionCopyMod
     ? selectedCells.filter(cell => regionCellHasContent(recordAt(cell)))
     : selectedCells.slice();
   if (!capturedCells.length) return null;
-  const active = state.selected || capturedCells[0];
-  const anchor = { dx: active.col - bounds.left, dy: active.row - bounds.top };
+  const active = selectionReferenceCell() || capturedCells[0];
+  const anchor = cellToIsoGrid(active);
   const cells = capturedCells
     .sort((left, right) => left.row - right.row || left.col - right.col)
-    .map(cell => ({ dx: cell.col - bounds.left, dy: cell.row - bounds.top, record: fieldIndexes.map(index => recordAt(cell)[index]) }));
-  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'cells', copyMode: normalizedMode, width: bounds.width, height: bounds.height, count: cells.length, fields, anchor, cells };
+    .map(cell => {
+      const point = cellToIsoGrid(cell);
+      return { du: point.u - anchor.u, dv: point.v - anchor.v, record: fieldIndexes.map(index => recordAt(cell)[index]) };
+    });
+  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, mode: 'iso-cells-v2', copyMode: normalizedMode, width: bounds.width, height: bounds.height, count: cells.length, fields, sourceAnchor: active, cells };
 }
 function cutRegionSnapshot(name = '区域剪切') {
   const snapshot = captureRegionSnapshot(name);
   if (!snapshot) return null;
-  const bounds = currentRegionBounds();
-  if (!bounds) return null;
-  const cells = snapshot.cells.map(cell => ({ col: bounds.left + cell.dx, row: bounds.top + cell.dy }));
+  const sourceAnchor = snapshot.sourceAnchor || selectionReferenceCell();
+  if (!sourceAnchor) return null;
+  const anchor = cellToIsoGrid(sourceAnchor);
+  const cells = snapshot.mode === 'iso-cells-v2'
+    ? snapshot.cells.map(cell => isoGridToCell({ u: anchor.u + cell.du, v: anchor.v + cell.dv }))
+    : snapshot.cells.map(cell => ({ col: cell.dx, row: cell.dy }));
   const snapshotFields = new Set(snapshot.fields.map(canonicalFieldName));
   const clearFields = (state.meta.editableRecordFields || [])
     .map(canonicalFieldName)
@@ -1487,6 +1636,8 @@ function pasteRegionSnapshot(snapshot) {
   if (!snapshot || !state.selected) return false;
   const changes = [];
   const pastedCells = new Map();
+  const pasteAnchor = { col: state.selected.col, row: state.selected.row };
+  const pastePoint = cellToIsoGrid(pasteAnchor);
   const pushRecord = (target, source) => {
     if (target.col >= state.meta.width || target.row >= state.meta.height || target.col < 0 || target.row < 0) return;
     pastedCells.set(`${target.col},${target.row}`, { col: target.col, row: target.row });
@@ -1496,7 +1647,9 @@ function pasteRegionSnapshot(snapshot) {
       changes.push({ x: target.col, y: target.row, field, after: source[sourceIndex] });
     }
   };
-  if (snapshot.mode === 'cells' && Array.isArray(snapshot.cells)) {
+  if (snapshot.mode === 'iso-cells-v2' && Array.isArray(snapshot.cells)) {
+    for (const cell of snapshot.cells) pushRecord(isoGridToCell({ u: pastePoint.u + cell.du, v: pastePoint.v + cell.dv }), cell.record);
+  } else if (snapshot.mode === 'cells' && Array.isArray(snapshot.cells)) {
     const anchor = snapshot.anchor || { dx: 0, dy: 0 };
     for (const cell of snapshot.cells) pushRecord({ col: state.selected.col + cell.dx - anchor.dx, row: state.selected.row + cell.dy - anchor.dy }, cell.record);
   } else {
@@ -1507,7 +1660,8 @@ function pasteRegionSnapshot(snapshot) {
   const changed = applyChangeSet(changes);
   if (pastedCells.size) {
     state.selectedCells = pastedCells;
-    state.selected = [...pastedCells.values()][0] || state.selected;
+    state.selected = pasteAnchor;
+    state.selectionAnchor = pasteAnchor;
     refreshCompositeList();
     scheduleDraw();
   }
@@ -2702,19 +2856,17 @@ function renderValidationPanel() {
   }
 }
 function drawRegionOverlay() {
-  const bounds = currentRegionBounds();
-  if (!bounds) return;
+  const cells = selectedCellList();
+  if (!cells.length) return;
   const scale = state.transform.scale || 1;
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.9)';
   ctx.fillStyle = 'rgba(15,118,110,0.12)';
   ctx.lineWidth = 1.4 / scale;
-  for (let row = bounds.top; row <= bounds.bottom; row++) {
-    for (let col = bounds.left; col <= bounds.right; col++) {
-      diamondPath(col, row);
-      ctx.fill();
-      ctx.stroke();
-    }
+  for (const cell of cells) {
+    diamondPath(cell.col, cell.row);
+    ctx.fill();
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -3388,6 +3540,8 @@ function resetEditState(meta) {
   state.redoStack = [];
   state.selected = null;
   state.selectedCells.clear();
+  state.selectionAnchor = null;
+  state.selectionDrag = null;
   state.regionClipboard = null;
   state.activeCompositeId = null;
   state.compositeObjects = [];
@@ -4943,6 +5097,11 @@ canvas.addEventListener('pointerdown', ev => {
   const world = clientToWorld(ev);
   const cell = worldToCell(world.x, world.y);
   if (!cell) return;
+  if (els.tool.value === 'select' && ev.shiftKey) {
+    ev.preventDefault();
+    startIsoSelectionDrag(ev, cell);
+    return;
+  }
   selectCell(cell, ev);
   if (els.tool.value === 'paint') {
     applyPaint(cell);
@@ -4952,14 +5111,18 @@ canvas.addEventListener('pointerdown', ev => {
   scheduleDraw();
 });
 canvas.addEventListener('pointermove', ev => {
+  if (updateIsoSelectionDrag(ev)) return;
   if (!state.dragging || !state.dragStart || ev.pointerId !== state.dragStart.pointerId) return;
   state.transform.x = state.dragStart.tx + ev.clientX - state.dragStart.x;
   state.transform.y = state.dragStart.ty + ev.clientY - state.dragStart.y;
   scheduleDraw();
 });
-canvas.addEventListener('pointerup', ev => { stopDrag(ev); });
-canvas.addEventListener('pointercancel', ev => { stopDrag(ev); });
-canvas.addEventListener('lostpointercapture', ev => { stopDrag(ev); });
+canvas.addEventListener('pointerup', ev => { if (state.selectionDrag) updateIsoSelectionDrag(ev); if (!stopIsoSelectionDrag(ev)) stopDrag(ev); });
+canvas.addEventListener('pointercancel', ev => { if (!stopIsoSelectionDrag(ev, true)) stopDrag(ev); });
+canvas.addEventListener('lostpointercapture', ev => {
+  if (state.selectionDrag) stopIsoSelectionDrag(ev, true);
+  else stopDrag(ev);
+});
 canvas.addEventListener('wheel', ev => { ev.preventDefault(); const before = clientToWorld(ev); const factor = ev.deltaY < 0 ? 1.12 : 0.89; state.transform.scale = Math.max(0.2, Math.min(5, state.transform.scale * factor)); const rect = canvas.getBoundingClientRect(); state.transform.x = ev.clientX - rect.left - before.x * state.transform.scale; state.transform.y = ev.clientY - rect.top - before.y * state.transform.scale; scheduleDraw(); }, { passive: false });
 mini.addEventListener('pointerdown', ev => {
   const imageSize = virtualImageSize();
@@ -5055,6 +5218,11 @@ els.resourceList.addEventListener('click', ev => {
   scheduleResourceListRender();
 });
 window.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && state.selectionDrag) {
+    ev.preventDefault();
+    stopIsoSelectionDrag(null, true);
+    return;
+  }
   const shortcutKey = ev.key.toLowerCase();
   if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && !isEditableTarget(ev.target) && (shortcutKey === 'c' || shortcutKey === 'x' || shortcutKey === 'v')) {
     ev.preventDefault();
@@ -5122,7 +5290,7 @@ async function boot() {
   resetEditState(state.meta);
   await loadStagePicker();
 }
-window.sanEditor = { state, els, applyImportedPatchPayload, loadPatchFile, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, cutRegionSnapshot, copySelectedRegion, cutSelectedRegion, pasteSelectedRegion, pasteRegionSnapshot, validationIssues };
+window.sanEditor = { state, els, applyImportedPatchPayload, loadPatchFile, applyPaint, undoLastEdit, redoLastEdit, addScenarioForce, addScenarioSite, addExistingGeneralToSite, addScenarioEntity, addSiteGate, updateGateField, loadLocalProjectFiles, resetSelectedLayerChange, resetAllChanges, loadLocalMFile, parseStageM, loadStagePicker, rebuildEditedImage, cellToWorld, cellToIsoGrid, isoGridToCell, isoCellsBetween, applyIsoSelection, fieldIndex, recordAt, exportEditedArtifacts, buildExportArtifacts, setActiveSite, activeSite, captureRegionSnapshot, cutRegionSnapshot, copySelectedRegion, cutSelectedRegion, pasteSelectedRegion, pasteRegionSnapshot, validationIssues };
 boot().catch(err => { els.status.textContent = String(err); });
 </script>
 </body>
