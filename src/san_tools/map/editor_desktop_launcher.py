@@ -91,6 +91,18 @@ class LauncherRuntimeController:
             self._fail_import(exc)
             raise
 
+    def import_content_pack(self, archive_path: Path, replace_confirmed: bool = False) -> RuntimeSession:
+        """校验独立内容包并直接载入持久哈希缓存。"""
+
+        self._begin_import(replace_confirmed)
+        try:
+            return self._finish_import(
+                self.manager.create_from_content_pack(archive_path, self.release_info)
+            )
+        except Exception as exc:
+            self._fail_import(exc)
+            raise
+
     def import_directory(self, source_dir: Path, replace_confirmed: bool = False) -> RuntimeSession:
         """从只含一个地图的用户目录创建或替换会话。"""
 
@@ -182,6 +194,17 @@ def find_editor_data_dir(explicit: Path | None = None) -> Path:
     raise FileNotFoundError(f"找不到编辑器数据目录，已检查：\n{searched}")
 
 
+def find_bundled_content_packs(data_dir: Path) -> list[Path]:
+    """查找与 editor-data 同级 content-packs 目录中的独立内容包。"""
+
+    from san_tools.map.editor_content_pack import CONTENT_PACK_SUFFIX
+
+    pack_dir = data_dir.expanduser().resolve().parent / "content-packs"
+    if not pack_dir.is_dir():
+        return []
+    return sorted(path.resolve() for path in pack_dir.glob(f"*{CONTENT_PACK_SUFFIX}") if path.is_file())
+
+
 def editor_entry_path(data_dir: Path, stage: str = "stage01") -> str:
     """优先打开指定关卡，不存在时退回编辑器索引。"""
 
@@ -220,11 +243,14 @@ def check_editor_data(data_dir: Path, stage: str) -> int:
     if entry == "/index.html" and not (data_dir / "index.html").is_file():
         return 3
     # 模板仅在用户选择地图后使用，必须纳入发布检查以捕获冻结资产遗漏。
+    from san_tools.map.editor_content_pack import ContentPackError, inspect_content_pack
     from san_tools.map.export_editor_bundle import resolve_editor_template
 
     try:
         resolve_editor_template(data_dir)
-    except FileNotFoundError:
+        for content_pack in find_bundled_content_packs(data_dir):
+            inspect_content_pack(content_pack)
+    except (FileNotFoundError, ContentPackError):
         return 4
 
     server = create_editor_server(data_dir)
@@ -232,7 +258,12 @@ def check_editor_data(data_dir: Path, stage: str) -> int:
     return 0
 
 
-def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
+def run_launcher(
+    data_dir: Path,
+    stage: str,
+    open_browser: bool = True,
+    startup_content_pack: Path | None = None,
+) -> int:
     """启动资源选择界面、本机服务和运行时临时会话。"""
 
     import tkinter as tk
@@ -264,7 +295,7 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
     root = tk.Tk()
     root.title(app_title)
     root.resizable(False, False)
-    root.geometry("620x290")
+    root.geometry("680x330")
     root.columnconfigure(0, weight=1)
     state_var = tk.StringVar()
     detail_var = tk.StringVar()
@@ -326,6 +357,7 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
         control_state = tk.DISABLED if busy or closing else tk.NORMAL
         choose_file_button.configure(state=control_state)
         choose_dir_button.configure(state=control_state)
+        choose_pack_button.configure(state=control_state)
         open_button.configure(state=tk.DISABLED if busy else tk.NORMAL)
 
     def replacement_confirmed() -> bool:
@@ -355,8 +387,12 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
             try:
                 if kind == "stage":
                     session = controller.import_stage(selected, replace_confirmed)
-                else:
+                elif kind == "content-pack":
+                    session = controller.import_content_pack(selected, replace_confirmed)
+                elif kind == "directory":
                     session = controller.import_directory(selected, replace_confirmed)
+                else:
+                    raise ValueError(f"未知导入类型：{kind}")
                 result_queue.put(("loaded", session))
             except Exception as exc:
                 result_queue.put(("failed", exc))
@@ -373,6 +409,18 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
         )
         if selected:
             begin_import("stage", Path(selected))
+
+    def choose_content_pack() -> None:
+        """选择已经预生成并通过 Manifest 审计的独立内容包。"""
+
+        from san_tools.map.editor_content_pack import CONTENT_PACK_SUFFIX
+
+        selected = filedialog.askopenfilename(
+            title="选择地图编辑器内容包",
+            filetypes=(("地图编辑器内容包", f"*{CONTENT_PACK_SUFFIX}"), ("ZIP 文件", "*.zip")),
+        )
+        if selected:
+            begin_import("content-pack", Path(selected))
 
     def choose_resource_directory() -> None:
         """选择只含一个 stageXX.m 的完整资源目录。"""
@@ -419,7 +467,7 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
             session = payload
             server.switch_data_dir(session.data_dir)
             refresh_launcher()
-            if not closing:
+            if not closing and open_browser:
                 open_editor()
         else:
             refresh_launcher()
@@ -442,6 +490,12 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
         command=choose_resource_directory,
     )
     choose_dir_button.grid(row=0, column=1, padx=6)
+    choose_pack_button = ttk.Button(
+        import_controls,
+        text="选择内容包",
+        command=choose_content_pack,
+    )
+    choose_pack_button.grid(row=0, column=2, padx=6)
     open_button = ttk.Button(action_controls, text="打开编辑器", command=open_editor)
     open_button.grid(row=0, column=0, padx=6)
     ttk.Button(action_controls, text="停止并退出", command=close_launcher).grid(
@@ -452,7 +506,17 @@ def run_launcher(data_dir: Path, stage: str, open_browser: bool = True) -> int:
     root.protocol("WM_DELETE_WINDOW", close_launcher)
     refresh_launcher()
     root.after(100, poll_import_result)
-    if open_browser:
+    bundled_packs = find_bundled_content_packs(data_dir)
+    requested_pack = startup_content_pack
+    if requested_pack is None and len(bundled_packs) == 1:
+        requested_pack = bundled_packs[0]
+    elif requested_pack is None and len(bundled_packs) > 1:
+        controller.message = f"发现 {len(bundled_packs)} 个随包内容包，请点击“选择内容包”指定目标。"
+        refresh_launcher()
+    if requested_pack is not None:
+        root.after(150, lambda path=requested_pack: begin_import("content-pack", path))
+
+    if open_browser and requested_pack is None:
         open_editor()
     root.mainloop()
     return 0
@@ -464,6 +528,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=APP_TITLE)
     parser.add_argument("--data-dir", type=Path, help="编辑器静态数据目录")
     parser.add_argument("--stage", default="stage01", help="启动后优先打开的关卡")
+    parser.add_argument("--content-pack", type=Path, help="启动后直接载入独立内容包")
     parser.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
     parser.add_argument("--check", action="store_true", help="只检查发布数据并立即退出")
     args = parser.parse_args(argv)
@@ -480,7 +545,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.check:
         return check_editor_data(data_dir, args.stage)
-    return run_launcher(data_dir, args.stage, not args.no_browser)
+    return run_launcher(data_dir, args.stage, not args.no_browser, args.content_pack)
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ class TestEditorDocumentation(unittest.TestCase):
             "build_editor_release.py", "export_editor_bundle.py", "editor_desktop_launcher.py",
             "editor_app.html", "stage_ini_codec.py", "m.ksy", "stage.json",
             "SanMapEditor.spec", "SanMapEditor.exe", "编辑器使用指南.md",
+            "editor_content_pack.py", "compose_editor_distribution.py", ".sanmap-pack",
             "test_editor_documentation.py",
         ):
             self.assertIn(marker, chain)
@@ -42,6 +43,8 @@ class TestEditorDocumentation(unittest.TestCase):
         release = (ROOT / "src" / "san_tools" / "map" / "build_editor_release.py").read_text(encoding="utf-8")
         self.assertIn("EDITOR_USER_GUIDE.zh.md", index)
         self.assertIn("EDITOR_PACKAGING_CHAIN.zh.md", index)
+        self.assertIn("EDITOR_CONTENT_PACK.zh.md", index)
+        self.assertTrue((ROOT / "docs" / "EDITOR_CONTENT_PACK.zh.md").is_file())
         self.assertIn("write_release_guides", release)
         self.assertIn("编辑器使用指南.md", release)
 

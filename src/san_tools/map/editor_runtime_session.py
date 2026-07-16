@@ -13,7 +13,10 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from san_tools.map.editor_content_pack import ContentPackReport
 
 
 SESSION_FORMAT = "san-map-editor-runtime-session-v1"
@@ -259,6 +262,7 @@ def validate_runtime_inputs(stage_path: Path, source_dir: Path | None = None) ->
 
 RuntimeExporter = Callable[[RuntimeInputReport, Path], dict[str, object]]
 
+
 def default_runtime_exporter(report: RuntimeInputReport, out_dir: Path) -> dict[str, object]:
     """延迟导入真实导出器，避免会话模块与 Bundle 模块循环依赖。"""
 
@@ -289,8 +293,9 @@ class RuntimeSession:
     data_dir: Path
     stage: str
     entry_path: str
-    report: RuntimeInputReport
+    report: RuntimeInputReport | ContentPackReport
     created_at: float
+    persistent: bool = False
 
 
 class RuntimeSessionManager:
@@ -327,6 +332,12 @@ class RuntimeSessionManager:
             json.dumps(marker, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def _discard_session(self, session: RuntimeSession | None) -> None:
+        """只清理临时会话；内容包哈希缓存跨启动保留。"""
+
+        if session is not None and not session.persistent:
+            self.cleanup_session_dir(session.root)
 
     def cleanup_session_dir(self, path: Path) -> bool:
         """只删除路径安全且具有本程序标记的会话目录。"""
@@ -389,6 +400,7 @@ class RuntimeSessionManager:
         report.require_valid()
         if (
             self.current is not None
+            and not self.current.persistent
             and self.current.root.is_dir()
             and input_fingerprint(self.current.report) == input_fingerprint(report)
         ):
@@ -440,15 +452,45 @@ class RuntimeSessionManager:
 
         previous = self.current
         self.current = session
-        if previous is not None:
-            self.cleanup_session_dir(previous.root)
+        self._discard_session(previous)
+        return session
+
+    def create_from_content_pack(
+        self,
+        archive_path: Path,
+        release_info: dict[str, object] | None = None,
+        cache_base: Path | None = None,
+    ) -> RuntimeSession:
+        """校验独立内容包并切换到可复用的持久哈希缓存。"""
+
+        from san_tools.map.editor_content_pack import load_content_pack
+
+        loaded = load_content_pack(archive_path, release_info, cache_base)
+        if (
+            self.current is not None
+            and self.current.persistent
+            and self.current.root.resolve() == loaded.root.resolve()
+        ):
+            return self.current
+        session = RuntimeSession(
+            root=loaded.root,
+            data_dir=loaded.data_dir,
+            stage=loaded.stage,
+            entry_path=loaded.entry_path,
+            report=loaded.report,
+            created_at=loaded.created_at,
+            persistent=True,
+        )
+        previous = self.current
+        self.current = session
+        self._discard_session(previous)
         return session
 
     def close(self) -> None:
-        """清理当前会话；没有活动会话时保持幂等。"""
+        """清理当前临时会话；内容包哈希缓存跨启动保留。"""
 
         if self.current is None:
             return
         current = self.current
         self.current = None
-        self.cleanup_session_dir(current.root)
+        self._discard_session(current)

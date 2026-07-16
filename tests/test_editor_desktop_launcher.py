@@ -20,6 +20,7 @@ from san_tools.map.editor_desktop_launcher import (
     check_editor_data,
     create_editor_server,
     editor_entry_path,
+    find_bundled_content_packs,
     find_editor_data_dir,
     load_release_info,
 )
@@ -66,6 +67,19 @@ class TestEditorDesktopLauncher(unittest.TestCase):
         self.assertEqual(find_editor_data_dir(root), root.resolve())
         self.assertEqual(editor_entry_path(root), "/index.html")
         self.assertEqual(check_editor_data(root, "stage01"), 0)
+
+    def test_release_check_rejects_invalid_bundled_content_pack(self) -> None:
+        """发布检查必须审计同级 content-packs 中的每个独立内容包。"""
+
+        package = TEST_TMP / "invalid-pack-release"
+        root = package / "editor-data"
+        pack_dir = package / "content-packs"
+        root.mkdir(parents=True)
+        pack_dir.mkdir()
+        (root / "index.html").write_text("尚未导入", encoding="utf-8")
+        (root / "release-info.json").write_text("{}", encoding="utf-8")
+        (pack_dir / "stage01.sanmap-pack").write_bytes("不是 ZIP".encode("utf-8"))
+        self.assertEqual(check_editor_data(root, "stage01"), 4)
 
     def test_release_check_rejects_missing_runtime_editor_template(self) -> None:
         """发布检查必须覆盖选择地图后才会读取的冻结 HTML 模板。"""
@@ -142,6 +156,42 @@ class TestEditorDesktopLauncher(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+    def test_discovers_bundled_content_packs_and_controller_loads_one(self) -> None:
+        """启动器应发现同级内容包，并通过控制器切换到持久缓存会话。"""
+
+        package = TEST_TMP / "content-package"
+        data_dir = package / "editor-data"
+        pack_dir = package / "content-packs"
+        data_dir.mkdir(parents=True)
+        pack_dir.mkdir()
+        first = pack_dir / "stage01.sanmap-pack"
+        second = pack_dir / "stage02.sanmap-pack"
+        first.write_bytes(b"one")
+        second.write_bytes(b"two")
+        self.assertEqual(find_bundled_content_packs(data_dir), [first.resolve(), second.resolve()])
+
+        manager = Mock()
+        manager.current = None
+        report = SimpleNamespace(files=[object()] * 4, warnings=[])
+        session = SimpleNamespace(
+            stage="stage01",
+            report=report,
+            data_dir=TEST_TMP / "content-cache",
+            entry_path="/stage01/editor.html",
+        )
+
+        def create_content(*_args, **_kwargs):
+            manager.current = session
+            return session
+
+        manager.create_from_content_pack.side_effect = create_content
+        controller = LauncherRuntimeController({"app_title": "测试编辑器"}, manager=manager)
+        loaded = controller.import_content_pack(first)
+        self.assertIs(loaded, session)
+        self.assertEqual(controller.state, LAUNCHER_LOADED)
+        self.assertIn("4 个输入文件", controller.message)
+        manager.create_from_content_pack.assert_called_once_with(first, controller.release_info)
 
     def test_runtime_controller_tracks_success_confirmation_and_failed_reimport(self) -> None:
         """控制器必须覆盖空项目、成功、替换确认和失败保留旧会话。"""

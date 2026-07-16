@@ -21,6 +21,7 @@
 | `docs/COMMAND_REFERENCE.zh.md` | 统一命令入口、全部命令参数、示例、产物与风险 | 当前有效 | 注册命令、参数、默认路径或输出行为变化时 |
 | `docs/EDITOR_USER_GUIDE.zh.md` | 随发布 ZIP 交付给编辑人员的启动、布局、逐步操作、快捷键、导出和排错指南 | 当前有效 | 用户界面、操作方式、快捷键或导出流程变化时 |
 | `docs/EDITOR_PACKAGING_CHAIN.zh.md` | 无资源 Windows 构建、五文件产物、用户运行时临时 Bundle、审计和发布门禁 | 当前有效 | 构建入口、运行时依赖、白名单、会话或发布目录变化时 |
+| `docs/EDITOR_CONTENT_PACK.zh.md` | 独立内容包格式、生成、审计、启动缓存和组合分发 | 当前有效 | 内容 Schema、缓存、审计或组合方式变化时 |
 | `docs/EDITOR_RESOURCE_FREE_RELEASE_PLAN.zh.md` | 无资源发布的目标、架构、改动清单、测试、验收标准和最终实施状态 | 已实施验收基线 | 无资源发布边界、运行时导入架构或验收状态变化时 |
 | `docs/EDITOR_UI_V2_DESIGN.zh.md` | 编辑器布局、工作流、管理界面和运行时架构 | 当前有效 | UI 结构、主要工作流或功能边界变化时 |
 | `docs/EDITOR_DATA_MANAGEMENT.zh.md` | 输入源、临时会话、用户导出边界，以及字段关系与跨文件同步规则 | 当前有效 | CRUD、会话、Patch 或导入导出行为变化时 |

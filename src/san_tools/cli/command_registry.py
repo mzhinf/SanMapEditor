@@ -22,6 +22,8 @@ COMMANDS: tuple[CommandEntry, ...] = (
     CommandEntry('stitch-kingdom', 'san_tools.map.stitch_kingdom_tiles', '拼接 kingdom tile 样张'),
     CommandEntry('export-m-layers', 'san_tools.map.export_m_layers', '批量导出 .m 三层索引图与附加字段图'),
     CommandEntry('build-editor-release', 'san_tools.map.build_editor_release', '构建地图编辑器 Windows 发布包'),
+    CommandEntry('build-editor-content-pack', 'san_tools.map.editor_content_pack', '生成地图编辑器独立内容包'),
+    CommandEntry('compose-editor-distribution', 'san_tools.map.compose_editor_distribution', '组合基础编辑器与独立内容包'),
     CommandEntry('launch-editor', 'san_tools.map.editor_desktop_launcher', '启动已生成的桌面编辑器数据'),
     CommandEntry('analyze-assets', 'san_tools.analysis.analyze_assets', '分析游戏目录中的 EXE、资源和文件分布'),
     CommandEntry('analyze-sidecars', 'san_tools.analysis.analyze_stage_sidecars', '分析 .stg/.evt/.spr/.dor/.s/.x sidecar'),

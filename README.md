@@ -7,6 +7,7 @@
 ## 当前能力
 
 - 导入 `stageXX.m`，只从同一目录加载同名 `.dor/.stg/.s/.x`、`stage.ini`、`History.txt`、`kingdom.cel`、`heads.dat` 与可选的 `kingdom.atr`。
+- 生成并直接载入 `.sanmap-pack` 独立内容包，按内容哈希复用缓存，不重复解析或渲染原始素材。
 - 编辑底层、叠加、物件与数据标记，支持图层显示、撤销、重做、2.5D 等距菱形框选、区域复制、剪切和合成对象。
 - 管理势力、城池、军寨、山寨、城门、武将与士兵关联。
 - 使用 `SAN_RGB_PALETTE` 渲染地图、小地图与武将头像；小地图颜色随 xyz 自动派生，并允许 Raw 手工修正。
@@ -66,10 +67,11 @@ python -m san_tools list
 
 1. 完整解压 ZIP，保持 `SanMapEditor.exe` 与 `editor-data` 同级。
 2. 双击 EXE。浏览器先显示“尚未导入地图项目”，桌面启动器显示资源选择按钮。
-3. 选择 `stageXX.m`，或选择只含一个 `stageXX.m` 的完整资源目录。
-4. 启动器校验全部同组文件，在 `%TEMP%/SanMapEditor` 生成当前会话并打开编辑页。
+3. 选择 `stageXX.m`、完整资源目录或已经预生成的 `.sanmap-pack` 内容包。
+4. 启动器完成校验后生成原始文件临时会话，或直接载入内容包缓存并打开编辑页。
 5. 重新选择资源会要求确认；新导入失败时旧会话保持可用。
-6. 关闭启动器会停止本机 HTTP 服务并删除当前临时会话。编辑结果必须先导出。
+6. 原始文件导入使用 `%TEMP%` 临时会话；内容包使用 `%LOCALAPPDATA%/SanMapEditor/content-cache` 持久缓存。
+7. 关闭启动器会停止本机 HTTP 服务，并只删除原始文件临时会话。编辑结果必须先导出。
 
 发布程序只监听 `127.0.0.1` 的随机端口，不会把编辑器暴露到局域网。
 
@@ -87,6 +89,24 @@ python -m san_tools run build-editor-release .
 ```
 
 构建不读取 `data/game` 或 `data/text`。`dist/` 中生成 ZIP、外部 SHA-256 清单和构建结果 JSON；ZIP 只允许 EXE、空入口、发布元数据、短说明和完整使用指南五个文件。公开发布前仍需完成资源审计、合法游戏副本人工兼容性验证，并对源码内 `SAN_RGB_PALETTE` 的发布边界作法律确认。
+
+生成独立内容包：
+
+```powershell
+python -m san_tools run build-editor-content-pack data/game/stage01.m `
+  --output-dir dist/content-packs
+```
+
+组合基础五文件目录与一个或多个内容包：
+
+```powershell
+python -m san_tools run compose-editor-distribution `
+  derived/editor-release/SanMapEditor `
+  dist/content-packs/stage01.sanmap-pack `
+  --output dist/SanMapEditor-with-stage01.zip
+```
+
+组合命令不重新解析素材。基础发布包继续保持无资源五文件白名单；组合 ZIP 只额外增加 `content-packs/*.sanmap-pack`。格式、安全审计和缓存规则见 [独立内容包说明](docs/EDITOR_CONTENT_PACK.zh.md)。
 
 ## 命令入口
 

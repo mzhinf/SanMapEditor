@@ -1,6 +1,6 @@
 # 地图编辑器 Windows 无资源打包链路
 
-本文描述正式代码发布与用户运行时资源生成两条隔离链路。正式 ZIP 不携带关卡、头像、文本或派生图片；这些内容只在用户导入后进入系统临时会话。
+本文描述基础代码发布、原始文件临时会话和独立内容包三条隔离链路。基础 ZIP 不携带关卡、头像、文本或派生图片；经过权利确认时可用组合命令把独立内容包加入另一份分发 ZIP。
 
 ## 一、链路总览
 
@@ -16,9 +16,14 @@ flowchart LR
   H --> I[export_editor_bundle.py 运行时入口]
   I --> J[系统临时 Bundle]
   J --> K[editor_app.html]
+  I --> L[build-editor-content-pack]
+  L --> M[独立 sanmap-pack]
+  M --> N[持久哈希缓存]
+  E --> O[compose-editor-distribution]
+  M --> O
 ```
 
-构建不得读取 `data/game`、`data/text` 或本机游戏目录；运行时只读取启动器明确选择的同一目录。
+基础构建不得读取 `data/game`、`data/text` 或本机游戏目录；内容包生成只读取用户明确选择的同一目录。组合分发不重新解析素材。
 
 ## 二、正式构建
 
@@ -37,6 +42,8 @@ python -m san_tools run build-editor-release .
 | `editor_desktop_launcher.py` | 四态资源选择、本机 HTTP 服务和固定端口内容切换。 |
 | `editor_runtime_session.py` | 输入校验、事务会话、复用、关闭清理和过期回收。 |
 | `export_editor_bundle.py` | 运行时地图、图集、小地图、头像、场景模型与写回模型生成。 |
+| `editor_content_pack.py` | 内容包生成、Manifest、路径与哈希审计、事务解包和持久缓存。 |
+| `compose_editor_distribution.py` | 五文件基础目录与一个或多个独立内容包的无解析组合。 |
 | `stage_ini_codec.py` | `stage.ini` 真实块流解析。 |
 | `editor_app.html` | 浏览器编辑、校验和用户导出。 |
 | `m.ksy`、`dor.ksy`、`stg.ksy` | 二进制字段顺序和类型规范。 |
@@ -84,7 +91,31 @@ SanMapEditor/
 
 运行时公共模型只使用用户 `stage.ini` 与 `History.txt`。`stage_ini_codec.py` 配合内置 49/17 字段生成写回位置；完整 CP950 映射由 Python 编解码器枚举验证，不读取 `data/text`。
 
-## 六、用户导出边界
+## 六、独立内容包与组合分发
+
+内容包生成命令复用严格运行时输入校验和 Bundle 生成器，但封装时移除 `editor.html`、索引和发布元数据：
+
+```powershell
+python -m san_tools run build-editor-content-pack path\to\stage01.m `
+  --output-dir dist\content-packs
+```
+
+`.sanmap-pack` 使用独立 Manifest，逐文件记录大小和 SHA-256，并校验浏览器资源引用。启动器首次载入后解包到 `%LOCALAPPDATA%/SanMapEditor/content-cache/<归档哈希>`；再次载入复用素材缓存，同时刷新当前 EXE 内嵌的编辑器页面。
+
+把内容包放在 EXE 同级 `content-packs/` 可形成带关卡目录；恰好一个时自动载入，多个时要求用户明确选择。正式组合命令为：
+
+```powershell
+python -m san_tools run compose-editor-distribution `
+  derived\editor-release\SanMapEditor `
+  dist\content-packs\stage01.sanmap-pack `
+  --output dist\SanMapEditor-with-stage01.zip
+```
+
+组合命令先分别审计基础目录和每个内容包，再生成只额外包含 `content-packs/*.sanmap-pack` 的 ZIP。基础五文件白名单不变，不能用组合分发规则放宽 `build-editor-release`。
+
+内容包仍包含用户生成的游戏派生素材和写回参考文件，公开分发前必须单独确认权利。完整格式见 [地图编辑器独立内容包](EDITOR_CONTENT_PACK.zh.md)。
+
+## 七、用户导出边界
 
 - `.dor/.stg/stage.ini/History.txt/heads.dat` 只复制到当前临时会话。
 - 原始 `.s/.x` 不进入发布包；其合法尾区写入 `stage.json.sidecars`。
@@ -92,7 +123,7 @@ SanMapEditor/
 - 网页内重新导入 `.m` 需要替换确认，仅用于同一桌面资源会话续编。
 - 用户下载的 `stageXX-export.zip` 可含游戏文件、工作簿和 Patch，它不是正式程序发布包。
 
-## 七、资源审计
+## 八、资源审计
 
 `editor_release_audit.py` 对目录和 ZIP 执行相同规则：
 
@@ -102,7 +133,7 @@ SanMapEditor/
 4. 目录与 ZIP 的路径、字节数和 SHA-256 逐项一致。
 5. Analysis、EXE、PKG、PYZ TOC 不得引用游戏资源。
 
-## 八、验证
+## 九、验证
 
 ```powershell
 python -m unittest discover -s tests
@@ -110,11 +141,11 @@ python -m san_tools run build-editor-release .
 .\derived\editor-release\SanMapEditor\SanMapEditor.exe --data-dir .\derived\editor-release\SanMapEditor\editor-data --check
 ```
 
-关键测试包括 `test_editor_release_audit.py`、`test_editor_resource_free_build.py`、`test_editor_runtime_session.py`、`test_editor_runtime_bundle.py`、`test_editor_runtime_text_independence.py`、`test_editor_resource_free_ui.py` 和 `test_editor_documentation.py`。
+关键测试包括 `test_editor_release_audit.py`、`test_editor_resource_free_build.py`、`test_editor_content_pack.py`、`test_editor_runtime_session.py`、`test_editor_runtime_bundle.py`、`test_editor_runtime_text_independence.py`、`test_editor_resource_free_ui.py` 和 `test_editor_documentation.py`。
 `--check` 同时验证 EXE 同级空入口和冻结程序内的 `editor_app.html`，用于提前捕获“启动成功、选择地图后才发现模板缺失”的构建错误。
 
 
-## 九、发布门禁
+## 十、发布门禁
 
 1. 完整测试、真实样本、EXE `--check`、目录/ZIP/TOC 审计全部通过。
 2. Manifest 与实际 ZIP 哈希一致，工作区没有暂存本地游戏数据。
