@@ -348,7 +348,32 @@ if (alerts.length !== 1 || !alerts[0].includes('Y 坐标 41 为奇数') || !aler
 """
         self.run_node(harness + functions + checks)
 
+    def test_gate_edit_rejects_odd_y(self) -> None:
+        """验证直接编辑城门 Y 为奇数时会提示且不登记 Patch。"""
+
+        source = script_source()
+        functions = function_range(source, "gateKey", "deleteSiteGate")
+        harness = """
+const gate = { gateKey: 'gate:old', gateIndex: 5, group: 2, doorIndex: 3, doorX: 10, doorY: 92, deleted: false };
+const state = { gates: [gate], gatePatches: new Map(), meta: { siteLinks: {} }, scenario: null };
+const alerts = [];
+let refreshes = 0;
+const window = { alert: message => alerts.push(String(message)) };
+function dorRecordKey(group, doorIndex) { return String(group) + ':' + String(doorIndex); }
+function schedulePatchRefresh() {}
+function buildSiteIndex() { return null; }
+function renderSitePicker() { refreshes += 1; }
+function scheduleDraw() {}
+"""
+        checks = """
+if (updateGateField(gate.gateKey, 'doorY', '93', true) !== false) throw new Error('奇数 Y 未被拒绝');
+if (gate.doorY !== 92 || state.gatePatches.size !== 0 || refreshes !== 0) throw new Error('奇数 Y 修改产生了副作用');
+if (alerts.length !== 1 || !alerts[0].includes('Y 坐标 93 为奇数') || !alerts[0].includes('只能保存偶数 Y 坐标')) throw new Error('直接修改的提示不明确');
+if (updateGateField(gate.gateKey, 'doorY', '94', true) !== true || gate.doorY !== 94 || state.gatePatches.size !== 1 || refreshes !== 1) throw new Error('偶数 Y 修改未正常生效');
+"""
+        self.run_node(harness + functions + checks)
     def test_new_master_rows_require_append_layout(self) -> None:
+
         """验证旧 bundle 缺少新增布局时会阻断母表扩展。"""
 
         source = script_source()

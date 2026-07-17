@@ -1746,14 +1746,19 @@ function refreshGateViews() {
 }
 function updateGateField(gateKeyValue, field, rawValue, numeric = true) {
   const gate = state.gates.find(item => gateKey(item) === gateKeyValue);
-  if (!gate || gate.deleted) return;
+  if (!gate || gate.deleted) return false;
   const after = numeric ? Number.parseInt(rawValue, 10) : String(rawValue || '');
-  if (numeric && !Number.isFinite(after)) return;
+  if (numeric && !Number.isFinite(after)) return false;
   const before = gate[field];
-  if (before === after) return;
+  if (before === after) return true;
+  if (field === 'doorY' && after % 2 !== 0) {
+    window.alert(`无法修改城门：Y 坐标 ${after} 为奇数，.dor 只能保存偶数 Y 坐标。`);
+    return false;
+  }
   gate[field] = after;
   storeGatePatch(gate, 'update', field, before, after);
   refreshGateViews();
+  return true;
 }
 function addSiteGate(siteView) {
   if (!siteView) return;
@@ -1811,7 +1816,9 @@ function appendGateInput(parent, gate, field, label, numeric = true, readonly = 
   input.value = gate[field] ?? '';
   input.disabled = readonly;
   if (readonly) input.title = '关系派生字段，与当前据点坐标同步';
-  else input.addEventListener('change', () => updateGateField(gateKey(gate), field, input.value, numeric));
+  else input.addEventListener('change', () => {
+    if (!updateGateField(gateKey(gate), field, input.value, numeric)) input.value = gate[field] ?? '';
+  });
   appendFieldControl(parent, label, input);
 }
 function scenarioCollectionName(kind) { return kind === 'entity' ? 'entities' : kind + 's'; }
