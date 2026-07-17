@@ -321,6 +321,33 @@ updateGateField(added.gateKey, 'doorX', '99', true);
 if (added.doorX !== 99 || existing.doorX !== 10) throw new Error('新增城门编辑串改已有城门');
 """
         self.run_node(harness + functions + checks)
+
+    def test_new_gate_rejects_odd_y(self) -> None:
+        """验证奇数 Y 坐标会提示并阻止新增城门。"""
+
+        source = script_source()
+        functions = function_range(source, "gateKey", "deleteSiteGate")
+        harness = """
+const state = {
+  gates: [], selected: { col: 30, row: 41 }, gatePatches: new Map(),
+  meta: { siteLinks: {} }, scenario: null
+};
+const alerts = [];
+let refreshes = 0;
+const window = { alert: message => alerts.push(String(message)) };
+function dorRecordKey(group, doorIndex) { return String(group) + ':' + String(doorIndex); }
+function schedulePatchRefresh() {}
+function buildSiteIndex() { return null; }
+function renderSitePicker() { refreshes += 1; }
+function scheduleDraw() {}
+"""
+        checks = """
+addSiteGate({ siteKey: 'site:1', cityName: '测试城', forceIndex: 2, mapX: 50, mapY: 60 });
+if (state.gates.length !== 0 || state.gatePatches.size !== 0 || refreshes !== 0) throw new Error('奇数 Y 仍新增了城门或产生副作用');
+if (alerts.length !== 1 || !alerts[0].includes('Y 坐标 41 为奇数') || !alerts[0].includes('只能保存偶数 Y 坐标')) throw new Error('奇数 Y 提示不明确');
+"""
+        self.run_node(harness + functions + checks)
+
     def test_new_master_rows_require_append_layout(self) -> None:
         """验证旧 bundle 缺少新增布局时会阻断母表扩展。"""
 

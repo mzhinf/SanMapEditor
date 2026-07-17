@@ -1757,11 +1757,16 @@ function updateGateField(gateKeyValue, field, rawValue, numeric = true) {
 }
 function addSiteGate(siteView) {
   if (!siteView) return;
+  const selected = state.selected || { col: Number(siteView.mapX || 0), row: Number(siteView.mapY || 0) };
+  const doorY = Number(selected.row || 0);
+  if (doorY % 2 !== 0) {
+    window.alert(`无法添加城门：当前 Y 坐标 ${doorY} 为奇数，.dor 只能保存偶数 Y 坐标。`);
+    return;
+  }
   const index = state.gates.reduce((maxValue, gate) => Math.max(maxValue, Number(gate.gateIndex || 0)), -1) + 1;
   const group = Number.isFinite(Number(siteView.forceIndex)) ? Number(siteView.forceIndex) : 0;
   const groupGates = state.gates.filter(gate => !gate.deleted && Number(gate.group) === group);
   const doorIndex = groupGates.reduce((maxValue, gate) => Math.max(maxValue, Number(gate.doorIndex || 0)), -1) + 1;
-  const selected = state.selected || { col: Number(siteView.mapX || 0), row: Number(siteView.mapY || 0) };
   const gate = {
     gateKey: `gate:new:${Date.now()}:${state.gates.length}`,
     gateIndex: index,
@@ -1772,7 +1777,7 @@ function addSiteGate(siteView) {
     originalDorKey: '',
     isNew: true,
     doorX: Number(selected.col || 0),
-    doorY: Number(selected.row || 0),
+    doorY,
     dir: 0,
     siteX: Number(siteView.mapX || 0),
     siteY: Number(siteView.mapY || 0),
