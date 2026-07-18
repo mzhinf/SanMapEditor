@@ -34,7 +34,7 @@
 
 ## 2026-07-13：GitHub 发布前整理
 
-- 复核 `master` 历史不存在超过 1 MiB 的文件，无需重建 Git 仓库。
+- 复核 `main` 历史不存在超过 1 MiB 的文件，无需重建 Git 仓库。
 - 统一本地资源目录为 `data/game` 与 `data/text`，清除源码和测试中的本机绝对路径。
 - 移除旧 `tools` 转发层、硬编码 Node 脚本、生成分析文件和失效测试。
 - 补齐 package data、CI、许可证、贡献指南、安全策略和 GitHub 模板。
