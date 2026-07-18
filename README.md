@@ -145,6 +145,10 @@ src/san_tools/
 
 文档职责与阅读顺序见 [文档索引](docs/DOCUMENT_INDEX.zh.md)。格式结论见 [二进制格式笔记](docs/FORMAT_NOTES.zh.md)，字段间转换见 [编辑器字段转换](docs/EDITOR_FIELD_CONVERSION.zh.md)，关联维护规则见 [编辑器数据管理](docs/EDITOR_DATA_MANAGEMENT.zh.md)，重要演进记录见 [项目历史](docs/PROJECT_HISTORY.zh.md)。
 
+## 开发说明
+
+本项目由项目创建者及维护者主导开发，并使用 OpenAI Codex 辅助。所有 AI 生成的内容均由维护者审核并整合。
+
 ## 贡献与许可
 
 贡献前请阅读 [贡献指南](CONTRIBUTING.zh.md) 和 [项目维护约定](AGENTS.md)。当前源码采用保留所有权利的许可；如需改为开源许可证，应由版权所有者单独确认并替换 [LICENSE](LICENSE)。
