@@ -2,6 +2,7 @@
 三国霸业/
 data/game/*
 data/text/*
+data/output/*
 
 # 生成物、发布物与分析输出不提交。
 derived/
