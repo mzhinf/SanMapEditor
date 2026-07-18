@@ -216,6 +216,56 @@ if (appended.stageIniValues.row_id !== '3' || appended.stageIniValues.title !== 
         self.run_node(harness + functions + checks)
 
 
+    def test_new_site_rejects_odd_y(self) -> None:
+        """验证选中奇数 Y 时不会新增据点。"""
+
+        source = script_source()
+        functions = function_range(source, "stageIniSiteRows", "stageIniGeneralByKey")
+        harness = """
+const force = { forceKey: 'force:0', forceIndex: 0, force_name: '测试势力' };
+const state = {
+  selected: { col: 40, row: 51 }, activeForceKey: force.forceKey,
+  scenario: { sites: [], forces: [force], forceByKey: new Map([[force.forceKey, force]]) }
+};
+const alerts = [];
+const window = { alert: message => alerts.push(String(message)) };
+"""
+        checks = """
+addScenarioSite(force.forceKey);
+if (state.scenario.sites.length !== 0) throw new Error('奇数 Y 仍新增了据点');
+if (alerts.length !== 1 || !alerts[0].includes('Y 坐标 51 为奇数') || !alerts[0].includes('只能保存偶数 Y 坐标')) throw new Error('新增据点的提示不明确');
+"""
+        self.run_node(harness + functions + checks)
+
+    def test_site_edit_rejects_odd_y(self) -> None:
+        """验证直接编辑据点 Y 为奇数时会提示且不登记 Patch。"""
+
+        source = script_source()
+        functions = function_range(source, "syncSiteGateCoordinates", "markScenarioDeleted")
+        harness = """
+const site = { siteKey: 'site:0', site_name: '测试城', coord_x: 10, coord_y: 92, parentForceKey: '', deleted: false };
+const state = {
+  gates: [], scenarioPatches: new Map(), meta: { siteLinks: {} },
+  scenario: { sites: [site], forces: [], entities: [], siteByKey: new Map([[site.siteKey, site]]), forceByKey: new Map() }
+};
+const alerts = [];
+let pickerRefreshes = 0; let managerRefreshes = 0; let draws = 0;
+const window = { alert: message => alerts.push(String(message)) };
+function storeScenarioPatch(kind, key, op, field, before, after) { state.scenarioPatches.set(`${kind}:${key}:${field}`, { kind, key, op, field, before, after }); }
+function schedulePatchRefresh() {}
+function buildSiteIndex() { return null; }
+function renderSitePicker() { pickerRefreshes += 1; }
+function renderDomainManagers() { managerRefreshes += 1; }
+function scheduleDraw() { draws += 1; }
+"""
+        checks = """
+if (updateScenarioField('site', site.siteKey, 'coord_y', '93', true) !== false) throw new Error('奇数 Y 未被拒绝');
+if (site.coord_y !== 92 || state.scenarioPatches.size !== 0 || pickerRefreshes !== 0 || managerRefreshes !== 0 || draws !== 0) throw new Error('奇数 Y 修改产生了副作用');
+if (alerts.length !== 1 || !alerts[0].includes('Y 坐标 93 为奇数') || !alerts[0].includes('只能保存偶数 Y 坐标')) throw new Error('直接修改据点的提示不明确');
+if (updateScenarioField('site', site.siteKey, 'coord_y', '94', true) !== true || site.coord_y !== 94 || state.scenarioPatches.size !== 1 || pickerRefreshes !== 1 || managerRefreshes !== 1 || draws !== 1) throw new Error('偶数 Y 修改未正常生效');
+"""
+        self.run_node(harness + functions + checks)
+
     def test_add_existing_general_refreshes_site_immediately(self) -> None:
         """验证据点添加已有武将后关系与据点 UI 同步刷新。"""
 

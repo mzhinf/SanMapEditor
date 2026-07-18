@@ -1894,11 +1894,15 @@ function refreshScenarioRelations() {
 }
 function updateScenarioField(kind, key, field, rawValue, numeric = false) {
   const row = state.scenario?.[`${kind}ByKey`]?.get(key);
-  if (!row || row.deleted) return;
+  if (!row || row.deleted) return false;
   const after = numeric ? Number.parseInt(rawValue, 10) : String(rawValue || '');
-  if (numeric && !Number.isFinite(after)) return;
+  if (numeric && !Number.isFinite(after)) return false;
   const before = row[field];
-  if (before === after) return;
+  if (before === after) return true;
+  if (kind === 'site' && field === 'coord_y' && after % 2 !== 0) {
+    window.alert(`无法修改据点：Y 坐标 ${after} 为奇数，当前据点导出坐标转换只能保存偶数 Y 坐标。`);
+    return false;
+  }
   row[field] = after;
   if (kind === 'site' && (field === 'coord_x' || field === 'coord_y')) syncSiteGateCoordinates(row, true);
   refreshScenarioRelations();
@@ -1907,6 +1911,7 @@ function updateScenarioField(kind, key, field, rawValue, numeric = false) {
   const managerFields = new Set(['force_name', 'site_name', 'parentForceKey', 'coord_x', 'coord_y', 'entity_name', 'command', 'parentSiteKey']);
   if (kind === 'force' || managerFields.has(field)) renderDomainManagers();
   scheduleDraw();
+  return true;
 }
 function markScenarioDeleted(kind, key) {
   const row = state.scenario?.[`${kind}ByKey`]?.get(key);
@@ -1986,6 +1991,11 @@ function addScenarioSite(forceKey = '') {
   const force = state.scenario.forceByKey.get(forceKey || state.activeForceKey) || scenarioRows('force')[0] || null;
   const cell = state.selected || { col: 0, row: 0 };
   const index = state.scenario.sites.length;
+  const siteY = Number(cell.row || 0);
+  if (siteY % 2 !== 0) {
+    window.alert(`无法添加据点：当前 Y 坐标 ${siteY} 为奇数，当前据点导出坐标转换只能保存偶数 Y 坐标。`);
+    return;
+  }
   const seed = nextAvailableStageIniSite();
   const defaults = newSiteDefaults();
   const cityIndex = Number(seed?.city_index || 0) || Math.max(0, ...stageIniSiteRows().map(row => Number(row.city_index || 0))) + 1;
@@ -1996,7 +2006,7 @@ function addScenarioSite(forceKey = '') {
   const stageIniValues = Object.fromEntries((sheet?.headers || []).map(header => [header, '0']));
   stageIniValues.row_id = stageIniRowKey;
   stageIniValues.title = siteName;
-  const fieldValues = { city_index: cityIndex, ...defaults, coord_x: cell.col, coord_y: cell.row };
+  const fieldValues = { city_index: cityIndex, ...defaults, coord_x: cell.col, coord_y: siteY };
   for (const [field, value] of Object.entries(fieldValues)) {
     const header = model?.fieldMap?.site?.fields?.[field];
     if (header) stageIniValues[header] = String(value);
@@ -2009,7 +2019,7 @@ function addScenarioSite(forceKey = '') {
     city_index: cityIndex,
     ...defaults,
     coord_x: cell.col,
-    coord_y: cell.row,
+    coord_y: siteY,
     stageIniRowKey,
     stageIniValues,
     parentForceKey: force?.forceKey || '',
@@ -2243,7 +2253,9 @@ function appendScenarioInput(parent, row, kind, field, numeric = false, label = 
   input.value = row[field] ?? '';
   input.disabled = readonly;
   if (readonly) input.title = '关系派生字段，由当前关联数据自动计算';
-  else input.addEventListener('change', () => updateScenarioField(kind, row[`${kind}Key`], field, input.value, numeric));
+  else input.addEventListener('change', () => {
+    if (!updateScenarioField(kind, row[`${kind}Key`], field, input.value, numeric)) input.value = row[field] ?? '';
+  });
   appendFieldControl(parent, label, input);
 }
 function renderManagerList(node, rows, emptyText) {

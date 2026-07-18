@@ -36,7 +36,9 @@
 
 据点的 `primary_entity_count` 是派生字段，等于当前未删除、归属于该据点且属于 `.stg` primary Entity 区的记录数量。武将与士兵的增删或归属变更后必须立即重算。
 
+新增据点使用当前选中 Cell 作为 `coord_x/coord_y`。新增据点运行坐标的 Y 导出采用 `floor(coord_y / 2) + 5`，因此当前编辑器只允许偶数 `coord_y`：选中奇数 Y 时取消新增；直接编辑为奇数时提示、恢复原值且不登记 Patch。
 以下关系显示字段也由关联键派生：
+
 
 - 据点的 `parent_force_index`、`parent_force_name` 来自 `parentForceKey`。
 - Entity 的 `parent_site_name` 来自 `parentSiteKey`。
