@@ -26,7 +26,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8,<9",
+  "pytest>=8,<10",
 ]
 release = [
   "pyinstaller>=6,<7",
