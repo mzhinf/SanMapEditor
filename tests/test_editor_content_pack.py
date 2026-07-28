@@ -125,7 +125,7 @@ class TestEditorContentPack(unittest.TestCase):
         self.assertTrue(session.root.is_dir())
 
     def test_composes_five_file_release_with_nested_content_pack(self) -> None:
-        """组合分发只在基础五文件之外增加经过审计的独立内容包。"""
+        """组合分发只在基础无资源许可证包之外增加经过审计的独立内容包。"""
 
         self.build_pack()
         release = TEST_TMP / "release"
@@ -135,12 +135,20 @@ class TestEditorContentPack(unittest.TestCase):
         (release / "editor-data" / "release-info.json").write_text("{}", encoding="utf-8")
         (release / "使用说明.txt").write_text("说明", encoding="utf-8")
         (release / "编辑器使用指南.md").write_text("指南", encoding="utf-8")
+        (release / "LICENSE.txt").write_text("项目许可证", encoding="utf-8")
+        (release / "THIRD-PARTY-NOTICES.txt").write_text("第三方声明", encoding="utf-8")
+        licenses = release / "licenses"
+        licenses.mkdir()
+        (licenses / "示例许可证.txt").write_text("许可证原文", encoding="utf-8")
         output = TEST_TMP / "with-stage.zip"
         result = compose_editor_distribution(release, [self.pack], output)
         self.assertEqual(result["stages"], ["stage01"])
         with zipfile.ZipFile(output) as archive:
             names = {info.filename for info in archive.infolist() if not info.is_dir()}
-        self.assertEqual(len(names), 6)
+        self.assertEqual(len(names), result["base_file_count"] + 1)
+        self.assertIn("LICENSE.txt", names)
+        self.assertIn("THIRD-PARTY-NOTICES.txt", names)
+        self.assertIn("licenses/示例许可证.txt", names)
         self.assertIn("content-packs/stage01.sanmap-pack", names)
 
 

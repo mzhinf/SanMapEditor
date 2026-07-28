@@ -1,6 +1,6 @@
 # 地图编辑器独立内容包
 
-独立内容包用于把一次性解析、渲染后的关卡素材与编辑器程序分离。基础 Windows 发布包仍保持五文件无资源结构；用户可以单独选择内容包，也可以使用包含 `content-packs/` 的组合分发包。
+独立内容包用于把一次性解析、渲染后的关卡素材与编辑器程序分离。基础 Windows 发布包仍保持无资源许可证结构；用户可以单独选择内容包，也可以使用包含 `content-packs/` 的组合分发包。
 
 ## 一、文件格式
 
@@ -71,7 +71,7 @@ python -m san_tools run build-editor-content-pack path\to\stage01.m `
 
 ## 五、组合带关卡分发包
 
-先构建五文件基础目录和独立内容包，再执行：
+先构建无资源许可证基础目录和独立内容包，再执行：
 
 ```powershell
 python -m san_tools run compose-editor-distribution `
@@ -80,7 +80,7 @@ python -m san_tools run compose-editor-distribution `
   --output dist\SanMapEditor-with-stage01.zip
 ```
 
-组合命令不会重新解析素材，也不会放宽基础发布审计。输出 ZIP 的顶层仍是五文件基础包，另增加：
+组合命令不会重新解析素材，也不会放宽基础发布审计。输出 ZIP 的顶层仍是无资源许可证基础包，另增加：
 
 ```text
 content-packs/
@@ -89,6 +89,6 @@ content-packs/
 
 因此发布维护者可以分别提供：
 
-- 不带关卡：只发布基础五文件 ZIP；
+- 不带关卡：只发布基础无资源许可证 ZIP；
 - 带关卡：发布经过权利确认的组合 ZIP；
 - 独立更新关卡：只分发新的 `.sanmap-pack`。

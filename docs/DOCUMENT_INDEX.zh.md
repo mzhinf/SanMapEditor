@@ -20,7 +20,7 @@
 | `docs/DOCUMENT_INDEX.zh.md` | 全部文档的职责、状态和维护入口 | 持续维护 | 新增、删除、合并或改名任何文档时 |
 | `docs/COMMAND_REFERENCE.zh.md` | 统一命令入口、全部命令参数、示例、产物与风险 | 当前有效 | 注册命令、参数、默认路径或输出行为变化时 |
 | `docs/EDITOR_USER_GUIDE.zh.md` | 随发布 ZIP 交付给编辑人员的启动、布局、逐步操作、快捷键、导出和排错指南 | 当前有效 | 用户界面、操作方式、快捷键或导出流程变化时 |
-| `docs/EDITOR_PACKAGING_CHAIN.zh.md` | 无资源 Windows 构建、五文件产物、用户运行时临时 Bundle、审计和发布门禁 | 当前有效 | 构建入口、运行时依赖、白名单、会话或发布目录变化时 |
+| `docs/EDITOR_PACKAGING_CHAIN.zh.md` | 无资源 Windows 构建、许可证产物、用户运行时临时 Bundle、审计和发布门禁 | 当前有效 | 构建入口、运行时依赖、白名单、会话或发布目录变化时 |
 | `docs/EDITOR_CONTENT_PACK.zh.md` | 独立内容包格式、生成、审计、启动缓存和组合分发 | 当前有效 | 内容 Schema、缓存、审计或组合方式变化时 |
 | `docs/EDITOR_RESOURCE_FREE_RELEASE_PLAN.zh.md` | 无资源发布的目标、架构、改动清单、测试、验收标准和最终实施状态 | 已实施验收基线 | 无资源发布边界、运行时导入架构或验收状态变化时 |
 | `docs/EDITOR_UI_V2_DESIGN.zh.md` | 编辑器布局、工作流、管理界面和运行时架构 | 当前有效 | UI 结构、主要工作流或功能边界变化时 |
@@ -29,7 +29,7 @@
 | `docs/FORMAT_NOTES.zh.md` | 二进制文件结构、证据级别、已确认结论与未解问题 | 当前有效 | KSY、样本统计或格式结论变化时 |
 | `docs/MINIMAP_COLOR_RELATION.zh.md` | `minimap_color` 与 xyz 的统计关系和预测边界 | 研究结论 | 样本集、算法或自动填色策略变化时 |
 | `docs/KNOWN_ISSUES.zh.md` | 暂时搁置的问题、风险和验证边界 | 持续维护 | 问题出现、状态变化或解决时 |
-| `docs/GITHUB_RELEASE_CHECKLIST.zh.md` | GitHub 推送、五文件发布审计、运行时验收和人工法律门禁 | 发布前有效 | GitHub 上传、许可证、资源审计或发布方式变化时 |
+| `docs/GITHUB_RELEASE_CHECKLIST.zh.md` | GitHub 推送、无资源许可证发布审计、运行时验收和人工法律门禁 | 发布前有效 | GitHub 上传、许可证、资源审计或发布方式变化时 |
 | `docs/PROJECT_HISTORY.zh.md` | 关键技术和产品里程碑摘要 | 只追加重要节点 | 完成会影响项目方向或能力边界的阶段时 |
 
 ## 项目入口与治理文档

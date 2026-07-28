@@ -13,7 +13,7 @@
 ### 使用发布 ZIP
 
 1. 找到 `SanMapEditor-日期.zip`，右键选择“全部解压”。不要在压缩包预览窗口里直接双击 EXE。
-2. 打开解压目录。正式包应只有下列五个白名单文件：
+2. 打开解压目录。正式包应只有下列无资源许可证结构：
 
 ```text
 SanMapEditor.exe
@@ -22,6 +22,10 @@ editor-data/
   └── release-info.json
 使用说明.txt
 编辑器使用指南.md
+LICENSE.txt
+THIRD-PARTY-NOTICES.txt
+licenses/
+  └── Python、Tcl/Tk、openpyxl、et_xmlfile、Pillow 等实际运行时组件的许可证原文
 ```
 
 3. 双击 `SanMapEditor.exe`。浏览器先显示“尚未导入地图项目”，桌面启动器显示“选择 stageNN.m”“选择资源目录”和“选择内容包”。

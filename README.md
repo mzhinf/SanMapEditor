@@ -88,7 +88,7 @@ python -m pip install -e ".[release]"
 python -m san_tools run build-editor-release .
 ```
 
-构建不读取 `data/game` 或 `data/text`。`dist/` 中生成 ZIP、外部 SHA-256 清单和构建结果 JSON；ZIP 只允许 EXE、空入口、发布元数据、短说明和完整使用指南五个文件。公开发布前仍需完成资源审计、合法游戏副本人工兼容性验证，并对源码内 `SAN_RGB_PALETTE` 的发布边界作法律确认。
+构建不读取 `data/game` 或 `data/text`。`dist/` 中生成 ZIP、外部 SHA-256 清单和构建结果 JSON；ZIP 只允许 EXE、空入口、发布元数据、用户文档、项目许可证、第三方声明及 `licenses/` 中按冻结归档生成的许可证原文。公开发布前仍需完成资源审计、合法游戏副本人工兼容性验证，并对源码内 `SAN_RGB_PALETTE` 的发布边界作法律确认。
 
 生成独立内容包：
 
@@ -97,7 +97,7 @@ python -m san_tools run build-editor-content-pack data/game/stage01.m `
   --output-dir dist/content-packs
 ```
 
-组合基础五文件目录与一个或多个内容包：
+组合基础无资源许可证目录与一个或多个内容包：
 
 ```powershell
 python -m san_tools run compose-editor-distribution `
@@ -106,7 +106,7 @@ python -m san_tools run compose-editor-distribution `
   --output dist/SanMapEditor-with-stage01.zip
 ```
 
-组合命令不重新解析素材。基础发布包继续保持无资源五文件白名单；组合 ZIP 只额外增加 `content-packs/*.sanmap-pack`。格式、安全审计和缓存规则见 [独立内容包说明](docs/EDITOR_CONTENT_PACK.zh.md)。
+组合命令不重新解析素材。基础发布包继续保持无资源许可证白名单；组合 ZIP 只额外增加 `content-packs/*.sanmap-pack`。格式、安全审计和缓存规则见 [独立内容包说明](docs/EDITOR_CONTENT_PACK.zh.md)。
 
 ## 命令入口
 

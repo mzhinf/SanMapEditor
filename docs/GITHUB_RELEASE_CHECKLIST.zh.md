@@ -4,7 +4,7 @@
 
 ## 当前结论
 
-源码仓库可继续公开推送；Windows 构建已改为五文件无资源包，并有目录、ZIP、PyInstaller TOC 扫描和 SHA-256 清单。公开上传 Release 前仍需完成合法游戏副本人工兼容性验证、`SAN_RGB_PALETTE` 发布边界确认和许可证决策。
+源码仓库可继续公开推送；Windows 构建已改为无资源许可证包，并有目录、ZIP、冻结归档扫描和 SHA-256 清单。公开上传 Release 前仍需完成合法游戏副本人工兼容性验证、`SAN_RGB_PALETTE` 发布边界确认和许可证决策。
 
 ## Git 历史与工作区
 
@@ -25,11 +25,14 @@ editor-data/index.html
 editor-data/release-info.json
 使用说明.txt
 编辑器使用指南.md
+LICENSE.txt
+THIRD-PARTY-NOTICES.txt
+licenses/（Python、Tcl/Tk、openpyxl、et_xmlfile、Pillow 及实际原生组件许可证原文）
 ```
 
 - [ ] ZIP 不含 `stageNN/`、`index.json`、游戏扩展名、`map.png`、`minimap.png`、`heads.png` 或图集。
 - [ ] 目录与 ZIP 的路径、字节数、SHA-256 一致。
-- [ ] Analysis、EXE、PKG、PYZ TOC 通过禁用资源扫描。
+- [ ] Analysis、EXE、PKG、PYZ TOC 通过禁用资源扫描，且第三方声明与最终收集组件、版本和许可证文件一致。
 - [ ] 外部 Manifest 记录 ZIP 大小、SHA-256 和 TOC。
 - [ ] 正式 EXE `--check` 返回 0。
 

@@ -64,9 +64,9 @@ san-tools run render-map . --stage stage01
 | `extract-kingdom` | `python -m san_tools run extract-kingdom .` | `--palette`、`--sheet-limit`；输出到 `derived/kingdom` | 只读导出 |
 | `stitch-kingdom` | `python -m san_tools run stitch-kingdom .` | `--acwz-align center|bottom|top`；输出到 `derived/kingdom` | 只读导出 |
 | `export-m-layers` | `python -m san_tools run export-m-layers .` | `--palette`；输出到 `derived/m_layers` | 只读导出 |
-| `build-editor-release` | `python -m san_tools run build-editor-release .` | 无资源五文件发布；`--work-dir`、`--output-dir`，默认输出 `dist` | 发布构建 |
+| `build-editor-release` | `python -m san_tools run build-editor-release .` | 无资源许可证发布；`--work-dir`、`--output-dir`，默认输出 `dist` | 发布构建 |
 | `build-editor-content-pack` | `python -m san_tools run build-editor-content-pack data/game/stage01.m` | `--output-dir` 默认 `dist/content-packs`；生成 `.sanmap-pack` | 内容构建 |
-| `compose-editor-distribution` | `python -m san_tools run compose-editor-distribution RELEASE PACK --output OUT.zip` | 审计并组合五文件目录与一个或多个内容包 | 分发组合 |
+| `compose-editor-distribution` | `python -m san_tools run compose-editor-distribution RELEASE PACK --output OUT.zip` | 审计并组合无资源许可证目录与一个或多个内容包 | 分发组合 |
 | `launch-editor` | `python -m san_tools run launch-editor --data-dir derived/editor --stage stage01` | `--content-pack` 直接载入内容包；`--no-browser`；`--check` | 本地启动 |
 
 ### Patch 写回建议
@@ -98,7 +98,7 @@ python -m san_tools run build-editor-release .
 
 构建命令会重建指定工作目录，因此 `--work-dir` 必须位于项目目录内；发布目录默认是 `dist/`。`--output-dir` 可修改归档目录，命令不接受 `--stage`。
 
-正式构建不读取 `data/game` 或 `data/text`，ZIP 只含 EXE、空 `editor-data`、短说明和完整指南，并额外生成路径、大小与 SHA-256 Manifest。发布维护流程见 [Windows 无资源打包链路](EDITOR_PACKAGING_CHAIN.zh.md)。
+正式构建不读取 `data/game` 或 `data/text`，ZIP 含 EXE、空 `editor-data`、用户文档、`LICENSE.txt`、`THIRD-PARTY-NOTICES.txt` 和 `licenses/` 中按冻结归档收集的许可证原文，并额外生成路径、大小与 SHA-256 Manifest。发布维护流程见 [Windows 无资源打包链路](EDITOR_PACKAGING_CHAIN.zh.md)。
 
 独立内容包生成会读取用户明确选择的同目录游戏文件，但不改变基础构建的无资源边界。组合命令不解析素材，只把已经通过审计的 `.sanmap-pack` 放入 `content-packs/`。详细格式见 [地图编辑器独立内容包](EDITOR_CONTENT_PACK.zh.md)。
 

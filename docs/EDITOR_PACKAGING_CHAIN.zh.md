@@ -9,7 +9,7 @@ flowchart LR
   A[源码和文档] --> B[build_editor_release.py]
   B --> C[PyInstaller 单文件 EXE]
   B --> D[空 editor-data]
-  C --> E[五文件发布 ZIP]
+  C --> E[无资源许可证发布 ZIP]
   D --> E
   E --> F[目录 ZIP TOC 审计]
   G[用户合法游戏文件] --> H[editor_runtime_session.py]
@@ -38,12 +38,12 @@ python -m san_tools run build-editor-release .
 
 | 文件 | 职责 |
 | --- | --- |
-| `build_editor_release.py` | PyInstaller、运行时 HTML 模板收集、空入口、五文件组包、Manifest 和审计总控。 |
+| `build_editor_release.py` | 冻结构建、运行时 HTML 模板收集、空入口、许可证组包、Manifest 和审计总控。 |
 | `editor_desktop_launcher.py` | 四态资源选择、本机 HTTP 服务和固定端口内容切换。 |
 | `editor_runtime_session.py` | 输入校验、事务会话、复用、关闭清理和过期回收。 |
 | `export_editor_bundle.py` | 运行时地图、图集、小地图、头像、场景模型与写回模型生成。 |
 | `editor_content_pack.py` | 内容包生成、Manifest、路径与哈希审计、事务解包和持久缓存。 |
-| `compose_editor_distribution.py` | 五文件基础目录与一个或多个独立内容包的无解析组合。 |
+| `compose_editor_distribution.py` | 无资源许可证基础目录与一个或多个独立内容包的无解析组合。 |
 | `stage_ini_codec.py` | `stage.ini` 真实块流解析。 |
 | `editor_app.html` | 浏览器编辑、校验和用户导出。 |
 | `m.ksy`、`dor.ksy`、`stg.ksy` | 二进制字段顺序和类型规范。 |
@@ -62,10 +62,20 @@ SanMapEditor/
 │   ├── index.html
 │   └── release-info.json
 ├── 使用说明.txt
-└── 编辑器使用指南.md
+├── 编辑器使用指南.md
+├── LICENSE.txt
+├── THIRD-PARTY-NOTICES.txt
+└── licenses/
+    ├── Python-版本-LICENSE.txt
+    ├── Tcl-Tk-版本-license.terms
+    ├── openpyxl-版本-LICENCE.rst
+    ├── et_xmlfile-版本-LICENCE.rst
+    ├── et_xmlfile-版本-LICENCE.python
+    ├── et_xmlfile-版本-AUTHORS.txt
+    └── Pillow-版本-LICENSE.txt
 ```
 
-`index.html` 是不发起资源请求的空项目页，`release-info.json` 声明 `user-import-only` 与 `system-temp`。不得包含 `index.json`、`stageNN/`、`stage.json`、图片图集或任何游戏扩展名。
+`index.html` 是不发起资源请求的空项目页，`release-info.json` 声明 `user-import-only` 与 `system-temp`。`LICENSE.txt` 是项目自身许可证；`THIRD-PARTY-NOTICES.txt` 按最终冻结归档列出组件、版本、许可证和对应原文；`licenses/` 只允许其列出的许可证文本。不得包含 `index.json`、`stageNN/`、`stage.json`、图片图集或任何游戏扩展名。
 
 构建还在 ZIP 外生成 `SanMapEditor-日期-manifest.json` 和 `SanMapEditor-release.json`，记录每个白名单文件、归档大小、SHA-256 和 TOC 路径。
 
@@ -111,7 +121,7 @@ python -m san_tools run compose-editor-distribution `
   --output dist\SanMapEditor-with-stage01.zip
 ```
 
-组合命令先分别审计基础目录和每个内容包，再生成只额外包含 `content-packs/*.sanmap-pack` 的 ZIP。基础五文件白名单不变，不能用组合分发规则放宽 `build-editor-release`。
+组合命令先分别审计基础目录和每个内容包，再生成只额外包含 `content-packs/*.sanmap-pack` 的 ZIP。基础无资源许可证白名单不变，不能用组合分发规则放宽 `build-editor-release`。
 
 内容包仍包含用户生成的游戏派生素材和写回参考文件，公开分发前必须单独确认权利。完整格式见 [地图编辑器独立内容包](EDITOR_CONTENT_PACK.zh.md)。
 
@@ -127,11 +137,12 @@ python -m san_tools run compose-editor-distribution `
 
 `editor_release_audit.py` 对目录和 ZIP 执行相同规则：
 
-1. 精确命中五文件白名单。
+1. 固定文件必须命中白名单，且 `licenses/` 至少含一个受限扩展名的许可证原文。
 2. 拒绝路径穿越、盘符路径、重复 ZIP 条目和关卡目录。
 3. 拒绝游戏扩展名、原始文件名和派生图片名。
 4. 目录与 ZIP 的路径、字节数和 SHA-256 逐项一致。
-5. Analysis、EXE、PKG、PYZ TOC 不得引用游戏资源。
+5. Analysis、EXE、PKG、PYZ TOC 不得引用游戏资源；许可证声明以 Analysis 与 PKG 的实际收集组件为准。
+6. 生成前端页面资产审计：不得引入未登记的第三方 JavaScript、CSS、Web 字体或 SVG 图标。
 
 ## 九、验证
 

@@ -20,7 +20,7 @@ def compose_editor_distribution(
     content_packs: list[Path],
     output_path: Path,
 ) -> dict[str, object]:
-    """审计基础五文件目录和内容包，并生成不改变内部边界的组合 ZIP。"""
+    """审计基础无资源许可证目录和内容包，并生成不改变内部边界的组合 ZIP。"""
 
     release_dir = release_dir.expanduser().resolve()
     base_manifest = audit_release_tree(release_dir, f"{EXE_NAME}.exe")
@@ -76,7 +76,7 @@ def main() -> int:
     """解析组合分发命令参数。"""
 
     parser = argparse.ArgumentParser(description="组合无资源编辑器基础目录与独立内容包")
-    parser.add_argument("release_dir", type=Path, help="已经通过审计的五文件发布目录")
+    parser.add_argument("release_dir", type=Path, help="已经通过审计的无资源许可证发布目录")
     parser.add_argument("content_pack", type=Path, nargs="+", help="一个或多个 .sanmap-pack 内容包")
     parser.add_argument("--output", type=Path, required=True, help="组合分发 ZIP 输出路径")
     args = parser.parse_args()

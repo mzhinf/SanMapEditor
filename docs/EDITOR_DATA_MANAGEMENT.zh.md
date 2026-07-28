@@ -100,7 +100,7 @@
 
 用户 `.s/.x` 顶部有效区从当前 `.m` 派生，底部尾区必须来自本次桌面会话输入。尾区编码在临时 `stage.json.sidecars` 中；缺失、无效或长度不匹配时导出阻断，禁止零填充。
 
-`.dor/.stg/stage.ini/History.txt/heads.dat` 可复制到当前临时会话作为参考，但永不进入正式发布目录。用户导出的 `stageNN-export.zip` 可包含游戏文件、工作簿和 Patch，与五文件正式程序包是不同数据边界。
+`.dor/.stg/stage.ini/History.txt/heads.dat` 可复制到当前临时会话作为参考，但永不进入正式发布目录。用户导出的 `stageNN-export.zip` 可包含游戏文件、工作簿和 Patch，与含许可证结构但不含游戏资源的正式程序包是不同数据边界。
 
 ## Patch 跨版本迁移
 

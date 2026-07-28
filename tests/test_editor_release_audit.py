@@ -35,7 +35,7 @@ class TestEditorReleaseAudit(unittest.TestCase):
     def _write_allowed_tree(self, root: Path) -> None:
         """写入最小无资源发布结构。"""
 
-        for relative in RELEASE_ALLOWED_FILES:
+        for relative in (*RELEASE_ALLOWED_FILES, "licenses/示例许可证.txt"):
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(f"测试文件：{relative}".encode("utf-8"))
@@ -48,7 +48,9 @@ class TestEditorReleaseAudit(unittest.TestCase):
 
         manifest = audit_release_tree(package)
 
-        self.assertEqual([item["path"] for item in manifest], sorted(RELEASE_ALLOWED_FILES))
+        paths = [item["path"] for item in manifest]
+        self.assertTrue(set(RELEASE_ALLOWED_FILES).issubset(paths))
+        self.assertIn("licenses/示例许可证.txt", paths)
         expected = "测试文件：editor-data/index.html".encode("utf-8")
         index_entry = next(item for item in manifest if item["path"] == "editor-data/index.html")
         self.assertEqual(index_entry["bytes"], len(expected))

@@ -9,6 +9,8 @@ from pathlib import Path, PurePosixPath
 
 
 DEFAULT_EXE_NAME = "SanMapEditor.exe"
+LICENSE_DIRECTORY = "licenses"
+LICENSE_ALLOWED_SUFFIXES = frozenset({".txt", ".rst", ".terms", ".python"})
 RELEASE_ALLOWED_FILES = frozenset(
     {
         DEFAULT_EXE_NAME,
@@ -16,6 +18,8 @@ RELEASE_ALLOWED_FILES = frozenset(
         "editor-data/release-info.json",
         "使用说明.txt",
         "编辑器使用指南.md",
+        "LICENSE.txt",
+        "THIRD-PARTY-NOTICES.txt",
     }
 )
 FORBIDDEN_FILE_NAMES = frozenset(
@@ -81,6 +85,19 @@ def release_allowed_files(exe_name: str = DEFAULT_EXE_NAME) -> frozenset[str]:
     return frozenset((RELEASE_ALLOWED_FILES - {DEFAULT_EXE_NAME}) | {normalize_release_path(exe_name)})
 
 
+def is_allowed_release_path(path: str, exe_name: str = DEFAULT_EXE_NAME) -> bool:
+    """判断路径是否为固定白名单文件或许可证目录中的受限文本文件。"""
+
+    if path in release_allowed_files(exe_name):
+        return True
+    pure_path = PurePosixPath(path)
+    return (
+        len(pure_path.parts) == 2
+        and pure_path.parts[0] == LICENSE_DIRECTORY
+        and pure_path.suffix.lower() in LICENSE_ALLOWED_SUFFIXES
+    )
+
+
 def validate_release_paths(paths: list[str], exe_name: str = DEFAULT_EXE_NAME) -> list[str]:
     """校验所有路径恰好命中白名单，并拒绝重复或禁用资源。"""
 
@@ -98,7 +115,14 @@ def validate_release_paths(paths: list[str], exe_name: str = DEFAULT_EXE_NAME) -
     allowed = release_allowed_files(exe_name)
     actual = set(normalized)
     missing = sorted(allowed - actual)
-    unexpected = sorted(actual - allowed)
+    unexpected = sorted(path for path in actual if not is_allowed_release_path(path, exe_name))
+    license_files = [
+        path
+        for path in normalized
+        if len(PurePosixPath(path).parts) == 2 and PurePosixPath(path).parts[0] == LICENSE_DIRECTORY
+    ]
+    if not license_files:
+        missing.append(f"{LICENSE_DIRECTORY}/（至少一个许可证原文）")
     if missing or unexpected:
         details: list[str] = []
         if missing:

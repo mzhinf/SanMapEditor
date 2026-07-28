@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import json
 import shutil
@@ -20,6 +21,7 @@ from san_tools.map.editor_release_audit import (
     audit_release_tree,
     audit_release_zip,
 )
+from san_tools.map.release_license_bundle import write_release_license_bundle
 
 
 EXE_NAME = "SanMapEditor"
@@ -69,6 +71,7 @@ def prepare_release_package(
     package_dir: Path,
     exe_source: Path,
     release_info: dict[str, object],
+    pyinstaller_work: Path,
 ) -> list[dict[str, object]]:
     """只复制白名单代码产物和文档，并立即执行目录资源审计。"""
 
@@ -76,6 +79,7 @@ def prepare_release_package(
     shutil.copy2(exe_source, package_dir / f"{EXE_NAME}.exe")
     write_resource_free_editor_data(package_dir / "editor-data", release_info)
     write_release_guides(root, package_dir, str(release_info["build_time"]))
+    write_release_license_bundle(root, package_dir, pyinstaller_work)
     return audit_release_tree(package_dir, f"{EXE_NAME}.exe")
 
 
@@ -160,6 +164,23 @@ def editor_template_data_spec(root: Path) -> str:
     return f"{template}:{EDITOR_TEMPLATE_TARGET}"
 
 
+def pyinstaller_environment() -> dict[str, str]:
+    """建立只含 Python 运行时和 Windows 系统目录的构建环境。"""
+
+    environment = os.environ.copy()
+    runtime_root = Path(sys.base_prefix).resolve()
+    system_root = Path(environment.get("SystemRoot", r"C:\\Windows"))
+    # 不沿用开发机完整 PATH，避免 JDK 等工具目录的 DLL 被自动收集进发布物。
+    trusted_paths = (
+        Path(sys.executable).resolve().parent,
+        runtime_root,
+        runtime_root / "DLLs",
+        system_root / "System32",
+        system_root,
+    )
+    environment["PATH"] = os.pathsep.join(str(path) for path in trusted_paths if path.is_dir())
+    return environment
+
 
 def build_release(root: Path, work_dir: Path, output_dir: Path) -> dict[str, object]:
     """在不读取任何游戏数据的情况下构建、审计并压缩发布包。"""
@@ -200,7 +221,7 @@ def build_release(root: Path, work_dir: Path, output_dir: Path) -> dict[str, obj
         editor_template_data_spec(root),
         str(launcher),
     ]
-    subprocess.run(command, cwd=root, check=True)
+    subprocess.run(command, cwd=root, check=True, env=pyinstaller_environment())
     toc_files = audit_pyinstaller_collection(pyinstaller_work)
 
     # 发布元数据不包含默认关卡，明确声明运行时数据来源和临时会话策略。
@@ -218,6 +239,7 @@ def build_release(root: Path, work_dir: Path, output_dir: Path) -> dict[str, obj
         package_dir,
         pyinstaller_dist / f"{EXE_NAME}.exe",
         release_info,
+        pyinstaller_work,
     )
 
     archive_base = output_dir / f"{EXE_NAME}-{build_date}"
